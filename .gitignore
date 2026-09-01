@@ -1,0 +1,74 @@
+# Python & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+venv/
+env/
+ENV/
+.venv/
+.env/
+
+# Environment Variables & Secrets (NEVER commit .env)
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.crt
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# SatQuery Local Data, Rasters & Generated Artifacts
+data/
+*.tif
+*.tiff
+*.geotiff
+*.png
+*.jpg
+*.jpeg
+*.pdf
+*.kml
+*.geojson
+!backend/
+!migrations/
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs
+*.log
