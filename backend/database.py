@@ -6,6 +6,9 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from backend.config import settings
+import sys
+from src.logger import logging
+from src.exception import CustomException
 
 # Configure SQLAlchemy 2.0 Engine using psycopg3
 engine = create_engine(
@@ -42,11 +45,15 @@ def get_db() -> Generator[Session, None, None]:
 
 def check_db_connection() -> dict:
     """Utility function to verify connectivity and PostGIS extension status."""
-    with engine.connect() as conn:
-        db_version = conn.execute(text("SELECT version();")).scalar()
-        postgis_version = conn.execute(text("SELECT PostGIS_Full_Version();")).scalar()
-        return {
-            "status": "connected",
-            "database_version": db_version,
-            "postgis_version": postgis_version,
-        }
+    try:
+        with engine.connect() as conn:
+            db_version = conn.execute(text("SELECT version();")).scalar()
+            postgis_version = conn.execute(text("SELECT PostGIS_Full_Version();")).scalar()
+            return {
+                "status": "connected",
+                "database_version": db_version,
+                "postgis_version": postgis_version,
+            }
+    except Exception as e:
+        logging.error(f"Database connection failed: {e}")
+        raise CustomException(e, sys)

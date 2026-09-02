@@ -7,6 +7,9 @@ import os
 import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
+import sys
+from src.logger import logging
+from src.exception import CustomException
 
 from geoalchemy2.elements import WKBElement
 from geoalchemy2.shape import from_shape, to_shape
@@ -62,7 +65,8 @@ def calculate_file_hash(file_path: Union[str, Path], chunk_size: int = 65536) ->
     """Compute SHA-256 hash of a file for integrity tracking and caching."""
     path = Path(file_path)
     if not path.exists():
-        raise FileNotFoundError(f"File not found for hashing: {file_path}")
+        logging.error(f"File not found for hashing: {file_path}")
+        raise CustomException(f"File not found for hashing: {file_path}", sys)
     hasher = hashlib.sha256()
     with open(path, "rb") as f:
         while chunk := f.read(chunk_size):
@@ -136,8 +140,9 @@ def geometry_to_geojson(geom: Optional[WKBElement]) -> Optional[Dict[str, Any]]:
     try:
         shapely_geom = to_shape(geom)
         return shapely_geom.__geo_interface__
-    except Exception:
-        return None
+    except Exception as e:
+        logging.error(f"Error converting geometry to geojson: {e}")
+        raise CustomException(e, sys)
 
 
 def geometry_to_wkt(geom: Optional[WKBElement]) -> Optional[str]:
@@ -147,8 +152,9 @@ def geometry_to_wkt(geom: Optional[WKBElement]) -> Optional[str]:
     try:
         shapely_geom = to_shape(geom)
         return shapely_geom.wkt
-    except Exception:
-        return None
+    except Exception as e:
+        logging.error(f"Error converting geometry to wkt: {e}")
+        raise CustomException(e, sys)
 
 
 # ---------------------------------------------------------------------------
