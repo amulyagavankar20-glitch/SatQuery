@@ -62,7 +62,12 @@ Configuration is loaded from environment variables or `.env`:
 
 | Variable | Default | Description |
 |---|---|---|
-| `DATABASE_URL` | `postgresql+psycopg://localhost/satquery` | PostgreSQL connection string using `psycopg3` |
+| `POSTGRES_PASSWORD` | `satquery` | Database password loaded from `.env` (never commit `.env`) |
+| `POSTGRES_USER` | `satquery` | Database role |
+| `POSTGRES_HOST` | `127.0.0.1` | Database host |
+| `POSTGRES_PORT` | `5432` | Database port |
+| `POSTGRES_DB` | `satquery` | Database name |
+| `DATABASE_URL` | assembled from `POSTGRES_*` | Optional full `postgresql+psycopg://` URL; overrides the fields above |
 | `ENVIRONMENT` | `development` | Deployment environment (`development` / `production`) |
 | `LOG_LEVEL` | `INFO` | Application log verbosity |
 | `DATA_DIR` | `data` | Base directory for file storage |

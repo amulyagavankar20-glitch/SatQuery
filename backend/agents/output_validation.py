@@ -13,7 +13,7 @@ This module does NOT import from graph.py to avoid circular dependencies.
 from __future__ import annotations
 
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, List
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
@@ -30,20 +30,20 @@ class ConfidenceLevel(str, Enum):
 
 
 class Evidence(BaseModel):
-    model_evidence: List[ToolResult] = Field(default_factory=list)
-    spatial_evidence: List[Dict[str, Any]] = Field(default_factory=list)
-    temporal_evidence: List[ToolResult] = Field(default_factory=list)
-    cross_modal_evidence: List[ToolResult] = Field(default_factory=list)
+    model_evidence: list[ToolResult] = Field(default_factory=list)
+    spatial_evidence: list[dict[str, Any]] = Field(default_factory=list)
+    temporal_evidence: list[ToolResult] = Field(default_factory=list)
+    cross_modal_evidence: list[ToolResult] = Field(default_factory=list)
 
     model_config = {"arbitrary_types_allowed": True}
 
 
-def _required_tools_for_task(task: str) -> List[str]:
+def _required_tools_for_task(task: str) -> list[str]:
     """Return the list of tool identifiers that must have produced results for *task*.
 
     The mapping mirrors the graph paths defined in ``backend.agents.graph``.
     """
-    mapping: Dict[str, List[str]] = {
+    mapping: dict[str, list[str]] = {
         "SINGLE_VQA":           ["geochat_vqa"],
         "CAPTIONING":           ["geochat_vqa"],
         "GROUNDING":            ["geochat_vqa", "grounding"],
@@ -72,7 +72,7 @@ def _collect_evidence(state: "GraphState") -> Evidence:
     return ev
 
 
-def _validate_spatial_refs(spatial_refs: List[Dict[str, Any]]) -> bool:
+def _validate_spatial_refs(spatial_refs: list[dict[str, Any]]) -> bool:
     """Lightweight geometry validity check.
 
     Each entry must contain a ``type`` (e.g. "Polygon") and ``coordinates``.
@@ -87,13 +87,13 @@ def _validate_spatial_refs(spatial_refs: List[Dict[str, Any]]) -> bool:
     return True
 
 
-def _aggregate_signals(state: "GraphState", evidence: Evidence) -> List[str]:
+def _aggregate_signals(state: "GraphState", evidence: Evidence) -> list[str]:
     """Derive a list of qualitative signals from the execution.
 
     Signals are simple strings that later map to a confidence level.
     Confidence MUST NOT be presented as a calibrated probability.
     """
-    signals: List[str] = []
+    signals: list[str] = []
 
     # Pair fitness – explicit flag set during metadata / pair-fitness processing
     pair_fitness = state.get("pair_fitness", {})  # type: ignore[union-attr]
@@ -123,7 +123,7 @@ def _aggregate_signals(state: "GraphState", evidence: Evidence) -> List[str]:
     return signals
 
 
-def _map_signals_to_confidence(signals: List[str]) -> ConfidenceLevel:
+def _map_signals_to_confidence(signals: list[str]) -> ConfidenceLevel:
     """Map collected signals to a qualitative confidence level.
 
     * HIGH   – all key signals present.
@@ -152,7 +152,7 @@ class ValidationResult(BaseModel):
     is_valid: bool
     confidence: ConfidenceLevel
     evidence: Evidence
-    messages: List[str] = Field(default_factory=list)
+    messages: list[str] = Field(default_factory=list)
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -173,7 +173,7 @@ def validate_output(state: "GraphState") -> ValidationResult:
     in the route/metadata against the detected task.  Simple string matching
     against the raw user query is NOT used.
     """
-    messages: List[str] = []
+    messages: list[str] = []
 
     # 1. Intent / task compatibility using structured route information
     task = state.get("detected_task", "") or ""

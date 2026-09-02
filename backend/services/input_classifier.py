@@ -1,7 +1,7 @@
 """
 SatQuery AI — Deterministic Input Classifier
 """
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 from pathlib import Path
 
 from backend.schemas import (
@@ -34,8 +34,8 @@ class InputClassifier:
 
     def classify(
         self,
-        assets: List[Union[str, Path, Dict[str, Any]]],
-        analysis_metadata: Optional[Dict[str, Any]] = None,
+        assets: list[str | Path | dict[str, Any]],
+        analysis_metadata: dict[str, Any] | None = None,
     ) -> InputClassification:
         """
         Classify input configuration using metadata from InputAnalyzer.
@@ -70,8 +70,8 @@ class InputClassifier:
 
         asset_count = analysis.get("asset_count", len(assets))
         analyzed_assets = analysis.get("assets", [])
-        spatial_rel: Optional[SpatialRelationship] = analysis.get("spatial_relationship")
-        temporal_rel: Optional[TemporalRelationship] = analysis.get("temporal_relationship")
+        spatial_rel: SpatialRelationship | None = analysis.get("spatial_relationship")
+        temporal_rel: TemporalRelationship | None = analysis.get("temporal_relationship")
 
         asset_ids = [str(a.get("asset_id", f"asset_{i+1}")) for i, a in enumerate(analyzed_assets)]
         modalities = [str(a.get("modality", "UNKNOWN")).upper() for a in analyzed_assets]

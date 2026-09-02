@@ -1,4 +1,3 @@
-from typing import List
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from backend.models import ToolRegistry
@@ -28,12 +27,12 @@ class ToolSelector:
     def __init__(self, db_session: Session):
         self.db = db_session
 
-    def get_tool_sequence(self, task: RouterTask) -> List[str]:
+    def get_tool_sequence(self, task: RouterTask) -> list[str]:
         if task not in self.TASK_TO_TOOLS:
             raise ToolSelectorError(f"Unsupported task for deterministic routing: {task}")
         return self.TASK_TO_TOOLS[task]
 
-    def validate_selection(self, task: RouterTask, input_class: InputClass) -> List[str]:
+    def validate_selection(self, task: RouterTask, input_class: InputClass) -> list[str]:
         """
         Gets the deterministic tool sequence and validates it against the DB registry.
         Returns the validated tool sequence or raises ToolSelectorError.

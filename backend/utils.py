@@ -2,11 +2,9 @@
 SatQuery AI — Utility Functions for Database, File Management, and Geospatial Helpers
 """
 import hashlib
-import json
-import os
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 import sys
 from src.logger import logging
 from src.exception import CustomException
@@ -43,7 +41,7 @@ def is_valid_uuid(val: Any) -> bool:
         return False
 
 
-def parse_uuid(val: Union[str, uuid.UUID]) -> uuid.UUID:
+def parse_uuid(val: str | uuid.UUID) -> uuid.UUID:
     """Parse a string into a UUID object, raising ValueError if invalid."""
     if isinstance(val, uuid.UUID):
         return val
@@ -53,7 +51,7 @@ def parse_uuid(val: Union[str, uuid.UUID]) -> uuid.UUID:
 # ---------------------------------------------------------------------------
 # File & Storage Utilities
 # ---------------------------------------------------------------------------
-def validate_file_extension(filename: str, allowed_extensions: Optional[set] = None) -> bool:
+def validate_file_extension(filename: str, allowed_extensions: set | None = None) -> bool:
     """Validate whether the file extension is within the allowed set."""
     if allowed_extensions is None:
         allowed_extensions = ALLOWED_RASTER_EXTENSIONS | ALLOWED_VECTOR_EXTENSIONS | ALLOWED_REPORT_EXTENSIONS
@@ -61,7 +59,7 @@ def validate_file_extension(filename: str, allowed_extensions: Optional[set] = N
     return suffix in allowed_extensions
 
 
-def calculate_file_hash(file_path: Union[str, Path], chunk_size: int = 65536) -> str:
+def calculate_file_hash(file_path: str | Path, chunk_size: int = 65536) -> str:
     """Compute SHA-256 hash of a file for integrity tracking and caching."""
     path = Path(file_path)
     if not path.exists():
@@ -74,7 +72,7 @@ def calculate_file_hash(file_path: Union[str, Path], chunk_size: int = 65536) ->
     return hasher.hexdigest()
 
 
-def create_job_directory(job_id: Union[str, uuid.UUID], base_dir: Optional[Path] = None) -> Dict[str, Path]:
+def create_job_directory(job_id: str | uuid.UUID, base_dir: Path | None = None) -> dict[str, Path]:
     """
     Create the standardized SatQuery storage directory structure on disk for a job.
     
@@ -127,13 +125,13 @@ def wkt_to_geometry(wkt_str: str, srid: int = 4326) -> WKBElement:
     return from_shape(geom_shape, srid=srid)
 
 
-def geojson_to_geometry(geojson_dict: Dict[str, Any], srid: int = 4326) -> WKBElement:
+def geojson_to_geometry(geojson_dict: dict[str, Any], srid: int = 4326) -> WKBElement:
     """Convert a GeoJSON geometry dictionary to a PostGIS WKBElement."""
     geom_shape = shape(geojson_dict)
     return from_shape(geom_shape, srid=srid)
 
 
-def geometry_to_geojson(geom: Optional[WKBElement]) -> Optional[Dict[str, Any]]:
+def geometry_to_geojson(geom: WKBElement | None) -> dict[str, Any] | None:
     """Convert a PostGIS WKBElement geometry to a GeoJSON mapping."""
     if geom is None:
         return None
@@ -145,7 +143,7 @@ def geometry_to_geojson(geom: Optional[WKBElement]) -> Optional[Dict[str, Any]]:
         raise CustomException(e, sys)
 
 
-def geometry_to_wkt(geom: Optional[WKBElement]) -> Optional[str]:
+def geometry_to_wkt(geom: WKBElement | None) -> str | None:
     """Convert a PostGIS WKBElement geometry to a WKT string."""
     if geom is None:
         return None
@@ -160,7 +158,7 @@ def geometry_to_wkt(geom: Optional[WKBElement]) -> Optional[str]:
 # ---------------------------------------------------------------------------
 # Metadata & Confidence Helpers
 # ---------------------------------------------------------------------------
-def normalize_confidence(score: Optional[float]) -> Tuple[str, float]:
+def normalize_confidence(score: float | None) -> tuple[str, float]:
     """
     Normalize confidence score to a (ConfidenceLabel, clamped_score) pair.
     Labels: HIGH (>= 0.75), MEDIUM (>= 0.45), LOW (< 0.45).
@@ -179,12 +177,12 @@ def normalize_confidence(score: Optional[float]) -> Tuple[str, float]:
 
 def serialize_trace_event(
     event_type: str,
-    node_name: Optional[str] = None,
-    tool_id: Optional[str] = None,
-    message: Optional[str] = None,
-    parameters: Optional[Dict[str, Any]] = None,
-    metadata: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    node_name: str | None = None,
+    tool_id: str | None = None,
+    message: str | None = None,
+    parameters: dict[str, Any] | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Serialize an execution trace event for persistence into the traces table."""
     return {
         "event_type": event_type,

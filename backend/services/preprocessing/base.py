@@ -1,24 +1,19 @@
 """
 SatQuery AI — Preprocessing Base Class & Shared Raster Operations
 """
-import math
-import os
-import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 import numpy as np
 from PIL import Image
 import rasterio
 from rasterio.crs import CRS
-from rasterio.transform import Affine, from_bounds
+from rasterio.transform import Affine
 from rasterio.warp import transform_bounds
 from rasterio.windows import Window
 from shapely.geometry import box
 
-from backend.exceptions import PreprocessingError
 from backend.schemas import TileReference
-from src.logger import logging
 
 
 class BasePreprocessor:
@@ -32,7 +27,7 @@ class BasePreprocessor:
         data: np.ndarray,
         p_min: float = 2.0,
         p_max: float = 98.0,
-        nodata: Optional[float] = None,
+        nodata: float | None = None,
     ) -> np.ndarray:
         """
         Normalize multi-channel or single-channel raster array using percentile stretch
@@ -80,8 +75,8 @@ class BasePreprocessor:
         width: int,
         height: int,
         tile_size: int = 256,
-        stride: Optional[int] = None,
-    ) -> List[Tuple[int, int, int, int]]:
+        stride: int | None = None,
+    ) -> list[tuple[int, int, int, int]]:
         """
         Compute standard tiling windows across the raster dimension.
         Returns a list of (col_off, row_off, tile_width, tile_height).
@@ -106,7 +101,7 @@ class BasePreprocessor:
         data: np.ndarray,
         transform: Affine,
         crs: str,
-        nodata: Optional[float] = None,
+        nodata: float | None = None,
     ) -> None:
         """Save a numpy raster array as a georeferenced GeoTIFF."""
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -172,9 +167,9 @@ class BasePreprocessor:
         tile_h: int,
         parent_transform: Affine,
         crs: str,
-        pair_tag: Optional[str] = None,
-        pair_tile_id: Optional[str] = None,
-        acquired_at: Optional[Any] = None,
+        pair_tag: str | None = None,
+        pair_tile_id: str | None = None,
+        acquired_at: Any | None = None,
     ) -> TileReference:
         """
         Construct a strongly-typed TileReference preserving exact geographic bounds

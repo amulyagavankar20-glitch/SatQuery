@@ -1,0 +1,22 @@
+# Optional PostGIS stack. The current Windows setup uses the local
+# PostgreSQL 18 + PostGIS 3.6 instance on port 5432 instead.
+services:
+  postgres:
+    image: postgis/postgis:17-3.5
+    container_name: satquery-postgres
+    environment:
+      POSTGRES_DB: satquery
+      POSTGRES_USER: satquery
+      POSTGRES_PASSWORD: satquery
+    ports:
+      - "5433:5432"
+    volumes:
+      - satquery_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U satquery -d satquery"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  satquery_pgdata:

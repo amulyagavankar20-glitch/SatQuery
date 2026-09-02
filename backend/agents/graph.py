@@ -16,19 +16,20 @@ ARCHITECTURE RULES ENFORCED HERE:
 
 from __future__ import annotations
 
-import asyncio
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any
+from collections.abc import Mapping
 
 from langgraph.graph import StateGraph, END
 
 from backend.session import get_session, SessionContext
+from backend.services.persistence import normalize_input_class, persist_run
 from backend.schemas import InputClass, RouterTask
 from backend.agents.state import GraphState          # ← canonical, single definition
 from backend.agents.tools.base import ToolResult
 from backend.agents.tools.executor import run_tool
 from backend.agents.tool_selector import ToolSelector, ToolSelectorError
 from backend.agents.router import QwenRouter, QwenRouterError
-from backend.agents.output_validation import validate_output, ConfidenceLevel
+from backend.agents.output_validation import validate_output
 from backend.agents.tools.preprocessing import run_preprocessing
 from backend.schemas import RouteRequest
 
@@ -60,9 +61,9 @@ def _record_event(
     state: GraphState,
     event_type: str,
     node_name: str,
-    tool_id: Optional[str] = None,
-    parameters: Optional[Dict[str, Any]] = None,
-    message: Optional[str] = None,
+    tool_id: str | None = None,
+    parameters: dict[str, Any] | None = None,
+    message: str | None = None,
 ) -> None:
     session = get_session(state.get("session_id", ""))
     if session:
@@ -80,13 +81,13 @@ def _record_event(
 # We store visited node names in execution_trace to avoid shadowing TypedDict
 # keys.  Tests check for 'visited' via the helper below.
 # ---------------------------------------------------------------------------
-def _visit(state: GraphState, node_name: str) -> Dict[str, Any]:
+def _visit(state: GraphState, node_name: str) -> dict[str, Any]:
     """Return a partial state update that appends *node_name* to execution_trace."""
-    existing: List[Dict[str, Any]] = state.get("execution_trace", [])  # type: ignore[assignment]
+    existing: list[dict[str, Any]] = state.get("execution_trace", [])  # type: ignore[assignment]
     return {"execution_trace": existing + [{"node": node_name}]}
 
 
-def _visited_nodes(state: GraphState) -> List[str]:
+def _visited_nodes(state: GraphState) -> list[str]:
     """Extract the list of visited node names from execution_trace."""
     return [e["node"] for e in state.get("execution_trace", [])]  # type: ignore[union-attr]
 
@@ -95,12 +96,12 @@ def _visited_nodes(state: GraphState) -> List[str]:
 # Node implementations
 # ---------------------------------------------------------------------------
 
-def input_validator(state: GraphState) -> Dict[str, Any]:
+def input_validator(state: GraphState) -> dict[str, Any]:
     _record_event(state, "INPUT_VALIDATED", "input_validator")
     updates = _visit(state, "input_validator")
 
     query = state.get("user_query", "")
-    warnings: List[str] = list(state.get("warnings", []))  # type: ignore[arg-type]
+    warnings: list[str] = list(state.get("warnings", []))  # type: ignore[arg-type]
 
     if not query or not query.strip():
         warnings.append("Empty user query received.")
@@ -115,7 +116,7 @@ def input_validator(state: GraphState) -> Dict[str, Any]:
     return updates
 
 
-def metadata_parser(state: GraphState) -> Dict[str, Any]:
+def metadata_parser(state: GraphState) -> dict[str, Any]:
     _record_event(state, "METADATA_PARSED", "metadata_parser")
     updates = _visit(state, "metadata_parser")
     # Normalise input_class from asset_metadata if not already set
@@ -124,14 +125,14 @@ def metadata_parser(state: GraphState) -> Dict[str, Any]:
     return updates
 
 
-def pair_fitness_gate(state: GraphState) -> Dict[str, Any]:
+def pair_fitness_gate(state: GraphState) -> dict[str, Any]:
     _record_event(state, "PAIR_FITNESS_CHECKED", "pair_fitness_gate")
     updates = _visit(state, "pair_fitness_gate")
     # pair_fitness signals are recorded in state; warnings propagated downstream
     return updates
 
 
-def query_router(state: GraphState) -> Dict[str, Any]:
+def query_router(state: GraphState) -> dict[str, Any]:
     """Route the query by invoking QwenRouter via Ollama.
 
     MUST NOT read metadata["task"] as a routing shortcut.
@@ -144,7 +145,7 @@ def query_router(state: GraphState) -> Dict[str, Any]:
     # Allow test injection: if state carries a pre-resolved task directly in
     # a field called "injected_task", use it (set only by tests that need to
     # bypass Qwen without a live Ollama server). Never use metadata["task"].
-    injected_task: Optional[str] = state.get("injected_task")  # type: ignore[attr-defined]
+    injected_task: str | None = state.get("injected_task")  # type: ignore[attr-defined]
     if injected_task is not None:
         if injected_task in RouterTask.__members__:
             updates["detected_task"] = RouterTask[injected_task].value
@@ -157,7 +158,7 @@ def query_router(state: GraphState) -> Dict[str, Any]:
                           message=f"Unknown injected_task: {injected_task}")
             return updates
 
-    # Production path: call QwenRouter
+    # Production path: call QwenRouter (sync — graph nodes are not async)
     router = QwenRouter()
     manifest = state.get("asset_metadata") or {}
     request = RouteRequest(
@@ -165,7 +166,7 @@ def query_router(state: GraphState) -> Dict[str, Any]:
         manifest=manifest,
     )
     try:
-        route_response = asyncio.run(router.route(request))
+        route_response = router.route_sync(request)
         updates["route"] = route_response
         updates["detected_task"] = route_response.task.value
     except QwenRouterError as exc:
@@ -180,7 +181,7 @@ def query_router(state: GraphState) -> Dict[str, Any]:
     return updates
 
 
-def tool_selector(state: GraphState) -> Dict[str, Any]:
+def tool_selector(state: GraphState) -> dict[str, Any]:
     """Deterministic tool selection enforcing PostgreSQL tool_registry validation.
 
     db_session MUST be a real session – never None.
@@ -190,7 +191,7 @@ def tool_selector(state: GraphState) -> Dict[str, Any]:
 
     task_value = state.get("detected_task", "")
     input_class_value = state.get("input_class", "SINGLE_OPTICAL")
-    warnings: List[str] = list(state.get("warnings", []))  # type: ignore[arg-type]
+    warnings: list[str] = list(state.get("warnings", []))  # type: ignore[arg-type]
 
     try:
         task_enum = RouterTask(task_value)
@@ -231,16 +232,16 @@ def tool_selector(state: GraphState) -> Dict[str, Any]:
 # Preprocessing node — calls Stage 3 pipeline via the wrapper.
 # Results are stored in state; tile references are passed downstream.
 # ---------------------------------------------------------------------------
-def preprocess(state: GraphState) -> Dict[str, Any]:
+def preprocess(state: GraphState) -> dict[str, Any]:
     _record_event(state, "PREPROCESS_STARTED", "preprocess", tool_id="preprocess",
                   parameters={"input_class": state.get("input_class"),
                                "asset_count": len(state.get("assets", []))})  # type: ignore[arg-type]
     updates = _visit(state, "preprocess")
 
     input_class_value = state.get("input_class", "SINGLE_OPTICAL")
-    assets_raw: List[Any] = list(state.get("assets", []))  # type: ignore[arg-type]
+    assets_raw: list[Any] = list(state.get("assets", []))  # type: ignore[arg-type]
     job_id = state.get("job_id", "unknown")
-    session_ctx: Optional[SessionContext] = get_session(state.get("session_id", ""))
+    session_ctx: SessionContext | None = get_session(state.get("session_id", ""))
 
     try:
         input_class_enum = InputClass(input_class_value)
@@ -248,7 +249,7 @@ def preprocess(state: GraphState) -> Dict[str, Any]:
         input_class_enum = InputClass.SINGLE_OPTICAL
 
     # Build asset dicts expected by the dispatcher
-    asset_dicts: List[Dict[str, Any]] = []
+    asset_dicts: list[dict[str, Any]] = []
     for a in assets_raw:
         if isinstance(a, dict):
             asset_dicts.append(a)
@@ -273,7 +274,7 @@ def preprocess(state: GraphState) -> Dict[str, Any]:
                       parameters={"tile_count": len(tile_refs),
                                    "success": preprocess_result.success})
     except Exception as exc:
-        warnings: List[str] = list(state.get("warnings", []))  # type: ignore[arg-type]
+        warnings: list[str] = list(state.get("warnings", []))  # type: ignore[arg-type]
         warnings.append(f"Preprocessing failed: {exc}")
         updates["warnings"] = warnings
         updates["_preprocess_image_refs"] = []  # type: ignore[typeddict-unknown-key]
@@ -285,11 +286,11 @@ def preprocess(state: GraphState) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Execution helper — runs a specialist tool via run_tool with a real DB session.
 # ---------------------------------------------------------------------------
-def _execute_tool(state: GraphState, tool_id: str, params: Mapping[str, Any]) -> Dict[str, Any]:
+def _execute_tool(state: GraphState, tool_id: str, params: Mapping[str, Any]) -> dict[str, Any]:
     _record_event(state, "TOOL_STARTED", tool_id, tool_id=tool_id, parameters=dict(params))
     updates = _visit(state, tool_id)
 
-    existing_results: List[ToolResult] = list(state.get("specialist_results", []))  # type: ignore[arg-type]
+    existing_results: list[ToolResult] = list(state.get("specialist_results", []))  # type: ignore[arg-type]
     db = _get_db(state)
     try:
         result = run_tool(tool_id, params, db=db)
@@ -319,7 +320,7 @@ def _execute_tool(state: GraphState, tool_id: str, params: Mapping[str, Any]) ->
     return updates
 
 
-def _image_refs(state: GraphState) -> List[str]:
+def _image_refs(state: GraphState) -> list[str]:
     """Return preprocessed tile reference paths from state."""
     return list(state.get("_preprocess_image_refs", []))  # type: ignore[attr-defined]
 
@@ -328,7 +329,7 @@ def _image_refs(state: GraphState) -> List[str]:
 # Specialist tool nodes
 # ---------------------------------------------------------------------------
 
-def geochat_vqa(state: GraphState) -> Dict[str, Any]:
+def geochat_vqa(state: GraphState) -> dict[str, Any]:
     params = {
         "question": state.get("user_query", ""),
         "image_refs": _image_refs(state),
@@ -337,7 +338,7 @@ def geochat_vqa(state: GraphState) -> Dict[str, Any]:
     return _execute_tool(state, "geochat_vqa", params)
 
 
-def grounding(state: GraphState) -> Dict[str, Any]:
+def grounding(state: GraphState) -> dict[str, Any]:
     params = {
         "text": state.get("user_query", ""),
         "image_refs": _image_refs(state),
@@ -346,12 +347,12 @@ def grounding(state: GraphState) -> Dict[str, Any]:
     return _execute_tool(state, "grounding", params)
 
 
-def align(state: GraphState) -> Dict[str, Any]:
+def align(state: GraphState) -> dict[str, Any]:
     _record_event(state, "ALIGNMENT_COMPLETED", "align")
     pre_result = state.get("preprocessing_result")
     # Derive pre/post tile refs from tile pairs if available
-    pre_refs: List[str] = []
-    post_refs: List[str] = []
+    pre_refs: list[str] = []
+    post_refs: list[str] = []
     if pre_result and pre_result.tile_pairs:
         for tp in pre_result.tile_pairs:
             pre_refs.append(tp.file_path_1)
@@ -367,13 +368,13 @@ def align(state: GraphState) -> Dict[str, Any]:
                "input_refs": _image_refs(state)}
     result_updates = _execute_tool(state, "align", params)
     # Store alignment result for downstream bit_cd
-    results: List[ToolResult] = result_updates.get("specialist_results", [])
+    results: list[ToolResult] = result_updates.get("specialist_results", [])
     if results:
         result_updates["alignment_result"] = results[-1]
     return result_updates
 
 
-def bit_cd(state: GraphState) -> Dict[str, Any]:
+def bit_cd(state: GraphState) -> dict[str, Any]:
     # Use aligned refs from alignment_result if available
     align_result = state.get("alignment_result")
     if align_result and isinstance(align_result.result, dict):
@@ -385,14 +386,14 @@ def bit_cd(state: GraphState) -> Dict[str, Any]:
     params = {"pre_image": pre, "post_image": post,
                "input_refs": _image_refs(state)}
     result_updates = _execute_tool(state, "bit_cd", params)
-    results: List[ToolResult] = result_updates.get("specialist_results", [])
+    results: list[ToolResult] = result_updates.get("specialist_results", [])
     if results:
         result_updates["change_result"] = results[-1]
     _record_event(state, "CHANGE_DETECTED", "bit_cd", tool_id="bit_cd")
     return result_updates
 
 
-def vectorize(state: GraphState) -> Dict[str, Any]:
+def vectorize(state: GraphState) -> dict[str, Any]:
     change_result = state.get("change_result")
     mask_id = "MOCK_BIT_CD_MASK"
     if change_result and isinstance(change_result.result, dict):
@@ -401,10 +402,10 @@ def vectorize(state: GraphState) -> Dict[str, Any]:
     return _execute_tool(state, "vectorize", params)
 
 
-def geochat_describe(state: GraphState) -> Dict[str, Any]:
+def geochat_describe(state: GraphState) -> dict[str, Any]:
     """Invoke geochat_describe — its own separate tool interface."""
     # Gather the most relevant output refs for description context
-    results: List[ToolResult] = list(state.get("specialist_results", []))  # type: ignore[arg-type]
+    results: list[ToolResult] = list(state.get("specialist_results", []))  # type: ignore[arg-type]
     output_refs = [r for res in results for r in res.output_refs]
     context_parts = []
     for res in results:
@@ -420,11 +421,11 @@ def geochat_describe(state: GraphState) -> Dict[str, Any]:
     return _execute_tool(state, "geochat_describe", params)
 
 
-def coregister(state: GraphState) -> Dict[str, Any]:
+def coregister(state: GraphState) -> dict[str, Any]:
     _record_event(state, "ALIGNMENT_COMPLETED", "coregister")
     pre_result = state.get("preprocessing_result")
-    optical_refs: List[str] = []
-    sar_refs: List[str] = []
+    optical_refs: list[str] = []
+    sar_refs: list[str] = []
     if pre_result and pre_result.tile_pairs:
         for tp in pre_result.tile_pairs:
             optical_refs.append(tp.file_path_1)
@@ -438,18 +439,18 @@ def coregister(state: GraphState) -> Dict[str, Any]:
     return _execute_tool(state, "coregister", params)
 
 
-def fusion_s1s2(state: GraphState) -> Dict[str, Any]:
+def fusion_s1s2(state: GraphState) -> dict[str, Any]:
     params = {"optical_ref": "optical_placeholder", "sar_ref": "sar_placeholder",
                "input_refs": _image_refs(state)}
     result_updates = _execute_tool(state, "fusion_s1s2", params)
-    results: List[ToolResult] = result_updates.get("specialist_results", [])
+    results: list[ToolResult] = result_updates.get("specialist_results", [])
     if results:
         result_updates["fusion_result"] = results[-1]
     _record_event(state, "FUSION_COMPLETED", "fusion_s1s2", tool_id="fusion_s1s2")
     return result_updates
 
 
-def agreement(state: GraphState) -> Dict[str, Any]:
+def agreement(state: GraphState) -> dict[str, Any]:
     fusion_result = state.get("fusion_result")
     fusion_id = "MOCK_FUSION_OUTPUT"
     if fusion_result and isinstance(fusion_result.result, dict):
@@ -463,11 +464,11 @@ def agreement(state: GraphState) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Evidence fusion — consumes validated tool outputs.
 # ---------------------------------------------------------------------------
-def evidence_fusion(state: GraphState) -> Dict[str, Any]:
+def evidence_fusion(state: GraphState) -> dict[str, Any]:
     _record_event(state, "EVIDENCE_FUSED", "evidence_fusion")
     updates = _visit(state, "evidence_fusion")
 
-    results: List[ToolResult] = list(state.get("specialist_results", []))  # type: ignore[arg-type]
+    results: list[ToolResult] = list(state.get("specialist_results", []))  # type: ignore[arg-type]
     # Collect spatial evidence from tool results
     spatial_evidence = []
     for r in results:
@@ -503,7 +504,7 @@ def evidence_fusion(state: GraphState) -> Dict[str, Any]:
     updates["evidence_items"] = evidence_items
     updates["confidence"] = confidence_obj
 
-    warnings: List[str] = list(state.get("warnings", []))  # type: ignore[arg-type]
+    warnings: list[str] = list(state.get("warnings", []))  # type: ignore[arg-type]
     if not validation.is_valid:
         for msg in validation.messages:
             if msg not in warnings:
@@ -513,24 +514,24 @@ def evidence_fusion(state: GraphState) -> Dict[str, Any]:
     return updates
 
 
-def audit_logger(state: GraphState) -> Dict[str, Any]:
+def audit_logger(state: GraphState) -> dict[str, Any]:
     _record_event(state, "LOG", "audit_logger")
     updates = _visit(state, "audit_logger")
     return updates
 
 
-def report_generator(state: GraphState) -> Dict[str, Any]:
+def report_generator(state: GraphState) -> dict[str, Any]:
     _record_event(state, "REPORT_GENERATED", "report_generator")
     updates = _visit(state, "report_generator")
 
     is_refused = state.get("status") == "refused"
     is_failed = state.get("status") == "failed"
 
-    results: List[ToolResult] = list(state.get("specialist_results", []))  # type: ignore[arg-type]
+    results: list[ToolResult] = list(state.get("specialist_results", []))  # type: ignore[arg-type]
     confidence_obj = state.get("confidence")
 
     # Determine final answer — never fabricate from failed/refused executions
-    final_answer: Optional[str] = None
+    final_answer: str | None = None
     if not is_refused and not is_failed:
         # Use last successful specialist result with a textual output
         for r in reversed(results):
@@ -541,7 +542,7 @@ def report_generator(state: GraphState) -> Dict[str, Any]:
                 final_answer = str(r.result)
                 break
 
-    report: Dict[str, Any] = {
+    report: dict[str, Any] = {
         "job_id": state.get("job_id"),
         "original_query": state.get("user_query"),
         "input_class": state.get("input_class"),
@@ -554,7 +555,7 @@ def report_generator(state: GraphState) -> Dict[str, Any]:
         "evidence_summary": state.get("evidence_items", []),
         "spatial_evidence_references": [
             dict(e) if hasattr(e, "__iter__") else e
-            for e in state.get("spatial_evidence", [])
+            for e in (state.get("spatial_evidence") or [])
         ],
         "warnings": state.get("warnings", []),
         "refusal_reason": state.get("refusal_reason"),
@@ -575,10 +576,10 @@ def report_generator(state: GraphState) -> Dict[str, Any]:
     return updates
 
 
-def refusal(state: GraphState) -> Dict[str, Any]:
+def refusal(state: GraphState) -> dict[str, Any]:
     _record_event(state, "REFUSED", "refusal")
     updates = _visit(state, "refusal")
-    warnings: List[str] = list(state.get("warnings", []))  # type: ignore[arg-type]
+    warnings: list[str] = list(state.get("warnings", []))  # type: ignore[arg-type]
     warnings.append("Request refused.")
     updates["warnings"] = warnings
     updates["status"] = "refused"
@@ -750,3 +751,61 @@ workflow.add_edge("refusal", "audit_logger")
 
 # Compile
 app = workflow.compile()
+
+
+def _serialize(value: Any) -> Any:
+    if value is None:
+        return None
+    if hasattr(value, "model_dump"):
+        return value.model_dump()
+    return value
+
+
+def run_graph(session_id: str) -> GraphState:
+    """Execute the compiled StateGraph for an in-memory SessionContext.
+
+    Invoked by FastAPI BackgroundTasks after POST /run.
+    """
+    session = get_session(session_id)
+    if session is None:
+        raise ValueError(f"No active session '{session_id}'")
+
+    input_class = normalize_input_class(
+        session.input_mode or session.metadata.get("input_class", "")
+    )
+    initial_state: GraphState = {
+        "job_id": session.job_id,
+        "session_id": session.session_id,
+        "user_query": session.query,
+        "input_class": input_class,
+        "assets": list(session.metadata.get("assets", [])),
+        "asset_metadata": session.metadata,
+        "pair_fitness": session.pair_fitness,
+        "warnings": [],
+        "status": "running",
+        "specialist_results": [],
+        "execution_trace": [],
+    }
+    session.status = "running"
+
+    result: GraphState = app.invoke(initial_state)
+
+    session.status = result.get("status", "completed")
+    session.task = result.get("detected_task") or session.task
+    route = result.get("route")
+    if route is not None:
+        session.route = _serialize(route)
+    pre = result.get("preprocessing_result")
+    if pre is not None:
+        session.preprocessing_result = _serialize(pre)
+    for tool_result in result.get("specialist_results") or []:
+        session.tool_results.append(_serialize(tool_result))
+    report = result.get("report")
+    if report:
+        session.artifacts.append({"type": "report", "payload": report})
+    refusal = result.get("refusal_reason")
+    if refusal:
+        session.errors.append(refusal)
+
+    persist_run(session, result)
+    return result

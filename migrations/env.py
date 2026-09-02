@@ -24,7 +24,8 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Set database URL dynamically from settings
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# Alembic ConfigParser interpolates '%', so encoded passwords must be escaped.
+config.set_main_option("sqlalchemy.url", (settings.DATABASE_URL or "").replace("%", "%%"))
 
 target_metadata = Base.metadata
 
@@ -60,9 +61,13 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        # Ensure PostGIS extension is available
-        connection.execute(text("CREATE EXTENSION IF NOT EXISTS postgis;"))
-        connection.commit()
+        # Ensure PostGIS extension is available. Superuser is required to
+        # create it; skip if the role can only use an already-enabled extension.
+        try:
+            connection.execute(text("CREATE EXTENSION IF NOT EXISTS postgis;"))
+            connection.commit()
+        except Exception:
+            connection.rollback()
 
         context.configure(
             connection=connection,

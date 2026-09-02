@@ -108,6 +108,12 @@ def patch_externals(monkeypatch):
     # Patch run_tool inside graph to avoid DB interaction
     monkeypatch.setattr("backend.agents.graph.run_tool", mock_run_tool)
 
+    # Skip PostgreSQL tool_registry lookups in unit tests
+    monkeypatch.setattr(
+        "backend.agents.graph.ToolSelector.validate_selection",
+        lambda self, task, input_class: self.get_tool_sequence(task),
+    )
+
     # Patch preprocessing to avoid real file I/O
     from backend.schemas import PreprocessResult, InputClass
     mock_preprocess_result = PreprocessResult(

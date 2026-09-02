@@ -1,7 +1,7 @@
 """
 SatQuery AI — Database Engine and Session Management
 """
-from typing import Generator
+from collections.abc import Generator
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
@@ -12,7 +12,7 @@ from src.exception import CustomException
 
 # Configure SQLAlchemy 2.0 Engine using psycopg3
 engine = create_engine(
-    settings.DATABASE_URL,
+    settings.DATABASE_URL,  # assembled from POSTGRES_* in .env unless overridden
     pool_size=settings.DB_POOL_SIZE,
     max_overflow=settings.DB_MAX_OVERFLOW,
     pool_timeout=settings.DB_POOL_TIMEOUT,

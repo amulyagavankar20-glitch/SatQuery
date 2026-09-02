@@ -1,8 +1,11 @@
 """
 SatQuery AI — Configuration
 """
+
 from pathlib import Path
-from typing import Optional
+from urllib.parse import quote_plus
+
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,8 +18,13 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # Database
-    DATABASE_URL: str = "postgresql+psycopg://localhost/satquery"
+    # Database — prefer POSTGRES_* in .env; DATABASE_URL overrides if set.
+    POSTGRES_USER: str = "satquery"
+    POSTGRES_PASSWORD: str = "satquery"
+    POSTGRES_HOST: str = "127.0.0.1"
+    POSTGRES_PORT: int = 5432
+    POSTGRES_DB: str = "satquery"
+    DATABASE_URL: str | None = None
     DB_POOL_SIZE: int = 10
     DB_MAX_OVERFLOW: int = 20
     DB_POOL_TIMEOUT: int = 30
@@ -33,6 +41,23 @@ class Settings(BaseSettings):
     BASE_DIR: Path = Path(__file__).resolve().parent.parent
     DATA_DIR: str = "data"
     JOB_STORAGE_PATH: str = "data/jobs"
+
+    # Qwen2.5-3B-Instruct router via Ollama (architecture §1 / §6 / §14)
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    OLLAMA_ROUTER_MODEL: str = "qwen2.5:3b-instruct"
+    OLLAMA_TIMEOUT_SECONDS: float = 180.0
+
+    @model_validator(mode="after")
+    def assemble_database_url(self) -> "Settings":
+        if self.DATABASE_URL:
+            return self
+        user = quote_plus(self.POSTGRES_USER)
+        password = quote_plus(self.POSTGRES_PASSWORD)
+        self.DATABASE_URL = (
+            f"postgresql+psycopg://{user}:{password}"
+            f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        )
+        return self
 
     @property
     def full_data_dir(self) -> Path:

@@ -1,21 +1,17 @@
 """
 SatQuery AI — Input Analyzer Service
 """
-import os
-import sys
-from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
-from backend.exceptions import InvalidRasterError, UnsupportedFormatError, MissingMetadataError
-from backend.schemas import AssetMetadata, Modality, SpatialRelationship, TemporalRelationship
+from backend.exceptions import InvalidRasterError, UnsupportedFormatError
+from backend.schemas import Modality
 from backend.services.geospatial import (
     compute_spatial_overlap,
     compute_temporal_relationship,
     extract_raster_metadata,
 )
 from backend.utils import validate_file_extension
-from src.logger import logging
 
 
 class InputAnalyzer:
@@ -59,8 +55,8 @@ class InputAnalyzer:
     @classmethod
     def infer_modality(
         cls,
-        metadata: Dict[str, Any],
-        explicit_modality: Optional[str] = None,
+        metadata: dict[str, Any],
+        explicit_modality: str | None = None,
     ) -> str:
         """
         Deterministically infer whether an asset is OPTICAL or SAR based on metadata,
@@ -101,9 +97,9 @@ class InputAnalyzer:
 
     def analyze_asset(
         self,
-        asset_input: Union[str, Path, Dict[str, Any]],
-        asset_id: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        asset_input: str | Path | dict[str, Any],
+        asset_id: str | None = None,
+    ) -> dict[str, Any]:
         """
         Analyze a single asset file or dictionary input and produce normalized metadata.
         """
@@ -141,9 +137,9 @@ class InputAnalyzer:
 
     def analyze_inputs(
         self,
-        assets: List[Union[str, Path, Dict[str, Any]]],
+        assets: list[str | Path | dict[str, Any]],
         min_overlap_threshold: float = 0.10,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Analyze a list of input assets, extracting individual metadata and pairwise relationships.
         """

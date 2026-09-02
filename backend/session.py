@@ -4,9 +4,8 @@ SatQuery AI — In-Memory Working Session Store
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
-from backend.exceptions import SatQueryBaseException
 
 
 @dataclass
@@ -23,28 +22,28 @@ class SessionContext:
     query: str = ""
     input_mode: str = ""
     task: str = ""
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    pair_fitness: Dict[str, Any] = field(default_factory=dict)
-    classification: Optional[Dict[str, Any]] = None
-    route: Dict[str, Any] = field(default_factory=dict)
-    preprocessing_result: Optional[Dict[str, Any]] = None
-    tool_results: List[Dict[str, Any]] = field(default_factory=list)
-    artifacts: List[Dict[str, Any]] = field(default_factory=list)
-    traces: List[Dict[str, Any]] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
+    pair_fitness: dict[str, Any] = field(default_factory=dict)
+    classification: dict[str, Any] | None = None
+    route: dict[str, Any] = field(default_factory=dict)
+    preprocessing_result: dict[str, Any] | None = None
+    tool_results: list[dict[str, Any]] = field(default_factory=list)
+    artifacts: list[dict[str, Any]] = field(default_factory=list)
+    traces: list[dict[str, Any]] = field(default_factory=list)
     status: str = "pending"
-    errors: List[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def record_trace(
         self,
         event_type: str,
-        node_name: Optional[str] = None,
-        tool_id: Optional[str] = None,
-        message: Optional[str] = None,
-        parameters: Optional[Dict[str, Any]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        node_name: str | None = None,
+        tool_id: str | None = None,
+        message: str | None = None,
+        parameters: dict[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Record an in-flight trace event into working memory."""
         event = {
             "event_type": event_type,
@@ -67,12 +66,12 @@ class SessionContext:
 
 
 # In-memory dictionary holding active runs keyed by session_id (string UUID)
-_ACTIVE_SESSIONS: Dict[str, SessionContext] = {}
+_ACTIVE_SESSIONS: dict[str, SessionContext] = {}
 
 
 def create_session(
-    session_id: Optional[Union[str, uuid.UUID]] = None,
-    job_id: Optional[Union[str, uuid.UUID]] = None,
+    session_id: str | uuid.UUID | None = None,
+    job_id: str | uuid.UUID | None = None,
     query: str = "",
     input_mode: str = "",
     task: str = "",
@@ -91,16 +90,25 @@ def create_session(
     return session
 
 
-def get_session(session_id: Union[str, uuid.UUID]) -> Optional[SessionContext]:
+def get_session(session_id: str | uuid.UUID) -> SessionContext | None:
     """Retrieve an active SessionContext by session_id."""
     return _ACTIVE_SESSIONS.get(str(session_id))
 
 
-def remove_session(session_id: Union[str, uuid.UUID]) -> Optional[SessionContext]:
+def get_session_by_job_id(job_id: str | uuid.UUID) -> SessionContext | None:
+    """Retrieve an active SessionContext by job_id, falling back to session_id."""
+    jid = str(job_id)
+    for session in _ACTIVE_SESSIONS.values():
+        if session.job_id == jid:
+            return session
+    return get_session(jid)
+
+
+def remove_session(session_id: str | uuid.UUID) -> SessionContext | None:
     """Remove a finished SessionContext from memory."""
     return _ACTIVE_SESSIONS.pop(str(session_id), None)
 
 
-def list_active_sessions() -> List[str]:
+def list_active_sessions() -> list[str]:
     """Return all active session IDs."""
     return list(_ACTIVE_SESSIONS.keys())

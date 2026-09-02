@@ -8,7 +8,8 @@ orchestrating tool execution.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from pydantic import BaseModel, Field
 
@@ -23,14 +24,14 @@ class ToolResult(BaseModel):
 
     tool_id: str = Field(..., description="Identifier of the tool that produced this result")
     status: str = Field(..., description="Execution status – e.g. 'success', 'validation_error', 'error'")
-    input_refs: List[str] = Field(default_factory=list, description="References to input artefacts used")
-    output_refs: List[str] = Field(default_factory=list, description="References to generated artefacts")
+    input_refs: list[str] = Field(default_factory=list, description="References to input artefacts used")
+    output_refs: list[str] = Field(default_factory=list, description="References to generated artefacts")
     result: Any = Field(..., description="Primary payload produced by the tool")
     confidence: float | None = Field(None, description="Confidence score if applicable")
     latency_ms: float | None = Field(None, description="Execution latency in milliseconds")
-    warnings: List[str] = Field(default_factory=list, description="Any non‑critical warnings raised")
+    warnings: list[str] = Field(default_factory=list, description="Any non‑critical warnings raised")
     explanation: str = Field(..., description="Narrative explanation of what the tool did")
-    spatial_refs: List[Mapping[str, Any]] = Field(
+    spatial_refs: list[Mapping[str, Any]] = Field(
         default_factory=list,
         description="Optional spatial references (e.g., bounding boxes, geometry) relevant to the result",
     )

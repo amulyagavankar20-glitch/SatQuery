@@ -9,7 +9,7 @@ tool ID "preprocess" in the `ToolSelector`. It accepts the same parameters that
 the dispatcher requires and returns a `PreprocessResult` instance.
 """
 
-from typing import List, Dict, Any, Optional
+from typing import Any
 
 from backend.schemas import InputClass, PreprocessResult
 from backend.services.preprocessing.dispatcher import PreprocessingDispatcher
@@ -18,9 +18,9 @@ from backend.session import SessionContext
 
 def run_preprocessing(
     input_class: InputClass,
-    assets: List[Dict[str, Any]],
+    assets: list[dict[str, Any]],
     job_id: str,
-    session_context: Optional[SessionContext] = None,
+    session_context: SessionContext | None = None,
 ) -> PreprocessResult:
     """Execute the preprocessing pipeline for a given job.
 
@@ -28,11 +28,11 @@ def run_preprocessing(
     ----------
     input_class: InputClass
         The classified input configuration (SINGLE_OPTICAL, SINGLE_SAR, etc.).
-    assets: List[Dict[str, Any]]
+    assets: list[dict[str, Any]]
         A list of asset dictionaries describing image paths and metadata.
     job_id: str
         The unique identifier for the current job/session.
-    session_context: Optional[SessionContext]
+    session_context: SessionContext | None
         The current session used for trace recording. If provided, audit events
         are recorded via ``session_context.record_trace``.
 

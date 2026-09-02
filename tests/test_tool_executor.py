@@ -74,7 +74,7 @@ def test_tool_failure(monkeypatch):
 # ---------------------------------------------------------------------------
 def test_malformed_parameters():
     db = make_mock_session(_FakeToolRegistry("geochat_vqa", enabled=True))
-    with pytest.raises(ValueError, match="params must be a mapping"):
+    with pytest.raises(ValueError, match="params.*must be a mapping"):
         run_tool("geochat_vqa", [1, 2, 3], db)  # type: ignore[arg-type]
 
 # ---------------------------------------------------------------------------

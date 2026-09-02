@@ -14,7 +14,8 @@ Tool IDs registered here MUST match the IDs used in:
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from .base import BaseTool
 

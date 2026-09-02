@@ -2,13 +2,11 @@
 SatQuery AI — Optical Preprocessing Pipeline
 """
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 import numpy as np
 import rasterio
-from rasterio.transform import Affine
 
-from backend.config import settings
 from backend.exceptions import InvalidRasterError, PreprocessingError
 from backend.schemas import InputClass, Modality, PreprocessResult, TileReference
 from backend.services.preprocessing.base import BasePreprocessor
@@ -27,7 +25,7 @@ class OpticalPreprocessor(BasePreprocessor):
     def __init__(
         self,
         tile_size: int = 256,
-        stride: Optional[int] = None,
+        stride: int | None = None,
         p_min: float = 2.0,
         p_max: float = 98.0,
     ):
@@ -38,9 +36,9 @@ class OpticalPreprocessor(BasePreprocessor):
 
     def preprocess(
         self,
-        asset_dict: Dict[str, Any],
+        asset_dict: dict[str, Any],
         job_id: str,
-        job_storage_dir: Optional[Path] = None,
+        job_storage_dir: Path | None = None,
     ) -> PreprocessResult:
         """
         Execute full optical preprocessing workflow on a single optical asset.
@@ -107,7 +105,7 @@ class OpticalPreprocessor(BasePreprocessor):
                 stride=self.stride,
             )
 
-            tile_references: List[TileReference] = []
+            tile_references: list[TileReference] = []
             source_id = str(asset_dict.get("asset_id") or file_path.stem)
             acquired_at = asset_dict.get("acquired_at")
 

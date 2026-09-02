@@ -3,7 +3,7 @@ SatQuery AI — Preprocessing Pipeline Dispatcher
 """
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from backend.exceptions import PreprocessingError, UnsupportedModalityError
 from backend.schemas import InputClass, PreprocessResult
@@ -12,7 +12,6 @@ from backend.services.preprocessing.optical import OpticalPreprocessor
 from backend.services.preprocessing.optical_sar import OpticalSARPreprocessor
 from backend.services.preprocessing.sar import SARPreprocessor
 from backend.session import SessionContext
-from backend.utils import serialize_trace_event
 from src.logger import logging
 
 
@@ -25,8 +24,8 @@ class PreprocessingDispatcher:
     def __init__(
         self,
         tile_size: int = 256,
-        stride: Optional[int] = None,
-        job_storage_dir: Optional[Path] = None,
+        stride: int | None = None,
+        job_storage_dir: Path | None = None,
     ):
         self.tile_size = tile_size
         self.stride = stride
@@ -39,10 +38,10 @@ class PreprocessingDispatcher:
 
     def preprocess(
         self,
-        input_class: Union[InputClass, str],
-        assets: List[Dict[str, Any]],
+        input_class: InputClass | str,
+        assets: list[dict[str, Any]],
         job_id: str,
-        session_context: Optional[SessionContext] = None,
+        session_context: SessionContext | None = None,
     ) -> PreprocessResult:
         """
         Dispatch and execute preprocessing based on the input configuration.

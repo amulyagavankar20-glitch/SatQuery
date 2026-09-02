@@ -14,7 +14,8 @@ Tool IDs here MUST match:
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from sqlalchemy.orm import Session
 

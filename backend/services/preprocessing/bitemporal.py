@@ -2,22 +2,18 @@
 SatQuery AI — Bitemporal Preprocessing Pipeline
 """
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 import numpy as np
 import rasterio
 from rasterio.crs import CRS
 from rasterio.enums import Resampling
-from rasterio.transform import Affine, from_bounds
-from rasterio.warp import reproject, transform_bounds
-from rasterio.windows import Window
-from shapely.geometry import box
+from rasterio.transform import from_bounds
+from rasterio.warp import transform_bounds
 
-from backend.config import settings
 from backend.exceptions import (
     InsufficientOverlapError,
     InvalidRasterError,
-    InvalidTemporalPairError,
     PreprocessingError,
 )
 from backend.schemas import InputClass, Modality, PreprocessResult, TilePair, TileReference
@@ -39,7 +35,7 @@ class BitemporalPreprocessor(BasePreprocessor):
     def __init__(
         self,
         tile_size: int = 256,
-        stride: Optional[int] = None,
+        stride: int | None = None,
         p_min: float = 2.0,
         p_max: float = 98.0,
     ):
@@ -50,9 +46,9 @@ class BitemporalPreprocessor(BasePreprocessor):
 
     def preprocess(
         self,
-        assets: List[Dict[str, Any]],
+        assets: list[dict[str, Any]],
         job_id: str,
-        job_storage_dir: Optional[Path] = None,
+        job_storage_dir: Path | None = None,
     ) -> PreprocessResult:
         """
         Execute paired bitemporal alignment and synchronized tiling.
@@ -179,8 +175,8 @@ class BitemporalPreprocessor(BasePreprocessor):
                 stride=self.stride,
             )
 
-            tile_references: List[TileReference] = []
-            tile_pairs: List[TilePair] = []
+            tile_references: list[TileReference] = []
+            tile_pairs: list[TilePair] = []
 
             source_id_1 = str(a1.get("asset_id") or path1.stem)
             source_id_2 = str(a2.get("asset_id") or path2.stem)

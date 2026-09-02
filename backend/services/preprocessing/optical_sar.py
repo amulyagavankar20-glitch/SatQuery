@@ -2,17 +2,15 @@
 SatQuery AI — Cross-Modal Optical + SAR Preprocessing Pipeline
 """
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 import numpy as np
 import rasterio
 from rasterio.crs import CRS
 from rasterio.enums import Resampling
-from rasterio.transform import Affine, from_bounds
+from rasterio.transform import from_bounds
 from rasterio.warp import transform_bounds
-from rasterio.windows import Window
 
-from backend.config import settings
 from backend.exceptions import (
     InsufficientOverlapError,
     InvalidRasterError,
@@ -38,7 +36,7 @@ class OpticalSARPreprocessor(BasePreprocessor):
     def __init__(
         self,
         tile_size: int = 256,
-        stride: Optional[int] = None,
+        stride: int | None = None,
         apply_sar_speckle_filter: bool = True,
         p_min_optical: float = 2.0,
         p_max_optical: float = 98.0,
@@ -55,9 +53,9 @@ class OpticalSARPreprocessor(BasePreprocessor):
 
     def preprocess(
         self,
-        assets: List[Dict[str, Any]],
+        assets: list[dict[str, Any]],
         job_id: str,
-        job_storage_dir: Optional[Path] = None,
+        job_storage_dir: Path | None = None,
     ) -> PreprocessResult:
         """
         Execute cross-modal optical + SAR alignment and paired tiling.
@@ -211,8 +209,8 @@ class OpticalSARPreprocessor(BasePreprocessor):
                 stride=self.stride,
             )
 
-            tile_references: List[TileReference] = []
-            tile_pairs: List[TilePair] = []
+            tile_references: list[TileReference] = []
+            tile_pairs: list[TilePair] = []
 
             source_id_opt = str(optical_asset.get("asset_id") or opt_path.stem)
             source_id_sar = str(sar_asset.get("asset_id") or sar_path.stem)

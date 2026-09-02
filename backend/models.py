@@ -3,7 +3,7 @@ SatQuery AI — SQLAlchemy 2.x Declarative Models
 """
 import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from geoalchemy2 import Geometry
 from geoalchemy2.elements import WKBElement
@@ -34,7 +34,7 @@ class Project(Base):
         default=uuid.uuid4,
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -42,7 +42,7 @@ class Project(Base):
     )
 
     # Relationships
-    jobs: Mapped[List["Job"]] = relationship(
+    jobs: Mapped[list["Job"]] = relationship(
         "Job",
         back_populates="project",
         cascade="all, delete-orphan",
@@ -59,7 +59,7 @@ class Job(Base):
         primary_key=True,
         default=uuid.uuid4,
     )
-    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("projects.id", ondelete="SET NULL"),
         nullable=True,
@@ -75,10 +75,10 @@ class Job(Base):
     input_mode: Mapped[str] = mapped_column(String(64), nullable=False)
     task: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False, index=True)
-    route_json: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
-    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    route_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -86,30 +86,30 @@ class Job(Base):
     )
 
     # Relationships
-    project: Mapped[Optional["Project"]] = relationship("Project", back_populates="jobs")
-    assets: Mapped[List["Asset"]] = relationship(
+    project: Mapped["Project | None"] = relationship("Project", back_populates="jobs")
+    assets: Mapped[list["Asset"]] = relationship(
         "Asset",
         back_populates="job",
         cascade="all, delete-orphan",
     )
-    tool_runs: Mapped[List["ToolRun"]] = relationship(
+    tool_runs: Mapped[list["ToolRun"]] = relationship(
         "ToolRun",
         back_populates="job",
         cascade="all, delete-orphan",
         order_by="ToolRun.sequence_no",
     )
-    outputs: Mapped[List["Output"]] = relationship(
+    outputs: Mapped[list["Output"]] = relationship(
         "Output",
         back_populates="job",
         cascade="all, delete-orphan",
     )
-    traces: Mapped[List["Trace"]] = relationship(
+    traces: Mapped[list["Trace"]] = relationship(
         "Trace",
         back_populates="job",
         cascade="all, delete-orphan",
         order_by="Trace.timestamp",
     )
-    spatial_features: Mapped[List["SpatialFeature"]] = relationship(
+    spatial_features: Mapped[list["SpatialFeature"]] = relationship(
         "SpatialFeature",
         back_populates="job",
         cascade="all, delete-orphan",
@@ -136,22 +136,22 @@ class Asset(Base):
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     format: Mapped[str] = mapped_column(String(32), nullable=False)
     modality: Mapped[str] = mapped_column(String(32), nullable=False)
-    sensor: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
-    acquired_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    crs: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
-    width: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    height: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    bands: Mapped[Optional[Any]] = mapped_column(JSONB, nullable=True)
-    nodata: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    cloud_fraction: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    bbox: Mapped[Optional[WKBElement]] = mapped_column(
+    sensor: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    acquired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    crs: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    width: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    height: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    bands: Mapped[Any | None] = mapped_column(JSONB, nullable=True)
+    nodata: Mapped[float | None] = mapped_column(Float, nullable=True)
+    cloud_fraction: Mapped[float | None] = mapped_column(Float, nullable=True)
+    bbox: Mapped[WKBElement | None] = mapped_column(
         Geometry(geometry_type="POLYGON", srid=4326, spatial_index=False),
         nullable=True,
     )
 
     # Relationships
     job: Mapped["Job"] = relationship("Job", back_populates="assets")
-    spatial_features: Mapped[List["SpatialFeature"]] = relationship(
+    spatial_features: Mapped[list["SpatialFeature"]] = relationship(
         "SpatialFeature",
         back_populates="asset",
     )
@@ -170,12 +170,12 @@ class ToolRegistry(Base):
     tool_id: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     tool_type: Mapped[str] = mapped_column(String(64), nullable=False)
-    model_name: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
-    model_version: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    supported_tasks: Mapped[Optional[List[str]]] = mapped_column(JSONB, nullable=True)
-    supported_modalities: Mapped[Optional[List[str]]] = mapped_column(JSONB, nullable=True)
-    parameter_schema: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    model_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    model_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    supported_tasks: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
+    supported_modalities: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
+    parameter_schema: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -184,7 +184,7 @@ class ToolRegistry(Base):
     )
 
     # Relationships
-    runs: Mapped[List["ToolRun"]] = relationship("ToolRun", back_populates="tool")
+    runs: Mapped[list["ToolRun"]] = relationship("ToolRun", back_populates="tool")
 
 
 class ToolRun(Base):
@@ -211,14 +211,14 @@ class ToolRun(Base):
     )
     sequence_no: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)
-    parameters: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
-    input_refs: Mapped[Optional[Any]] = mapped_column(JSONB, nullable=True)
-    output_refs: Mapped[Optional[Any]] = mapped_column(JSONB, nullable=True)
-    confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    latency_ms: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    parameters: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    input_refs: Mapped[Any | None] = mapped_column(JSONB, nullable=True)
+    output_refs: Mapped[Any | None] = mapped_column(JSONB, nullable=True)
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    latency_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Relationships
     job: Mapped["Job"] = relationship("Job", back_populates="tool_runs")
@@ -242,11 +242,11 @@ class Output(Base):
         index=True,
     )
     output_type: Mapped[str] = mapped_column(String(64), nullable=False)
-    text_result: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    file_path: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
-    mime_type: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
-    confidence_label: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
-    confidence_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    text_result: Mapped[str | None] = mapped_column(Text, nullable=True)
+    file_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    mime_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    confidence_label: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -274,17 +274,17 @@ class Trace(Base):
         index=True,
     )
     event_type: Mapped[str] = mapped_column(String(64), nullable=False)
-    node_name: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
-    tool_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
-    model_version: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
-    parameters: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
-    message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    node_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    tool_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    model_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    parameters: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    message: Mapped[str | None] = mapped_column(Text, nullable=True)
     timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         nullable=False,
     )
-    trace_metadata: Mapped[Optional[Dict[str, Any]]] = mapped_column("metadata", JSONB, nullable=True)
+    trace_metadata: Mapped[dict[str, Any] | None] = mapped_column("metadata", JSONB, nullable=True)
 
     # Relationships
     job: Mapped["Job"] = relationship("Job", back_populates="traces")
@@ -306,7 +306,7 @@ class SpatialFeature(Base):
         nullable=False,
         index=True,
     )
-    asset_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    asset_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("assets.id", ondelete="SET NULL"),
         nullable=True,
@@ -317,10 +317,10 @@ class SpatialFeature(Base):
         Geometry(geometry_type="GEOMETRY", srid=4326, spatial_index=False),
         nullable=False,
     )
-    class_label: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
-    confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    area_m2: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    properties: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    class_label: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    area_m2: Mapped[float | None] = mapped_column(Float, nullable=True)
+    properties: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -329,4 +329,4 @@ class SpatialFeature(Base):
 
     # Relationships
     job: Mapped["Job"] = relationship("Job", back_populates="spatial_features")
-    asset: Mapped[Optional["Asset"]] = relationship("Asset", back_populates="spatial_features")
+    asset: Mapped["Asset | None"] = relationship("Asset", back_populates="spatial_features")

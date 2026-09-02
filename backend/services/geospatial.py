@@ -1,28 +1,23 @@
 """
 SatQuery AI — Geospatial & Raster Manipulation Services
 """
-import math
-import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
-import numpy as np
 import rasterio
 from rasterio.crs import CRS
 from rasterio.enums import Resampling
-from rasterio.transform import Affine, from_bounds
+from rasterio.transform import from_bounds
 from rasterio.warp import calculate_default_transform, reproject, transform_bounds
-from rasterio.windows import Window
-from shapely.geometry import Polygon, box, mapping, shape
-from shapely.ops import transform as shapely_transform
+from shapely.geometry import box
 
-from backend.exceptions import InvalidRasterError, UnsupportedFormatError
+from backend.exceptions import InvalidRasterError
 from backend.schemas import SpatialRelationship, TemporalRelationship
 from src.logger import logging
 
 
-def extract_raster_metadata(file_path: Union[str, Path]) -> Dict[str, Any]:
+def extract_raster_metadata(file_path: str | Path) -> dict[str, Any]:
     """
     Extract comprehensive geospatial and raster metadata from a file header
     without loading full image arrays into memory.
@@ -98,9 +93,9 @@ def extract_raster_metadata(file_path: Union[str, Path]) -> Dict[str, Any]:
 
 
 def compute_spatial_overlap(
-    bounds1: List[float],
+    bounds1: list[float],
     crs1: str,
-    bounds2: List[float],
+    bounds2: list[float],
     crs2: str,
     min_overlap_threshold: float = 0.10,
 ) -> SpatialRelationship:
@@ -177,8 +172,8 @@ def compute_spatial_overlap(
 
 
 def compute_temporal_relationship(
-    date1: Optional[datetime],
-    date2: Optional[datetime],
+    date1: datetime | None,
+    date2: datetime | None,
     min_distinct_seconds: float = 60.0,
 ) -> TemporalRelationship:
     """
@@ -208,13 +203,13 @@ def compute_temporal_relationship(
 
 
 def reproject_and_resample_raster(
-    src_path: Union[str, Path],
-    dst_path: Union[str, Path],
-    target_crs: Optional[str] = None,
-    target_bounds: Optional[List[float]] = None,
-    target_resolution: Optional[Tuple[float, float]] = None,
+    src_path: str | Path,
+    dst_path: str | Path,
+    target_crs: str | None = None,
+    target_bounds: list[float] | None = None,
+    target_resolution: tuple[float, float] | None = None,
     resampling_method: Resampling = Resampling.bilinear,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Reproject, crop to target bounds, and resample a raster to match a desired spatial reference.
     Preserves exact geospatial transform and headers.
