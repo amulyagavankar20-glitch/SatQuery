@@ -59,3 +59,7 @@ uvicorn==0.50.2
 uvloop==0.22.1
 watchfiles==1.2.0
 websockets==16.0
+rasterio==1.5.1
+pillow==12.3.0
+tifffile==2026.8.23
+affine==3.0.1

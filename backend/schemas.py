@@ -3,8 +3,110 @@ SatQuery AI — Pydantic v2 Data Validation and API Schemas
 """
 import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from enum import Enum
+from typing import Any, Dict, List, Optional, Union
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+# ---------------------------------------------------------------------------
+# Input Classification & Modality Enums
+# ---------------------------------------------------------------------------
+class InputClass(str, Enum):
+    SINGLE_OPTICAL = "SINGLE_OPTICAL"
+    SINGLE_SAR = "SINGLE_SAR"
+    BI_TEMPORAL = "BI_TEMPORAL"
+    OPTICAL_SAR = "OPTICAL_SAR"
+
+
+class Modality(str, Enum):
+    OPTICAL = "OPTICAL"
+    SAR = "SAR"
+    UNKNOWN = "UNKNOWN"
+
+
+# ---------------------------------------------------------------------------
+# Spatial & Temporal Relationship Schemas
+# ---------------------------------------------------------------------------
+class SpatialRelationship(BaseModel):
+    overlap_fraction_1: float = Field(..., ge=0.0, le=1.0, description="Overlap fraction relative to asset 1 area")
+    overlap_fraction_2: float = Field(..., ge=0.0, le=1.0, description="Overlap fraction relative to asset 2 area")
+    iou: float = Field(..., ge=0.0, le=1.0, description="Intersection over Union of footprints")
+    intersection_bbox_wgs84: Optional[List[float]] = Field(None, description="[min_lon, min_lat, max_lon, max_lat]")
+    intersection_wkt: Optional[str] = Field(None, description="WKT polygon of intersection")
+    has_sufficient_overlap: bool = Field(..., description="Whether overlap meets minimum threshold")
+
+
+class TemporalRelationship(BaseModel):
+    date_1: Optional[datetime] = None
+    date_2: Optional[datetime] = None
+    days_difference: Optional[float] = None
+    is_distinct_time: bool = Field(..., description="True if acquisitions occurred at different timestamps")
+    is_chronological: bool = Field(True, description="True if date_1 <= date_2")
+
+
+# ---------------------------------------------------------------------------
+# Input Classification Result Schema
+# ---------------------------------------------------------------------------
+class InputClassification(BaseModel):
+    input_class: Optional[InputClass] = Field(None, description="SINGLE_OPTICAL, SINGLE_SAR, BI_TEMPORAL, OPTICAL_SAR")
+    valid: bool = Field(..., description="True if input configuration meets criteria for analysis")
+    asset_ids: List[str] = Field(default_factory=list, description="IDs/keys of input assets analyzed")
+    modalities: List[str] = Field(default_factory=list, description="Modalities of respective inputs")
+    acquisition_dates: List[Optional[datetime]] = Field(default_factory=list)
+    spatial_relationship: Optional[SpatialRelationship] = None
+    temporal_relationship: Optional[TemporalRelationship] = None
+    validation_messages: List[str] = Field(default_factory=list)
+    warnings: List[str] = Field(default_factory=list)
+    refusal_reason: Optional[str] = None
+    details: Dict[str, Any] = Field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# Preprocessing Output Schemas
+# ---------------------------------------------------------------------------
+class TileReference(BaseModel):
+    tile_id: str = Field(..., description="Unique identifier for the tile")
+    tile_index: int = Field(..., description="Zero-based tile index in grid")
+    source_asset_id: str = Field(..., description="Parent asset identifier")
+    modality: str = Field(..., description="OPTICAL or SAR")
+    file_path: str = Field(..., description="Path to generated tile raster/image file")
+    col_off: int = Field(..., description="Column offset in source raster")
+    row_off: int = Field(..., description="Row offset in source raster")
+    width: int = Field(..., description="Tile width in pixels")
+    height: int = Field(..., description="Tile height in pixels")
+    bounds: List[float] = Field(..., description="[min_x, min_y, max_x, max_y] in spatial CRS")
+    bounds_wgs84: Optional[List[float]] = Field(None, description="[min_lon, min_lat, max_lon, max_lat]")
+    bbox_wkt: Optional[str] = Field(None, description="WKT polygon in spatial CRS")
+    crs: str = Field(..., description="CRS of the tile coordinates")
+    pair_tag: Optional[str] = Field(None, description="Tag for paired tiles (t1, t2, optical, sar)")
+    pair_tile_id: Optional[str] = Field(None, description="Corresponding tile_id in paired modality/timestamp")
+    acquisition_date: Optional[datetime] = None
+
+
+class TilePair(BaseModel):
+    pair_index: int
+    tile_id_1: str
+    tile_id_2: str
+    file_path_1: str
+    file_path_2: str
+    tag_1: str  # e.g., 't1' or 'optical'
+    tag_2: str  # e.g., 't2' or 'sar'
+    bounds: List[float]
+    crs: str
+
+
+class PreprocessResult(BaseModel):
+    input_class: InputClass
+    success: bool
+    processed_assets: List[Dict[str, Any]] = Field(default_factory=list)
+    tile_references: List[TileReference] = Field(default_factory=list)
+    tile_pairs: Optional[List[TilePair]] = None
+    preprocessing_steps: List[str] = Field(default_factory=list)
+    spatial_reference: Dict[str, Any] = Field(default_factory=dict)
+    output_paths: Dict[str, Any] = Field(default_factory=dict)
+    warnings: List[str] = Field(default_factory=list)
+    errors: List[str] = Field(default_factory=list)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
