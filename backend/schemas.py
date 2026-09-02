@@ -23,6 +23,29 @@ class Modality(str, Enum):
     SAR = "SAR"
     UNKNOWN = "UNKNOWN"
 
+class RouterTask(str, Enum):
+    SINGLE_VQA = "SINGLE_VQA"
+    CAPTIONING = "CAPTIONING"
+    GROUNDING = "GROUNDING"
+    CHANGE_DETECTION = "CHANGE_DETECTION"
+    CHANGE_VQA = "CHANGE_VQA"
+    OPTICAL_SAR_ANALYSIS = "OPTICAL_SAR_ANALYSIS"
+
+class RouterInputMode(str, Enum):
+    SINGLE_OPTICAL = "SINGLE_OPTICAL"
+    SINGLE_SAR = "SINGLE_SAR"
+    BI_TEMPORAL_OPTICAL = "BI_TEMPORAL_OPTICAL"
+    OPTICAL_SAR = "OPTICAL_SAR"
+
+class RouterTool(str, Enum):
+    GEOSPATIAL_VALIDATOR = "geospatial_validator"
+    GEOCHAT_VQA = "geochat_vqa"
+    GEOCHAT_DESCRIBE = "geochat_describe"
+    BIT_CD = "bit_cd"
+    FUSION_S1S2 = "fusion_s1s2"
+    MOBILESAM = "mobilesam"
+    VECTORIZER = "vectorizer"
+
 
 # ---------------------------------------------------------------------------
 # Spatial & Temporal Relationship Schemas
@@ -349,9 +372,9 @@ class RouteRequest(BaseModel):
 
 
 class RouteResponse(BaseModel):
-    task: str = Field(..., description="Identified task (SINGLE_VQA, CHANGE_VQA, OPTICAL_SAR_FUSION, etc.)")
-    input_mode: str = Field(..., description="Input configuration (SINGLE_OPTICAL, BI_TEMPORAL_OPTICAL, OPTICAL_SAR)")
-    tools: List[str] = Field(..., description="Ordered list of tools to execute")
+    task: RouterTask = Field(..., description="Identified task from user intent")
+    input_mode: RouterInputMode = Field(..., description="Input configuration")
+    tools: List[RouterTool] = Field(..., description="Ordered list of tools to execute")
     need_overlay: bool = True
     params: Dict[str, Any] = Field(default_factory=dict)
 

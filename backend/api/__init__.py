@@ -1,0 +1,3 @@
+"""
+SatQuery AI API Endpoints
+"""
