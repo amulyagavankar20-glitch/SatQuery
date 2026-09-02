@@ -2,6 +2,7 @@ from typing import Any
 
 import httpx
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api import jobs
 from backend.config import settings
@@ -10,6 +11,14 @@ app = FastAPI(
     title="SatQuery AI API",
     description="SIH26167 SatQuery backend for Agentic Orchestration",
     version="1.0.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origin_list,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(jobs.router)
@@ -35,6 +44,7 @@ def health_check() -> dict[str, Any]:
     return {
         "status": "ok",
         "router_model": settings.OLLAMA_ROUTER_MODEL,
+        "talking_vlm": settings.TALKING_VLM_MODEL,
         "ollama": ollama_status,
         "postgres": postgres,
     }
@@ -53,6 +63,8 @@ def list_models() -> dict[str, Any]:
     return {
         "router_model": settings.OLLAMA_ROUTER_MODEL,
         "router_ready": settings.OLLAMA_ROUTER_MODEL in available,
+        "talking_vlm": settings.TALKING_VLM_MODEL,
+        "talking_vlm_backend": settings.TALKING_VLM_BACKEND,
         "available": available,
         "ollama": ollama_status,
     }

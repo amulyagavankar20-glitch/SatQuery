@@ -1,20 +1,28 @@
 import asyncio
 import uuid
-from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse, Response
 
 from backend.agents.graph import run_graph
 from backend.exceptions import UnsupportedFormatError
-from backend.schemas import JobCreate, RouteRequest, RouteResponse
+from backend.schemas import JobCreate, JobView, RouteRequest, RouteResponse
 from backend.services.ingest import ingest_rasters
-from backend.services.persistence import create_job_record, load_job, persist_assets
+from backend.services.job_view import (
+    footprint_geojson,
+    footprint_kml,
+    get_job_view,
+    resolve_composite_path,
+    resolve_tile_path,
+    safe_job_file,
+)
+from backend.services.persistence import create_job_record, persist_assets
 from backend.services.router import route_query_with_qwen
 from backend.session import create_session, get_session_by_job_id
 
 router = APIRouter()
 
-@router.post("/ingest", response_model=dict[str, Any])
+@router.post("/ingest")
 async def ingest_job(
     files: list[UploadFile] = File(..., description="GeoTIFF rasters"),
     query: str = Form(""),
@@ -49,7 +57,6 @@ async def ingest_job(
         "assets": [
             {
                 "filename": a.get("filename"),
-                "file_path": a.get("file_path"),
                 "modality": a.get("modality"),
                 "sensor": a.get("sensor"),
                 "width": a.get("width"),
@@ -115,28 +122,56 @@ async def run_job(job: JobCreate, background_tasks: BackgroundTasks):
     return {"session_id": session.session_id, "job_id": session.job_id, "status": "running"}
 
 
-@router.get("/jobs/{job_id}", response_model=dict[str, Any])
-async def get_job(job_id: str):
-    """
-    Get job status and results.
-    """
-    session = get_session_by_job_id(job_id)
-    if session:
-        return {
-            "session_id": session.session_id,
-            "job_id": session.job_id,
-            "status": session.status,
-            "task": session.task,
-            "route": session.route,
-            "traces": session.traces,
-            "artifacts": session.artifacts,
-            "errors": session.errors,
-            "input_class": session.input_mode,
-            "preprocessing": session.preprocessing_result,
-        }
+@router.get("/jobs/{job_id}", response_model=JobView)
+async def get_job(job_id: str) -> JobView:
+    """Canonical JobView for the Analyze UI (docs/api-spec.md)."""
+    view = get_job_view(job_id)
+    if view is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return view
 
-    persisted = load_job(job_id)
-    if persisted:
-        return persisted
 
-    raise HTTPException(status_code=404, detail="Job not found")
+@router.get("/jobs/{job_id}/artifacts/composite")
+async def get_composite(job_id: str):
+    if get_job_view(job_id) is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    path = resolve_composite_path(job_id)
+    safe = safe_job_file(job_id, path) if path else None
+    if safe is None:
+        raise HTTPException(status_code=404, detail="Composite not ready")
+    media = "image/png" if safe.suffix.lower() == ".png" else "image/tiff"
+    return FileResponse(safe, media_type=media, filename=safe.name)
+
+
+@router.get("/jobs/{job_id}/artifacts/tiles/{index}")
+async def get_tile(job_id: str, index: int):
+    if get_job_view(job_id) is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    path = resolve_tile_path(job_id, index)
+    safe = safe_job_file(job_id, path) if path else None
+    if safe is None:
+        raise HTTPException(status_code=404, detail="Tile not found")
+    return FileResponse(safe, media_type="image/png", filename=safe.name)
+
+
+@router.get("/jobs/{job_id}/export.geojson")
+async def export_geojson(job_id: str):
+    geo = footprint_geojson(job_id)
+    if geo is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return geo
+
+
+@router.get("/jobs/{job_id}/export.kml")
+async def export_kml(job_id: str):
+    kml = footprint_kml(job_id)
+    if kml is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return Response(content=kml, media_type="application/vnd.google-earth.kml+xml")
+
+
+@router.get("/jobs/{job_id}/report.pdf")
+async def export_pdf(job_id: str):
+    if get_job_view(job_id) is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    raise HTTPException(status_code=501, detail="PDF report is not implemented yet")

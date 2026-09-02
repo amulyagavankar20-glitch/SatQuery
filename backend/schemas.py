@@ -420,3 +420,55 @@ class JobResponse(BaseModel):
     outputs: list[OutputResponse] = Field(default_factory=list)
     traces: list[TraceResponse] = Field(default_factory=list)
     spatial_features: list[SpatialFeatureResponse] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Analyze UI contract (docs/api-spec.md JobView)
+# ---------------------------------------------------------------------------
+class JobAnswer(BaseModel):
+    text: str | None = None
+    model: str = "OpenGVLab/InternVL3-1B"
+    backend: str = Field("mock", description="mock | internvl")
+    confidence: str | None = None
+
+
+class JobAssetView(BaseModel):
+    filename: str
+    modality: str
+    sensor: str | None = None
+    bounds_wgs84: list[float] | None = None
+    preview_url: str | None = None
+
+
+class JobOverlay(BaseModel):
+    type: str = Field(..., description="FOOTPRINT | CHANGE | GROUNDING | UNCERTAIN | AGREEMENT")
+    geojson_url: str
+    confidence: float | None = None
+
+
+class JobTraceView(BaseModel):
+    event_type: str
+    node_name: str | None = None
+    tool_id: str | None = None
+    message: str | None = None
+    timestamp: str | None = None
+
+
+class JobView(BaseModel):
+    """Canonical document for GET /jobs/{id}. UI Zod schema must match."""
+
+    job_id: str
+    session_id: str
+    status: str
+    query: str = ""
+    input_class: str = ""
+    task: str = "UNROUTED"
+    route: dict[str, Any] | None = None
+    answer: JobAnswer | None = None
+    assets: list[JobAssetView] = Field(default_factory=list)
+    overlays: list[JobOverlay] = Field(default_factory=list)
+    traces: list[JobTraceView] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
+    refusal_reason: str | None = None
+    tile_count: int = 0

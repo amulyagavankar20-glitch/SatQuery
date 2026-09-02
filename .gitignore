@@ -73,3 +73,12 @@ htmlcov/
 
 # Logs
 *.log
+
+# Frontend
+node_modules/
+web/node_modules/
+web/dist/
+package-lock.json
+!web/
+!web/public/
+!web/public/**

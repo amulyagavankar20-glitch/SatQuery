@@ -1,0 +1,13 @@
+{
+  "name": "SatQuery",
+  "short_name": "SatQuery",
+  "description": "SAC / ISRO satellite query console",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#050910",
+  "theme_color": "#050910",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "/apple-touch-icon.jpg", "sizes": "180x180", "type": "image/jpeg" }
+  ]
+}

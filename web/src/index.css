@@ -1,0 +1,189 @@
+@import "tailwindcss";
+@import "maplibre-gl/dist/maplibre-gl.css";
+
+@theme {
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --color-ink: #eef4fb;
+  --color-muted: #7f96ad;
+  --color-navy: #050910;
+  --color-panel: #0a1520;
+  --color-panel-2: #0e1c2b;
+  --color-line: #23445f;
+  --color-saffron: #f0842a;
+  --color-gold: #e0b84a;
+  --color-cyan: #4ad4d4;
+  --color-ok: #3dba7a;
+  --color-warn: #d4a017;
+  --color-bad: #e05b56;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+body {
+  background-color: #04070c;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 8% -10%, rgba(240, 132, 42, 0.16), transparent 55%),
+    radial-gradient(ellipse 60% 45% at 96% 8%, rgba(74, 212, 212, 0.12), transparent 50%),
+    radial-gradient(ellipse 50% 40% at 50% 110%, rgba(32, 80, 120, 0.25), transparent 55%),
+    linear-gradient(165deg, #08121c 0%, #050910 42%, #03060a 100%);
+  background-attachment: fixed;
+}
+
+body::before {
+  content: "";
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  z-index: 0;
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(74, 212, 212, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(74, 212, 212, 0);
+  }
+}
+
+@keyframes sheen {
+  to {
+    transform: translateX(220%);
+  }
+}
+
+@keyframes scan {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(400%);
+  }
+}
+
+.glass {
+  background: linear-gradient(180deg, rgba(16, 32, 48, 0.72), rgba(8, 18, 28, 0.55));
+  backdrop-filter: blur(22px) saturate(1.35);
+  border: 1px solid rgba(120, 170, 210, 0.14);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 18px 50px rgba(0, 0, 0, 0.35);
+}
+
+.glass-strong {
+  background: linear-gradient(165deg, rgba(18, 36, 54, 0.82), rgba(8, 16, 26, 0.7));
+  backdrop-filter: blur(28px) saturate(1.4);
+  border: 1px solid rgba(240, 132, 42, 0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 20px 60px rgba(0, 0, 0, 0.4);
+}
+
+.rise {
+  animation: rise 0.55s var(--ease-out) both;
+}
+
+.btn-shine {
+  position: relative;
+  overflow: hidden;
+}
+.btn-shine::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.28) 50%, transparent 65%);
+  transform: translateX(-120%);
+}
+.btn-shine:hover::after {
+  animation: sheen 0.7s var(--ease-out);
+}
+
+.maplibregl-ctrl-group {
+  background: rgba(8, 18, 28, 0.75) !important;
+  border: 1px solid rgba(120, 170, 210, 0.2) !important;
+  backdrop-filter: blur(12px);
+  box-shadow: none !important;
+}
+.maplibregl-ctrl-group button {
+  filter: invert(1) hue-rotate(180deg);
+}
+.maplibregl-ctrl-attrib {
+  font-size: 10px !important;
+  background: rgba(7, 16, 24, 0.65) !important;
+  color: var(--color-muted) !important;
+  backdrop-filter: blur(8px);
+}
+
+.sq-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.sq-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #2a5878, #1a3348);
+  border-radius: 99px;
+}
+
+::selection {
+  background: rgba(240, 132, 42, 0.35);
+  color: #fff7ee;
+}
+
+:focus-visible {
+  outline: 2px solid rgba(74, 212, 212, 0.7);
+  outline-offset: 2px;
+}
+
+textarea,
+input,
+select {
+  caret-color: #4ad4d4;
+}
+
+kbd {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.35);
+  color: #9bb0c4;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise,
+  .btn-shine::after {
+    animation: none !important;
+  }
+}

@@ -47,6 +47,15 @@ class Settings(BaseSettings):
     OLLAMA_ROUTER_MODEL: str = "qwen2.5:3b-instruct"
     OLLAMA_TIMEOUT_SECONDS: float = 180.0
 
+    TALKING_VLM_MODEL: str = "OpenGVLab/InternVL3-1B"
+    TALKING_VLM_BACKEND: str = "mock"
+
+    CORS_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
+
     @model_validator(mode="after")
     def assemble_database_url(self) -> "Settings":
         if self.DATABASE_URL:
