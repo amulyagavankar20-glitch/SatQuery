@@ -1,115 +1,398 @@
-# SatQuery AI — Database Foundation & Backend Architecture
+<div align="center">
 
-This document provides the technical overview and operational guide for the SatQuery AI database foundation.
+<img src="./web/public/favicon.svg" alt="SatQuery mark" width="88" height="88" />
+
+<br/>
+
+<!-- Animated typewriter — saffron to match SatQuery primary -->
+<p align="center">
+  <img
+    src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=28&duration=2800&pause=1000&color=F0842A&center=true&vCenter=true&multiline=false&width=920&height=48&lines=SatQuery+AI;SIH26167+Satellite+Query+Agent;Qwen+routes.+InternVL+talks.+GIS+grounds.;Cartosat.+RISAT.+Ask+the+scene.;The+agent+decides+WHAT.+Specialists+analyse."
+    alt="SatQuery typing animation"
+  />
+</p>
+
+### Natural-language analysis for ISRO Earth-observation rasters
+
+*Qwen2.5-3B JSON router · frozen LangGraph DAG · InternVL3-1B talking VLM · PostGIS evidence · Analyze ops console*
+
+<br/>
+
+[**API Spec**](./docs/api-spec.md)
+&nbsp;·&nbsp;
+[**Architecture**](./docs/SatQuery_AI_System_Architecture.md)
+&nbsp;·&nbsp;
+[**Database**](./docs/database_architecture.md)
+&nbsp;·&nbsp;
+[**Preprocessing**](./docs/input_classification_and_preprocessing.md)
+&nbsp;·&nbsp;
+[**Analyze UI**](./web/src/pages/AnalyzePage.tsx)
+
+<br/>
+
+<!-- Stack -->
+<p>
+  <img src="https://img.shields.io/badge/FastAPI-0.139-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI" />
+  <img src="https://img.shields.io/badge/LangGraph-0.2-1C3C3C?style=for-the-badge" alt="LangGraph" />
+  <img src="https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python" />
+  <img src="https://img.shields.io/badge/Qwen2.5-3B_Instruct-F0842A?style=for-the-badge" alt="Qwen2.5-3B" />
+</p>
+
+<!-- Frontend & GIS -->
+<p>
+  <img src="https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="React" />
+  <img src="https://img.shields.io/badge/Vite-8-646CFF?style=for-the-badge&logo=vite&logoColor=white" alt="Vite" />
+  <img src="https://img.shields.io/badge/TypeScript-5.9-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/Tailwind_CSS-4-38BDF8?style=for-the-badge&logo=tailwindcss&logoColor=white" alt="Tailwind CSS" />
+  <img src="https://img.shields.io/badge/MapLibre-5-4AD4D4?style=for-the-badge" alt="MapLibre" />
+</p>
+
+<!-- Persistence & models -->
+<p>
+  <img src="https://img.shields.io/badge/PostgreSQL-18-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL" />
+  <img src="https://img.shields.io/badge/PostGIS-3.6-74B743?style=for-the-badge" alt="PostGIS" />
+  <img src="https://img.shields.io/badge/Ollama-local-000000?style=for-the-badge" alt="Ollama" />
+  <img src="https://img.shields.io/badge/InternVL3-1B-4AD4D4?style=for-the-badge" alt="InternVL3-1B" />
+  <img src="https://img.shields.io/badge/uv-venv-DE5FE9?style=for-the-badge" alt="uv" />
+</p>
+
+<!-- Meta -->
+<p>
+  <img src="https://img.shields.io/badge/version-1.0.0-F0842A?style=for-the-badge" alt="Version 1.0.0" />
+  <img src="https://img.shields.io/badge/SIH-26167-0A1520?style=for-the-badge" alt="SIH 26167" />
+  <img src="https://img.shields.io/badge/Contract-JobView-4AD4D4?style=for-the-badge" alt="JobView" />
+  <img src="https://img.shields.io/badge/No-Redis%20%7C%20Kafka-7f96ad?style=for-the-badge" alt="No Redis Kafka" />
+  <img src="https://img.shields.io/github/last-commit/amulyagavankar20-glitch/SatQuery?style=for-the-badge&label=Updated" alt="Last commit" />
+  <img src="https://img.shields.io/github/stars/amulyagavankar20-glitch/SatQuery?style=for-the-badge&label=Stars" alt="Stars" />
+</p>
+
+<br/>
+
+[![Open Repository](https://img.shields.io/badge/Open-Repository-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/amulyagavankar20-glitch/SatQuery)
+[![Read the Spec](https://img.shields.io/badge/Read-API_Spec-0F172A?style=for-the-badge)](./docs/api-spec.md)
+[![Architecture](https://img.shields.io/badge/Read-Architecture-F0842A?style=for-the-badge)](./docs/SatQuery_AI_System_Architecture.md)
+[![Analyze Console](https://img.shields.io/badge/Open-Analyze_UI-4AD4D4?style=for-the-badge)](./web/src/pages/AnalyzePage.tsx)
+
+</div>
 
 ---
 
-## 1. Overview
+> [!IMPORTANT]
+> **Architecture locks.** The agent decides WHAT to run. Specialists analyse. GIS says WHERE.
+> Router is **Qwen2.5-3B-Instruct** (text only, JSON schema, Ollama). Talking VLM is **InternVL3-1B** (replaces GeoChat-7B at implementation; graph tool IDs stay `geochat_vqa` / `geochat_describe`). Graph is a **frozen LangGraph StateGraph**. No Redis. No Kafka. No 30B orchestrator. Client polls `GET /jobs/{id}` — one document: **JobView**.
 
-SatQuery AI couples an in-memory execution pipeline with a relational + spatial persistent storage layer:
-- **In-Memory (`SessionContext` / `SatQueryState`)**: Holds active request state, intermediate model tensors, and tool inputs during the LangGraph execution.
-- **PostgreSQL 17 + PostGIS 3.6 (`satquery` database)**: Persists completed jobs, asset metadata, tool registries, execution traces, generated output manifests, and vector evidence (polygons, footprints, and change masks).
-- **Disk Storage (`data/jobs/{job_id}/...`)**: Stores multi-gigabyte satellite rasters (GeoTIFFs), resampled tiles, binary mask rasters, vector files, and PDF reports.
+## What this is
 
+SatQuery is an ISRO / DoS software problem statement agent for **SAC analysts**. Drop Cartosat, RISAT, or Sentinel GeoTIFFs, ask a question in English, and get a grounded answer plus spatial evidence — not a generic cloud VLM caption.
+
+| You bring | SatQuery returns |
+|---|---|
+| One optical scene + query | Caption / VQA (`geochat_describe` / `geochat_vqa`) |
+| Two dates, same AOI | Change path (`align` → `bit_cd` → vectorize / describe) |
+| Optical + SAR pair | Fusion path (`coregister` → `fusion_s1s2` → agreement) |
+| Phrase + scene | Grounding overlay (`geochat_vqa` → `grounding`) |
+
+Configs the gate accepts: **single optical**, **single SAR**, **bi-temporal pair**, **co-registered optical + SAR**. Formats: GeoTIFF / TIFF.
+
+## Pipeline
+
+```mermaid
+flowchart LR
+  U["Analyst<br/>query + GeoTIFF"] --> I["POST /ingest<br/>classify + persist"]
+  I --> R["POST /run<br/>LangGraph"]
+  R --> Q["Qwen 3B<br/>JSON route"]
+  Q --> G["Frozen DAG<br/>specialists"]
+  G --> F["Fusion + audit<br/>report"]
+  F --> J["JobView"]
+  J --> UI["Analyze console<br/>poll 2–3s"]
+  J --> PG[("Postgres + PostGIS")]
+  J --> D[("data/jobs/{id}")]
+
+  style U fill:#0a1520,stroke:#f0842a,color:#eef4fb
+  style Q fill:#0a1520,stroke:#f0842a,color:#eef4fb
+  style J fill:#0a1520,stroke:#4ad4d4,color:#eef4fb
+  style UI fill:#0a1520,stroke:#4ad4d4,color:#eef4fb
 ```
-projects (optional)
-   ↓ 1:N
-jobs
- ├── assets             (spatial bbox footprint via PostGIS Geometry)
- ├── tool_runs          (execution telemetry & status per tool)
- │    └── tool_registry (catalog of fixed models/tools: GeoChat, BIT, SAM, etc.)
- ├── outputs            (references to generated files: masks, reports, text)
- ├── traces             (observable audit log for LangGraph nodes & specialists)
- └── spatial_features   (PostGIS Geometry: AOIs, change polygons, grounding)
+
+Live memory is an in-process `dict[session_id → SessionContext]`. When the graph ends, Postgres remembers the job; rasters stay on disk.
+
+```mermaid
+flowchart TB
+  subgraph live ["FastAPI process — live run"]
+    S["sessions[session_id] = SessionContext"]
+    LG["LangGraph StateGraph"]
+    S --- LG
+  end
+
+  subgraph after ["After the run"]
+    PG[("PostgreSQL + PostGIS<br/>jobs · assets · traces · footprints")]
+    DS["Disk data/jobs/{job_id}/<br/>raw · processed · tiles · masks · vectors"]
+  end
+
+  live -->|"persist_run()"| after
 ```
 
----
+> [!NOTE]
+> Process restart loses in-flight and un-persisted ingest sessions. Re-ingest the raster. Finished jobs live in Postgres. That is intentional for SIH — not a missing Redis.
 
-## 2. Why PostGIS & Storage Design Rationale
+## Frozen LangGraph
 
-### Why PostGIS?
-- **Genuine Spatial Operations**: SatQuery processes Earth Observation data. Storing bounding boxes and polygons as plain text or JSON makes spatial filtering (`ST_Intersects`, `ST_Contains`, `ST_Area`, `ST_Union`) slow and unindexed.
-- **Spatial Indexing**: PostGIS provides R-Tree based GIST indexes (`idx_assets_bbox`, `idx_spatial_features_geometry`) enabling sub-millisecond bounding box and AOI spatial queries across thousands of satellite scenes.
-- **Multipolygon & Coordinate Reference Systems**: PostGIS natively understands EPSG:4326 (WGS84 lat/lon) and coordinate transformations for accurate geodesic area and perimeter measurements.
+Conditional edges only. The graph never invents tools.
 
-### Why Imagery is Stored on Disk (Not in PostgreSQL)
-- High-resolution multispectral scenes (Sentinel-2, Cartosat-2S, RISAT) are hundreds of megabytes to gigabytes.
-- Storing large binary BLOBs in PostgreSQL causes database bloat, exhausts connection pool memory, slows down backups, and hurts write-ahead logging (WAL).
-- SatQuery uses a clean separation of concerns:
-  - **Rasterio / Disk**: `data/jobs/{job_id}/raw/`, `processed/`, `tiles/`, `masks/`
-  - **PostgreSQL / PostGIS**: Stores paths, metadata, band descriptions, acquisition timestamps, spatial footprints, confidence scores, and audit traces.
+```mermaid
+flowchart TD
+  IV[input_validator] -->|ok| MP[metadata_parser]
+  IV -->|empty query| RF[refusal]
+  MP --> PF[pair_fitness_gate]
+  PF -->|ok| QR[query_router]
+  PF -->|unfit pair| RF
+  QR -->|Qwen JSON| TS[tool_selector]
+  QR -->|route fail| RF
+  TS --> PP[preprocess]
 
----
+  PP -->|SINGLE_VQA / CAPTIONING / GROUNDING| GV[geochat_vqa]
+  PP -->|CHANGE_*| AL[align]
+  PP -->|OPTICAL_SAR| CR[coregister]
+  PP -->|unknown| RF
 
-## 3. Database Schema Reference
+  GV -->|GROUNDING| GR[grounding]
+  GV -->|else| EF[evidence_fusion]
+  GR --> EF
 
-| Table | Description | Key Fields |
+  AL --> BIT[bit_cd]
+  BIT -->|CHANGE_VQA| GD[geochat_describe]
+  BIT -->|CHANGE_DETECTION| VZ[vectorize]
+  VZ --> EF
+
+  CR --> FU[fusion_s1s2]
+  FU --> AG[agreement]
+  AG --> GD
+  GD --> EF
+
+  EF --> AU[audit_logger]
+  RF --> AU
+  AU --> RG[report_generator]
+  RG --> END([END])
+
+  style QR fill:#1a1208,stroke:#f0842a,color:#eef4fb
+  style GV fill:#081418,stroke:#4ad4d4,color:#eef4fb
+  style GD fill:#081418,stroke:#4ad4d4,color:#eef4fb
+  style RF fill:#1a0a0a,stroke:#e05b56,color:#eef4fb
+  style EF fill:#0a1520,stroke:#3dba7a,color:#eef4fb
+```
+
+| Role | Runtime | Notes |
 |---|---|---|
-| `projects` | Container for grouping related analysis jobs | `id` (UUID), `name`, `description`, `created_at` |
-| `jobs` | Analysis run corresponding to a user query | `id` (UUID), `project_id`, `session_id`, `query`, `input_mode`, `task`, `status`, `route_json`, `started_at`, `completed_at`, `error_message` |
-| `assets` | Satellite raster metadata & footprint | `id` (UUID), `job_id`, `file_path`, `filename`, `format`, `modality`, `sensor`, `crs`, `width`, `height`, `bands` (JSONB), `nodata`, `cloud_fraction`, `bbox` (PostGIS Polygon) |
-| `tool_registry` | Fixed orchestrator tools / models catalog | `id` (UUID), `tool_id` (Unique string), `name`, `tool_type`, `model_name`, `model_version`, `supported_tasks` (JSONB), `supported_modalities` (JSONB), `parameter_schema` (JSONB), `enabled` |
-| `tool_runs` | Individual tool executions within a job | `id` (UUID), `job_id`, `tool_id`, `sequence_no`, `status`, `parameters` (JSONB), `input_refs` (JSONB), `output_refs` (JSONB), `confidence`, `latency_ms` |
-| `outputs` | Derived artifacts (text, masks, reports) | `id` (UUID), `job_id`, `output_type`, `text_result`, `file_path`, `mime_type`, `confidence_label`, `confidence_score` |
-| `traces` | Observable audit log for evaluation | `id` (UUID), `job_id`, `event_type`, `node_name`, `tool_id`, `model_version`, `parameters` (JSONB), `message`, `metadata` (JSONB), `timestamp` |
-| `spatial_features` | Vector evidence layer | `id` (UUID), `job_id`, `asset_id`, `feature_type` (AOI, CHANGE, FOOTPRINT, GROUNDING), `geometry` (PostGIS Geometry), `class_label`, `confidence`, `area_m2`, `properties` (JSONB) |
+| Router | `qwen2.5:3b-instruct` via Ollama | Query + manifest → `{task, tools[], params}`. No pixels. |
+| Talking VLM | `OpenGVLab/InternVL3-1B` | VQA, caption, weak grounding, change-crop describe. **Mock until loaded.** |
+| Change mask | BIT | Silent pixel map. Language from the talking VLM on the crop. |
+| Grounding fallback | MobileSAM | Prompted by the VLM phrase — not a second 7B. |
+| Optical + SAR | Dual encoder + linear head | Not SkySense. |
 
----
+> [!WARNING]
+> BIT, SAM, and optical–SAR fusion still return **mock specialist results**. The talking VLM backend is `mock` until InternVL is loaded (`TALKING_VLM_BACKEND=internvl`). `GET /jobs/{id}/report.pdf` is **501**. The graph, JobView contract, ingest, router, and Analyze UI are live.
 
-## 4. Environment Configuration
+## Analyze console
 
-Configuration is loaded from environment variables or `.env`:
+The UI is an **analysis operations console**, not a 3D marketing site. One `JobView` object drives every panel.
 
-| Variable | Default | Description |
-|---|---|---|
-| `POSTGRES_PASSWORD` | `satquery` | Database password loaded from `.env` (never commit `.env`) |
-| `POSTGRES_USER` | `satquery` | Database role |
-| `POSTGRES_HOST` | `127.0.0.1` | Database host |
-| `POSTGRES_PORT` | `5432` | Database port |
-| `POSTGRES_DB` | `satquery` | Database name |
-| `DATABASE_URL` | assembled from `POSTGRES_*` | Optional full `postgresql+psycopg://` URL; overrides the fields above |
-| `ENVIRONMENT` | `development` | Deployment environment (`development` / `production`) |
-| `LOG_LEVEL` | `INFO` | Application log verbosity |
-| `DATA_DIR` | `data` | Base directory for file storage |
-| `JOB_STORAGE_PATH` | `data/jobs` | Job artifact directory |
-| `DEFAULT_SRID` | `4326` | Spatial Reference System ID (WGS84) |
+```mermaid
+sequenceDiagram
+  actor Analyst
+  participant UI as Analyze UI :5173
+  participant API as FastAPI :8000
+  participant Qwen as Ollama Qwen 3B
+  participant PG as PostGIS
 
----
+  Analyst->>UI: drop GeoTIFF + query
+  UI->>API: POST /ingest multipart
+  API->>PG: assets + footprint
+  API-->>UI: job_id, input_class
+  UI->>API: POST /run
+  API->>Qwen: route JSON
+  Qwen-->>API: task + tools
+  loop every 2–3s while running
+    UI->>API: GET /jobs/{id}
+    API-->>UI: JobView
+  end
+  UI->>API: GET artifacts/composite + tiles
+  UI->>API: GET export.geojson
+```
 
-## 5. Alembic Migrations
+| Surface | Behaviour |
+|---|---|
+| Status LEDs | API / Ollama / Postgres from `GET /health` |
+| Question chips | Official queries from the API spec (not free-form only) |
+| Evidence map | MapLibre, footprint toggle, cursor lon/lat, zoom |
+| Trace rail | LangGraph node events as they land in JobView |
+| Keyboard | `Ctrl+Enter` run · `O` open file · `K` focus query · `?` shortcuts |
 
-Alembic manages all schema changes:
+Dev URLs: API `http://127.0.0.1:8000` · UI `http://127.0.0.1:5173` (CORS locked to those origins).
+
+## Quick start
+
+> [!TIP]
+> Use **`uv`** for the Python venv. On Windows OneDrive workspaces, create it with `--link-mode=copy` so packages that cannot hardlink still install.
+
+### 1. Router model
 
 ```bash
-# Activate virtual environment
-source venv/bin/activate
+ollama pull qwen2.5:3b-instruct
+ollama serve
+```
 
-# Apply migrations to satquery database
+### 2. Database
+
+Local PostgreSQL 18 + PostGIS 3.6 on `5432` is the current Windows path. Optional Docker (host **5433** so it does not collide):
+
+```bash
+docker compose up -d postgres
+```
+
+Create the role and database, then migrate:
+
+```bash
+cp .env.example .env   # set POSTGRES_PASSWORD — never commit .env
+# Windows: Copy-Item .env.example .env
+
+uv venv --python 3.12 --link-mode=copy
+# Windows: .venv\Scripts\activate
+# Unix:    source .venv/bin/activate
+
+uv pip install -r requirements.txt
 alembic upgrade head
-
-# Generate a new migration after editing models.py
-alembic revision --autogenerate -m "description_of_change"
-
-# Roll back the most recent migration
-alembic downgrade -1
 ```
+
+### 3. API
+
+```bash
+# Rasterio must see its own PROJ data, not PostGIS proj.db
+# PowerShell:
+$proj = (Resolve-Path .venv\Lib\site-packages\rasterio\proj_data).Path
+$env:PROJ_LIB = $proj
+$env:PROJ_DATA = $proj
+.venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+```
+
+```bash
+# Unix
+export PROJ_LIB="$(python -c "import rasterio, pathlib; print(pathlib.Path(rasterio.__file__).parent / 'proj_data')")"
+export PROJ_DATA="$PROJ_LIB"
+uvicorn backend.main:app --host 127.0.0.1 --port 8000
+```
+
+### 4. Analyze UI
+
+```bash
+cd web
+npm install
+npx vite --host 127.0.0.1 --port 5173
+```
+
+### 5. Smoke a Cartosat scene
+
+> [!CAUTION]
+> On Windows PowerShell, `curl` is `Invoke-WebRequest`. Multipart uploads need **`curl.exe`**. JSON bodies should be built with `ConvertTo-Json -Compress` or `Invoke-RestMethod`, not a hand-split string.
+
+```bash
+curl.exe -s http://127.0.0.1:8000/health
+
+curl.exe -F "files=@data/fixtures/cartosat2s_demo.tif" -F "sensor=Cartosat-2S" -F "query=What land-cover classes are visible?" http://127.0.0.1:8000/ingest
+
+# then POST /run with the returned job_id, poll GET /jobs/{id}
+```
+
+Fixture: [`data/fixtures/cartosat2s_demo.tif`](./data/fixtures/cartosat2s_demo.tif).
+
+```bash
+pytest tests/ -q
+```
+
+## Persistence
+
+Imagery never enters PostgreSQL as a BLOB.
+
+| Layer | Stores | Does not store |
+|---|---|---|
+| In-memory `SessionContext` | Live tensors, tool I/O, route, traces in flight | Durable history |
+| PostgreSQL + PostGIS | Jobs, asset metadata, footprints, traces, GeoJSON refs | Multi-GB rasters |
+| `data/jobs/{job_id}/` | Raw GeoTIFF, processed RGB, tiles, masks, vectors, reports | Query text |
+
+```
+projects  1:N  jobs
+               ├── assets            bbox via PostGIS Geometry
+               ├── tool_runs         → tool_registry
+               ├── outputs
+               ├── traces
+               └── spatial_features  AOI / CHANGE / FOOTPRINT / GROUNDING
+```
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | `satquery` | Role, secret, database |
+| `DATABASE_URL` | assembled from `POSTGRES_*` | Optional full URL override |
+| `OLLAMA_ROUTER_MODEL` | `qwen2.5:3b-instruct` | JSON router |
+| `TALKING_VLM_MODEL` | `OpenGVLab/InternVL3-1B` | Talking VLM id |
+| `TALKING_VLM_BACKEND` | `mock` | `mock` until InternVL is loaded |
+| `CORS_ORIGINS` | Vite `5173` | Analyze UI origin list |
+| `JOB_STORAGE_PATH` | `data/jobs` | Raster + artifact root |
+| `DEFAULT_SRID` | `4326` | WGS84 |
+
+Full field list: [`.env.example`](./.env.example). Schema detail: [`docs/database_architecture.md`](./docs/database_architecture.md).
+
+## HTTP surface
+
+Base URL (dev): `http://127.0.0.1:8000`
+
+| Method | Path | Role |
+|---|---|---|
+| `GET` | `/health` | API + Ollama + Postgres LEDs |
+| `GET` | `/models` | Router ready + talking VLM backend |
+| `POST` | `/ingest` | Multipart GeoTIFF → `ingested` |
+| `POST` | `/run` | Start the frozen graph → `202 running` |
+| `POST` | `/route` | Planner only; Analyze does not need it |
+| `GET` | `/jobs/{id}` | **JobView** (live session or Postgres) |
+| `GET` | `/jobs/{id}/artifacts/composite` | Processed preview |
+| `GET` | `/jobs/{id}/artifacts/tiles/{index}` | 256 px tile PNG |
+| `GET` | `/jobs/{id}/export.geojson` | Footprints (later CHANGE / GROUNDING) |
+| `GET` | `/jobs/{id}/export.kml` | Same features as KML |
+| `GET` | `/jobs/{id}/report.pdf` | **501** until reports exist |
+
+Job status machine: `ingested` → `running` → `completed` | `failed` | `refused`. Poll while `running`; stop on a terminal status.
+
+> [!NOTE]
+> JobView never returns local filesystem paths. Artifacts are API URLs (`/jobs/{id}/artifacts/...`). Extra JSON keys are ignored by the UI; missing required keys are a backend bug.
+
+Canonical schema: [`docs/api-spec.md`](./docs/api-spec.md).
+
+## Repository map
+
+```
+SatQuery/
+├── backend/           FastAPI, LangGraph, ingest, JobView
+│   ├── agents/        router · frozen graph · tool selector
+│   ├── api/           /jobs router
+│   └── services/      ingest · persistence · preprocessing
+├── web/               Analyze console (Vite + React 19)
+├── docs/              architecture · API · database · preprocessing
+├── migrations/        Alembic (PostGIS schema)
+├── tests/             router, graph paths, JobView, tools
+└── data/fixtures/     cartosat2s_demo.tif
+```
+
+## Docs
+
+| Document | What it freezes |
+|---|---|
+| [System architecture](./docs/SatQuery_AI_System_Architecture.md) | Models, graph, session store, product locks |
+| [Analyze API spec](./docs/api-spec.md) | JobView, endpoints, chips, talking VLM id |
+| [Database architecture](./docs/database_architecture.md) | ER, PostGIS, disk layout |
+| [Input classification](./docs/input_classification_and_preprocessing.md) | Gate, modalities, pair-fitness |
 
 ---
 
-## 6. How to Run Verification Tests
+<div align="center">
 
-Run the standalone database verification test:
+**SIH26167** · SatQuery AI · the agent decides WHAT · specialists analyse · GIS says WHERE
 
-```bash
-./venv/bin/python test_database_foundation.py
-```
-
----
-
-## 7. Starting the Backend (Future Phases)
-
-When the FastAPI routers and LangGraph state graph are implemented:
-
-```bash
-./venv/bin/uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
-```
+</div>
