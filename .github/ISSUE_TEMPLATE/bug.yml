@@ -1,0 +1,59 @@
+name: Bug
+description: Something is broken in the API, graph, or Analyze console.
+title: "fix: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please search existing issues first. Security reports go to [SECURITY.md](https://github.com/amulyagavankar20-glitch/SatQuery/blob/main/SECURITY.md), not here.
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface
+      options:
+        - Ingest / preprocessing
+        - Qwen router
+        - LangGraph
+        - JobView / GET /jobs/{id}
+        - Artifacts / export
+        - Analyze UI
+        - Postgres / PostGIS
+        - Docs
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      placeholder: Expected JobView status completed; got refused with …
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduce
+      placeholder: |
+        1. POST /ingest cartosat2s_demo.tif
+        2. POST /run
+        3. GET /jobs/{id}
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      placeholder: |
+        OS: Windows 11
+        Python: 3.12
+        Ollama: qwen2.5:3b-instruct
+        TALKING_VLM_BACKEND: mock
+        Postgres: 18 + PostGIS 3.6
+    validations:
+      required: true
+  - type: textarea
+    id: jobview
+    attributes:
+      label: JobView / logs (redact secrets)
+      description: Paste status, route, errors, traces. Never paste .env or POSTGRES_PASSWORD.

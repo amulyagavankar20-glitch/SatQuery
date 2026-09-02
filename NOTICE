@@ -1,0 +1,56 @@
+SatQuery AI
+Copyright (c) 2026 SatQuery contributors
+
+This repository is a student implementation of Smart India Hackathon
+problem statement SIH26167. It is not an official product of ISRO,
+the Department of Space, or SAC.
+
+The software in this repository is licensed under the MIT License
+(see LICENSE). Weights, datasets, and third-party libraries keep
+their own licenses. Do not treat a GeoTIFF you ingest as licensed
+by this project.
+
+-----------------------------------------------------------------------------
+Third-party models (not shipped in this repo)
+-----------------------------------------------------------------------------
+
+Qwen2.5-3B-Instruct
+  Role: JSON router via Ollama (text only, no pixels)
+  Source: https://huggingface.co/Qwen/Qwen2.5-3B-Instruct
+  License: Apache License 2.0 (Qwen research license terms may also apply
+  to some checkpoints — check the model card before redistribution)
+
+InternVL3-1B (OpenGVLab)
+  Role: talking VLM (replaces GeoChat-7B at implementation)
+  Source: https://huggingface.co/OpenGVLab/InternVL3-1B
+  License: MIT (confirm the model card)
+
+GeoChat (MBZUAI)
+  Role: architecture citation; graph tool IDs remain geochat_vqa /
+  geochat_describe even though the talking VLM is InternVL3-1B
+  Paper: arXiv:2311.15826
+  Source: https://github.com/mbzuai-oryx/GeoChat
+
+BIT (Change detection)
+  Role: silent change mask specialist (currently mocked)
+  Paper: arXiv:2103.00208
+  Source: https://github.com/justchenhao/BIT_CD
+
+-----------------------------------------------------------------------------
+Third-party software
+-----------------------------------------------------------------------------
+
+Python dependencies are declared in requirements.txt.
+Frontend dependencies are declared in web/package.json.
+
+Notable stacks: FastAPI, LangGraph, SQLAlchemy, GeoAlchemy2, Rasterio,
+PostgreSQL/PostGIS, React, Vite, MapLibre GL, TanStack Query/Router, Zod.
+
+-----------------------------------------------------------------------------
+Data
+-----------------------------------------------------------------------------
+
+data/fixtures/cartosat2s_demo.tif is a development fixture for ingest
+smoke tests. Operational Cartosat / RISAT / Sentinel scenes remain the
+property of their respective agencies and must not be committed here.
+Generated job artifacts under data/jobs/ are gitignored.

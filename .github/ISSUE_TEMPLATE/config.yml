@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Architecture locks
+    url: https://github.com/amulyagavankar20-glitch/SatQuery/blob/main/docs/SatQuery_AI_System_Architecture.md
+    about: Read the frozen graph, models, and session store before proposing Redis, Kafka, or a 30B router.
+  - name: JobView API spec
+    url: https://github.com/amulyagavankar20-glitch/SatQuery/blob/main/docs/api-spec.md
+    about: Canonical Analyze contract. Missing required keys are backend bugs.
+  - name: Report a vulnerability
+    url: https://github.com/amulyagavankar20-glitch/SatQuery/security/advisories/new
+    about: Private advisory — do not file a public issue for security reports.
+  - name: How to run SatQuery
+    url: https://github.com/amulyagavankar20-glitch/SatQuery/blob/main/README.md
+    about: Quick start, PROJ_LIB, PowerShell curl.exe, and Analyze URLs.

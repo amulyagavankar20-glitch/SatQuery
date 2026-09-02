@@ -1,0 +1,44 @@
+name: Architecture lock
+description: Propose lifting or changing a product lock. Discuss before coding.
+title: "arch: "
+labels: ["architecture"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Product locks are in [SatQuery_AI_System_Architecture.md](https://github.com/amulyagavankar20-glitch/SatQuery/blob/main/docs/SatQuery_AI_System_Architecture.md).
+        Open this issue **before** a PR that changes models, the graph, or the memory design.
+  - type: dropdown
+    id: lock
+    attributes:
+      label: Which lock
+      options:
+        - Router model (Qwen2.5-3B JSON / Ollama)
+        - Talking VLM (InternVL3-1B, geochat_* tool ids)
+        - Frozen LangGraph node list
+        - No Redis / Kafka / Celery / WebSocket
+        - In-memory SessionContext + Postgres after
+        - JobView as the only UI contract
+        - Analyze console (not 3D marketing)
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why the lock is blocking
+    validations:
+      required: true
+  - type: textarea
+    id: alternative
+    attributes:
+      label: What you want instead
+      description: Be specific. "Add Redis" is not enough — say which state moves there and why in-memory fails.
+    validations:
+      required: true
+  - type: textarea
+    id: cost
+    attributes:
+      label: Runtime cost
+      description: VRAM, extra processes, SIH demo risk if the laptop cannot load it.
+      placeholder: Adds ~6 GB VRAM; demo machine has 8 GB.

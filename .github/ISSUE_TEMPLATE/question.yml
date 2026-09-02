@@ -1,0 +1,21 @@
+name: Question
+description: How do I run, ingest, or read JobView?
+title: "q: "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check [README.md](https://github.com/amulyagavankar20-glitch/SatQuery/blob/main/README.md) and [SUPPORT.md](https://github.com/amulyagavankar20-glitch/SatQuery/blob/main/SUPPORT.md) first.
+        Bugs belong on the Bug template. Security reports belong in a private advisory.
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+    validations:
+      required: true
+  - type: textarea
+    id: tried
+    attributes:
+      label: What you already tried
+      placeholder: I ran alembic upgrade head; /health shows postgres connected; Ollama is unreachable.

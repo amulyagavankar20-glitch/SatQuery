@@ -22,11 +22,13 @@
 &nbsp;·&nbsp;
 [**Architecture**](./docs/SatQuery_AI_System_Architecture.md)
 &nbsp;·&nbsp;
-[**Database**](./docs/database_architecture.md)
+[**Docs**](./docs/README.md)
 &nbsp;·&nbsp;
-[**Preprocessing**](./docs/input_classification_and_preprocessing.md)
+[**Contributing**](./CONTRIBUTING.md)
 &nbsp;·&nbsp;
-[**Analyze UI**](./web/src/pages/AnalyzePage.tsx)
+[**Security**](./SECURITY.md)
+&nbsp;·&nbsp;
+[**License**](./LICENSE)
 
 <br/>
 
@@ -59,6 +61,7 @@
 <!-- Meta -->
 <p>
   <img src="https://img.shields.io/badge/version-1.0.0-F0842A?style=for-the-badge" alt="Version 1.0.0" />
+  <img src="https://img.shields.io/badge/License-MIT-F59E0B?style=for-the-badge" alt="License" />
   <img src="https://img.shields.io/badge/SIH-26167-0A1520?style=for-the-badge" alt="SIH 26167" />
   <img src="https://img.shields.io/badge/Contract-JobView-4AD4D4?style=for-the-badge" alt="JobView" />
   <img src="https://img.shields.io/badge/No-Redis%20%7C%20Kafka-7f96ad?style=for-the-badge" alt="No Redis Kafka" />
@@ -70,8 +73,9 @@
 
 [![Open Repository](https://img.shields.io/badge/Open-Repository-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/amulyagavankar20-glitch/SatQuery)
 [![Read the Spec](https://img.shields.io/badge/Read-API_Spec-0F172A?style=for-the-badge)](./docs/api-spec.md)
-[![Architecture](https://img.shields.io/badge/Read-Architecture-F0842A?style=for-the-badge)](./docs/SatQuery_AI_System_Architecture.md)
-[![Analyze Console](https://img.shields.io/badge/Open-Analyze_UI-4AD4D4?style=for-the-badge)](./web/src/pages/AnalyzePage.tsx)
+[![Contributing](https://img.shields.io/badge/Contributing-Guide-F0842A?style=for-the-badge)](./CONTRIBUTING.md)
+[![Security](https://img.shields.io/badge/Security-Policy-e05b56?style=for-the-badge)](./SECURITY.md)
+[![Code of Conduct](https://img.shields.io/badge/Code-of_Conduct-4AD4D4?style=for-the-badge)](./CODE_OF_CONDUCT.md)
 
 </div>
 
@@ -377,10 +381,14 @@ SatQuery/
 ├── docs/              architecture · API · database · preprocessing
 ├── migrations/        Alembic (PostGIS schema)
 ├── tests/             router, graph paths, JobView, tools
+├── .github/           issue + PR templates
+├── LICENSE            MIT
 └── data/fixtures/     cartosat2s_demo.tif
 ```
 
 ## Docs
+
+Index: [docs/README.md](./docs/README.md).
 
 | Document | What it freezes |
 |---|---|
@@ -388,6 +396,16 @@ SatQuery/
 | [Analyze API spec](./docs/api-spec.md) | JobView, endpoints, chips, talking VLM id |
 | [Database architecture](./docs/database_architecture.md) | ER, PostGIS, disk layout |
 | [Input classification](./docs/input_classification_and_preprocessing.md) | Gate, modalities, pair-fitness |
+| [Contributing](./CONTRIBUTING.md) | Dev setup, locks, PR checklist |
+| [Security](./SECURITY.md) | Private vulnerability reports |
+| [Code of conduct](./CODE_OF_CONDUCT.md) | Contributor Covenant 2.1 |
+| [NOTICE](./NOTICE) | Model licenses + SIH / ISRO disclaimer |
+
+## License
+
+[MIT](./LICENSE) © 2026 SatQuery contributors. This is a student implementation
+of SIH26167 — not an official ISRO / DoS product. Model weights keep their own
+licenses; see [NOTICE](./NOTICE).
 
 ---
 
