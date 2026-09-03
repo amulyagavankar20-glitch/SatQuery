@@ -24,6 +24,9 @@ const rootRoute = createRootRoute({ component: RootLayout });
 const analyzeRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
+  validateSearch: (search: Record<string, unknown>): { job?: string } => ({
+    job: typeof search.job === "string" && search.job.length > 0 ? search.job : undefined,
+  }),
   component: AnalyzePage,
 });
 const exploreRoute = createRoute({
