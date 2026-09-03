@@ -31,21 +31,9 @@ body,
 body {
   background-color: #04070c;
   background-image:
-    radial-gradient(ellipse 80% 50% at 8% -10%, rgba(240, 132, 42, 0.16), transparent 55%),
-    radial-gradient(ellipse 60% 45% at 96% 8%, rgba(74, 212, 212, 0.12), transparent 50%),
-    radial-gradient(ellipse 50% 40% at 50% 110%, rgba(32, 80, 120, 0.25), transparent 55%),
-    linear-gradient(165deg, #08121c 0%, #050910 42%, #03060a 100%);
+    radial-gradient(ellipse 70% 50% at 50% -20%, rgba(10, 21, 32, 0.9), transparent 65%),
+    linear-gradient(180deg, #060d16 0%, #04080e 100%);
   background-attachment: fixed;
-}
-
-body::before {
-  content: "";
-  pointer-events: none;
-  position: fixed;
-  inset: 0;
-  opacity: 0.035;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  z-index: 0;
 }
 
 #root {
@@ -57,15 +45,22 @@ body::before {
   box-sizing: border-box;
 }
 
+/* ─── Animations ─── */
+
 @keyframes rise {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
     transform: none;
   }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes pulse-glow {
@@ -93,27 +88,59 @@ body::before {
   }
 }
 
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes typing-dot {
+  0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
+}
+
+/* ─── Surface Utilities ─── */
+
 .glass {
-  background: linear-gradient(180deg, rgba(16, 32, 48, 0.72), rgba(8, 18, 28, 0.55));
-  backdrop-filter: blur(22px) saturate(1.35);
-  border: 1px solid rgba(120, 170, 210, 0.14);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    0 18px 50px rgba(0, 0, 0, 0.35);
+  background: rgba(10, 21, 32, 0.85);
+  backdrop-filter: blur(16px) saturate(1.15);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 12px 40px rgba(0, 0, 0, 0.3);
 }
 
 .glass-strong {
-  background: linear-gradient(165deg, rgba(18, 36, 54, 0.82), rgba(8, 16, 26, 0.7));
-  backdrop-filter: blur(28px) saturate(1.4);
-  border: 1px solid rgba(240, 132, 42, 0.18);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 20px 60px rgba(0, 0, 0, 0.4);
+  background: rgba(12, 24, 38, 0.92);
+  backdrop-filter: blur(20px) saturate(1.2);
+  border: 1px solid rgba(240, 132, 42, 0.12);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 16px 48px rgba(0, 0, 0, 0.35);
 }
 
-.rise {
-  animation: rise 0.55s var(--ease-out) both;
+.glass-subtle {
+  background: rgba(10, 21, 32, 0.6);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
+
+/* ─── Motion Utilities ─── */
+
+.rise {
+  animation: rise 0.45s var(--ease-out) both;
+}
+
+.fade-in {
+  animation: fade-in 0.3s ease both;
+}
+
+.slide-up {
+  animation: slide-up 0.4s var(--ease-out) both;
+}
+
+/* ─── Button Shine ─── */
 
 .btn-shine {
   position: relative;
@@ -130,9 +157,75 @@ body::before {
   animation: sheen 0.7s var(--ease-out);
 }
 
+/* ─── Chat Bubble Styles ─── */
+
+.chat-bubble {
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.6;
+  max-width: 100%;
+  word-break: break-word;
+}
+
+.chat-bubble-user {
+  background: rgba(240, 132, 42, 0.08);
+  border-left: 2px solid var(--color-saffron);
+}
+
+.chat-bubble-ai {
+  background: rgba(14, 28, 43, 0.9);
+  border-left: 2px solid var(--color-cyan);
+}
+
+.chat-bubble-system {
+  background: transparent;
+  border-left: 2px solid rgba(127, 150, 173, 0.3);
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+/* ─── Typing Indicator ─── */
+
+.typing-dots span {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--color-cyan);
+  margin: 0 2px;
+  animation: typing-dot 1.2s ease-in-out infinite;
+}
+.typing-dots span:nth-child(2) { animation-delay: 0.15s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.3s; }
+
+/* ─── Drawer Transitions ─── */
+
+.drawer-container {
+  transition: width 0.35s var(--ease-out), min-width 0.35s var(--ease-out);
+  will-change: width;
+}
+
+.drawer-content {
+  transition: opacity 0.2s ease;
+}
+
+.drawer-collapsed .drawer-content {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ─── Result Card ─── */
+
+.result-card-enter {
+  animation: slide-up 0.45s var(--ease-out) both;
+}
+
+/* ─── MapLibre Overrides ─── */
+
 .maplibregl-ctrl-group {
-  background: rgba(8, 18, 28, 0.75) !important;
-  border: 1px solid rgba(120, 170, 210, 0.2) !important;
+  background: rgba(8, 18, 28, 0.8) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
   backdrop-filter: blur(12px);
   box-shadow: none !important;
 }
@@ -141,20 +234,22 @@ body::before {
 }
 .maplibregl-ctrl-attrib {
   font-size: 10px !important;
-  background: rgba(7, 16, 24, 0.65) !important;
+  background: rgba(7, 16, 24, 0.7) !important;
   color: var(--color-muted) !important;
   backdrop-filter: blur(8px);
 }
 
 .maplibregl-ctrl-scale {
-  background: rgba(7, 16, 24, 0.7) !important;
-  border: 1px solid rgba(120, 170, 210, 0.25) !important;
+  background: rgba(7, 16, 24, 0.75) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
   border-bottom: 2px solid #9bb0c4 !important;
   color: #9bb0c4 !important;
   font-family: var(--font-mono) !important;
   font-size: 10px !important;
   backdrop-filter: blur(8px);
 }
+
+/* ─── AOI Tag ─── */
 
 .sq-aoi-tag {
   font-family: var(--font-mono);
@@ -168,6 +263,8 @@ body::before {
   box-shadow: 0 4px 16px rgba(240, 132, 42, 0.35);
 }
 
+/* ─── Crosshair Overlay ─── */
+
 .sq-crosshair {
   pointer-events: none;
   position: absolute;
@@ -178,7 +275,7 @@ body::before {
 .sq-crosshair::after {
   content: "";
   position: absolute;
-  background: rgba(74, 212, 212, 0.28);
+  background: rgba(74, 212, 212, 0.22);
 }
 .sq-crosshair::before {
   left: 50%;
@@ -195,6 +292,8 @@ body::before {
   transform: translateY(-50%);
 }
 
+/* ─── Form Elements ─── */
+
 input[type="checkbox"] {
   accent-color: #f0842a;
   width: 12px;
@@ -205,23 +304,31 @@ input[type="range"] {
   height: 4px;
 }
 
+/* ─── Custom Scrollbar ─── */
+
 .sq-scroll::-webkit-scrollbar {
-  width: 6px;
+  width: 5px;
 }
 .sq-scroll::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #2a5878, #1a3348);
+  background: rgba(42, 88, 120, 0.5);
   border-radius: 99px;
 }
+
+/* ─── Selection ─── */
 
 ::selection {
   background: rgba(240, 132, 42, 0.35);
   color: #fff7ee;
 }
 
+/* ─── Focus Visible ─── */
+
 :focus-visible {
-  outline: 2px solid rgba(74, 212, 212, 0.7);
+  outline: 2px solid rgba(74, 212, 212, 0.6);
   outline-offset: 2px;
 }
+
+/* ─── Input ─── */
 
 textarea,
 input,
@@ -229,24 +336,34 @@ select {
   caret-color: #4ad4d4;
 }
 
+/* ─── Keyboard Shortcuts ─── */
+
 kbd {
   font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.04em;
   padding: 1px 6px;
   border-radius: 5px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(0, 0, 0, 0.35);
   color: #9bb0c4;
 }
 
+/* ─── Reduced Motion ─── */
+
 @media (prefers-reduced-motion: reduce) {
   .rise,
-  .btn-shine::after {
+  .fade-in,
+  .slide-up,
+  .btn-shine::after,
+  .result-card-enter {
     animation: none !important;
   }
   .sq-crosshair::before,
   .sq-crosshair::after {
     display: none;
+  }
+  .drawer-container {
+    transition: none !important;
   }
 }
