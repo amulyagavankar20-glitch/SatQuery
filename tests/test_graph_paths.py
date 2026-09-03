@@ -226,7 +226,7 @@ def test_change_vqa_path_excludes_fusion(patch_externals):
     state = run_graph("CHANGE_VQA", input_class="BI_TEMPORAL")
     v = visited(state)
     expected = {
-        "preprocess", "align", "bit_cd", "geochat_describe",
+        "preprocess", "align", "bit_cd", "vectorize", "geochat_describe",
         "evidence_fusion", "audit_logger", "report_generator",
     }
     assert expected.issubset(set(v)), f"Missing: {expected - set(v)}"
@@ -289,16 +289,17 @@ def test_empty_query_refusal(patch_externals):
 
 
 # ---------------------------------------------------------------------------
-# I. CHANGE_VQA does NOT go through vectorize → evidence_fusion directly
-#    (vectorize only runs for CHANGE_DETECTION; CHANGE_VQA skips to geochat_describe)
+# I. CHANGE_VQA goes through vectorize then geochat_describe before evidence_fusion
 # ---------------------------------------------------------------------------
 
-def test_change_vqa_skips_vectorize_to_fusion(patch_externals):
+def test_change_vqa_vectorize_to_describe_order(patch_externals):
     state = run_graph("CHANGE_VQA", input_class="BI_TEMPORAL")
     v = visited(state)
-    # geochat_describe must appear before evidence_fusion
-    if "geochat_describe" in v and "evidence_fusion" in v:
-        assert v.index("geochat_describe") < v.index("evidence_fusion")
+    assert "vectorize" in v
+    assert "geochat_describe" in v
+    assert "evidence_fusion" in v
+    assert v.index("vectorize") < v.index("geochat_describe")
+    assert v.index("geochat_describe") < v.index("evidence_fusion")
 
 
 # ---------------------------------------------------------------------------

@@ -26,6 +26,9 @@ class TestQwenRouter(unittest.IsolatedAsyncioTestCase):
         self._mock_response(mock_client_cls, '''{
             "task": "SINGLE_VQA",
             "input_mode": "SINGLE_OPTICAL",
+            "requires_grounding": false,
+            "requires_change_analysis": false,
+            "requires_optical_sar_analysis": false,
             "tools": ["geospatial_validator", "geochat_vqa"],
             "need_overlay": false,
             "params": {}
@@ -39,6 +42,9 @@ class TestQwenRouter(unittest.IsolatedAsyncioTestCase):
         self._mock_response(mock_client_cls, '''{
             "task": "CAPTIONING",
             "input_mode": "SINGLE_OPTICAL",
+            "requires_grounding": false,
+            "requires_change_analysis": false,
+            "requires_optical_sar_analysis": false,
             "tools": ["geospatial_validator", "geochat_describe"],
             "need_overlay": false,
             "params": {}
@@ -52,6 +58,9 @@ class TestQwenRouter(unittest.IsolatedAsyncioTestCase):
         self._mock_response(mock_client_cls, '''{
             "task": "GROUNDING",
             "input_mode": "SINGLE_OPTICAL",
+            "requires_grounding": true,
+            "requires_change_analysis": false,
+            "requires_optical_sar_analysis": false,
             "tools": ["geospatial_validator", "mobilesam"],
             "need_overlay": true,
             "params": {}
@@ -65,6 +74,9 @@ class TestQwenRouter(unittest.IsolatedAsyncioTestCase):
         self._mock_response(mock_client_cls, '''{
             "task": "CHANGE_DETECTION",
             "input_mode": "BI_TEMPORAL_OPTICAL",
+            "requires_grounding": false,
+            "requires_change_analysis": true,
+            "requires_optical_sar_analysis": false,
             "tools": ["geospatial_validator", "bit_cd", "vectorizer"],
             "need_overlay": true,
             "params": {}
@@ -78,6 +90,9 @@ class TestQwenRouter(unittest.IsolatedAsyncioTestCase):
         self._mock_response(mock_client_cls, '''{
             "task": "CHANGE_VQA",
             "input_mode": "BI_TEMPORAL_OPTICAL",
+            "requires_grounding": false,
+            "requires_change_analysis": true,
+            "requires_optical_sar_analysis": false,
             "tools": ["geospatial_validator", "bit_cd", "geochat_describe"],
             "need_overlay": true,
             "params": {}
@@ -91,6 +106,9 @@ class TestQwenRouter(unittest.IsolatedAsyncioTestCase):
         self._mock_response(mock_client_cls, '''{
             "task": "OPTICAL_SAR_ANALYSIS",
             "input_mode": "OPTICAL_SAR",
+            "requires_grounding": false,
+            "requires_change_analysis": false,
+            "requires_optical_sar_analysis": true,
             "tools": ["geospatial_validator", "fusion_s1s2"],
             "need_overlay": true,
             "params": {}
@@ -98,6 +116,20 @@ class TestQwenRouter(unittest.IsolatedAsyncioTestCase):
         req = RouteRequest(query="Fuse optical and SAR to find vessels.", manifest=self.base_manifest)
         res = await self.router.route(req)
         self.assertEqual(res.task, RouterTask.OPTICAL_SAR_ANALYSIS)
+
+    @patch('backend.agents.router.httpx.AsyncClient')
+    async def test_contradictory_intent_flags_rejected(self, mock_client_cls):
+        self._mock_response(mock_client_cls, '''{
+            "task": "CHANGE_VQA",
+            "input_mode": "BI_TEMPORAL_OPTICAL",
+            "requires_grounding": false,
+            "requires_change_analysis": false,
+            "requires_optical_sar_analysis": false
+        }''')
+        req = RouteRequest(query="What changed?", manifest=self.base_manifest)
+        with self.assertRaises(QwenRouterError) as context:
+            await self.router.route(req)
+        self.assertIn("Intent contradiction", str(context.exception))
 
     @patch('backend.agents.router.httpx.AsyncClient')
     async def test_unsupported_task(self, mock_client_cls):

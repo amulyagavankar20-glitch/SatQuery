@@ -5,7 +5,7 @@ import httpx
 from pydantic import ValidationError
 
 from backend.config import settings
-from backend.schemas import RouteRequest, RouteResponse
+from backend.schemas import RouteRequest, RouteResponse, RouterTask
 
 
 class QwenRouterError(Exception):
@@ -33,10 +33,10 @@ class QwenRouter:
         self.timeout = timeout if timeout is not None else settings.OLLAMA_TIMEOUT_SECONDS
         self.response_schema = RouteResponse.model_json_schema()
         self.schema_json = json.dumps(self.response_schema, indent=2)
-        
+
     def build_prompt(self, request: RouteRequest, available_tools: list[str], constraints: list[str]) -> str:
         return f"""<|im_start|>system
-You are the SatQuery AI query router. Your only job is to map the user's intent to a specific structured routing plan.
+You are the SatQuery AI query intent classifier. Your only job is to map the user's intent to a specific structured intent schema.
 You must NOT answer the user's question directly.
 You must NOT execute code, SQL, or arbitrary tools.
 You must NOT generate filesystem paths.
@@ -45,11 +45,14 @@ You receive TEXT ONLY. You will never receive raw image pixels.
 Distinguish INPUT CONFIGURATION from USER INTENT.
 For example: just because two optical images are provided, it does not mean the task is CHANGE_DETECTION. The user must explicitly ask for change or comparison.
 
-Available capabilities / tools:
-{json.dumps(available_tools, indent=2)}
-
 Constraints:
-{json.dumps(constraints, indent=2)}
+- You must NOT select, invent, or substitute models or tools.
+- Never invent tasks. Only use tasks from the closed enum: SINGLE_VQA, CAPTIONING, GROUNDING, CHANGE_DETECTION, CHANGE_VQA, OPTICAL_SAR_ANALYSIS.
+- If the query asks for change or differences between timestamps, task MUST be CHANGE_DETECTION or CHANGE_VQA, and requires_change_analysis must be true.
+- If the query asks to ground, locate, or segment specific objects, task MUST be GROUNDING and requires_grounding must be true.
+- If the query asks to fuse or analyze optical and SAR data together, task MUST be OPTICAL_SAR_ANALYSIS and requires_optical_sar_analysis must be true.
+- If the query asks to identify or answer questions about a single image, task MUST be SINGLE_VQA.
+- If the query asks to describe an image in general, task MUST be CAPTIONING.
 
 You MUST output your response as valid JSON matching this exact JSON schema:
 {self.schema_json}
@@ -60,6 +63,58 @@ Input Class / Normalized Metadata: {json.dumps(request.manifest, default=str)}
 <|im_end|>
 <|im_start|>assistant
 """
+
+    def validate_intent(self, route_resp: RouteResponse) -> RouteResponse:
+        """
+        Validate semantic consistency of the structured intent returned by Qwen.
+        Raises QwenRouterError if the intent contains contradictions or unsupported tasks.
+        """
+        task = route_resp.task
+        if not isinstance(task, RouterTask) and task not in RouterTask.__members__.values():
+            raise QwenRouterError(f"Unsupported task in router output: {task}")
+
+        # Semantic flag consistency validation
+        if task in (RouterTask.CHANGE_VQA, RouterTask.CHANGE_DETECTION):
+            if not route_resp.requires_change_analysis:
+                raise QwenRouterError(
+                    f"Intent contradiction: task '{task.value}' requires requires_change_analysis=True"
+                )
+            if route_resp.requires_optical_sar_analysis:
+                raise QwenRouterError(
+                    f"Intent contradiction: task '{task.value}' cannot require requires_optical_sar_analysis=True"
+                )
+
+        if task == RouterTask.GROUNDING:
+            if not route_resp.requires_grounding:
+                raise QwenRouterError(
+                    f"Intent contradiction: task '{task.value}' requires requires_grounding=True"
+                )
+            if route_resp.requires_change_analysis:
+                raise QwenRouterError(
+                    f"Intent contradiction: task '{task.value}' cannot require requires_change_analysis=True"
+                )
+
+        if task == RouterTask.OPTICAL_SAR_ANALYSIS:
+            if not route_resp.requires_optical_sar_analysis:
+                raise QwenRouterError(
+                    f"Intent contradiction: task '{task.value}' requires requires_optical_sar_analysis=True"
+                )
+            if route_resp.requires_change_analysis:
+                raise QwenRouterError(
+                    f"Intent contradiction: task '{task.value}' cannot require requires_change_analysis=True"
+                )
+
+        if task in (RouterTask.SINGLE_VQA, RouterTask.CAPTIONING):
+            if route_resp.requires_change_analysis:
+                raise QwenRouterError(
+                    f"Intent contradiction: task '{task.value}' cannot have requires_change_analysis=True"
+                )
+            if route_resp.requires_optical_sar_analysis:
+                raise QwenRouterError(
+                    f"Intent contradiction: task '{task.value}' cannot have requires_optical_sar_analysis=True"
+                )
+
+        return route_resp
 
     async def route(self, request: RouteRequest) -> RouteResponse:
         available_tools = [
@@ -132,5 +187,7 @@ Input Class / Normalized Metadata: {json.dumps(request.manifest, default=str)}
     def _parse_response(self, result: dict[str, Any]) -> RouteResponse:
         response_body: str | dict[str, Any] = result.get("response", "{}")
         if isinstance(response_body, dict):
-            return RouteResponse.model_validate(response_body)
-        return RouteResponse.model_validate_json(response_body)
+            parsed = RouteResponse.model_validate(response_body)
+        else:
+            parsed = RouteResponse.model_validate_json(response_body)
+        return self.validate_intent(parsed)

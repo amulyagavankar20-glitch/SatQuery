@@ -139,7 +139,6 @@ def query_router(state: GraphState) -> dict[str, Any]:
     MUST NOT default unknown/failed routing to SINGLE_VQA.
     Failed routing → controlled refusal.
     """
-    _record_event(state, "QUERY_ROUTED", "query_router")
     updates = _visit(state, "query_router")
 
     # Allow test injection: if state carries a pre-resolved task directly in
@@ -148,7 +147,21 @@ def query_router(state: GraphState) -> dict[str, Any]:
     injected_task: str | None = state.get("injected_task")  # type: ignore[attr-defined]
     if injected_task is not None:
         if injected_task in RouterTask.__members__:
-            updates["detected_task"] = RouterTask[injected_task].value
+            task_val = RouterTask[injected_task].value
+            updates["detected_task"] = task_val
+            input_class_val = state.get("input_class", "SINGLE_OPTICAL")
+            selected_path = ToolSelector.TASK_TO_TOOLS.get(RouterTask[injected_task], [])
+            _record_event(
+                state,
+                "QUERY_ROUTED",
+                "query_router",
+                parameters={
+                    "task": task_val,
+                    "input_class": input_class_val,
+                    "routing_policy": "deterministic_v1",
+                    "selected_path": selected_path,
+                },
+            )
             return updates
         else:
             # Unknown injected task → refusal
@@ -169,6 +182,19 @@ def query_router(state: GraphState) -> dict[str, Any]:
         route_response = router.route_sync(request)
         updates["route"] = route_response
         updates["detected_task"] = route_response.task.value
+        input_class_val = state.get("input_class", "SINGLE_OPTICAL")
+        selected_path = ToolSelector.TASK_TO_TOOLS.get(route_response.task, [])
+        _record_event(
+            state,
+            "QUERY_ROUTED",
+            "query_router",
+            parameters={
+                "task": route_response.task.value,
+                "input_class": input_class_val,
+                "routing_policy": "deterministic_v1",
+                "selected_path": selected_path,
+            },
+        )
     except QwenRouterError as exc:
         updates["status"] = "refused"
         updates["refusal_reason"] = f"Routing failed: {exc}"
@@ -640,18 +666,12 @@ def after_geochat_vqa(state: GraphState) -> str:
     return "evidence_fusion"
 
 
-def after_bit_cd(state: GraphState) -> str:
-    task = state.get("detected_task", "")
-    if task == RouterTask.CHANGE_VQA.value:
-        return "geochat_describe"
-    # CHANGE_DETECTION goes through vectorize first
-    return "vectorize"
-
-
 def after_vectorize(state: GraphState) -> str:
     task = state.get("detected_task", "")
     if task == RouterTask.CHANGE_DETECTION.value:
         return "evidence_fusion"
+    if task == RouterTask.CHANGE_VQA.value:
+        return "geochat_describe"
     # Should not reach here for other tasks
     return "refusal"
 
@@ -724,13 +744,14 @@ workflow.add_edge("grounding", "evidence_fusion")
 
 # CHANGE_DETECTION / CHANGE_VQA paths
 workflow.add_edge("align", "bit_cd")
-workflow.add_conditional_edges(
-    "bit_cd", after_bit_cd,
-    {"geochat_describe": "geochat_describe", "vectorize": "vectorize"},
-)
+workflow.add_edge("bit_cd", "vectorize")
 workflow.add_conditional_edges(
     "vectorize", after_vectorize,
-    {"evidence_fusion": "evidence_fusion", "refusal": "refusal"},
+    {
+        "evidence_fusion": "evidence_fusion",
+        "geochat_describe": "geochat_describe",
+        "refusal": "refusal",
+    },
 )
 
 # OPTICAL_SAR_ANALYSIS path: coregister → fusion_s1s2 → agreement → geochat_describe

@@ -374,8 +374,14 @@ class RouteRequest(BaseModel):
 
 class RouteResponse(BaseModel):
     task: RouterTask = Field(..., description="Identified task from user intent")
-    input_mode: RouterInputMode = Field(..., description="Input configuration")
-    tools: list[RouterTool] = Field(..., description="Ordered list of tools to execute")
+    target: str | None = Field(None, description="Identified semantic target (e.g., BUILT_UP_AREA, SHIPS, VEGETATION)")
+    operation: str | None = Field(None, description="Requested operation (e.g., SPATIAL_EXPANSION, DETECTION, IDENTIFICATION)")
+    output_type: str | None = Field(None, description="Desired output format (e.g., TEXT, TEXT_AND_SPATIAL, SPATIAL_MASK)")
+    requires_grounding: bool = Field(default=False, description="Whether intent requires spatial grounding")
+    requires_change_analysis: bool = Field(default=False, description="Whether intent requires temporal change analysis")
+    requires_optical_sar_analysis: bool = Field(default=False, description="Whether intent requires cross-modal optical+SAR analysis")
+    input_mode: RouterInputMode | None = Field(None, description="Optional input configuration")
+    tools: list[RouterTool] = Field(default_factory=list, description="Ordered list of tools")
     need_overlay: bool = True
     params: dict[str, Any] = Field(default_factory=dict)
 
