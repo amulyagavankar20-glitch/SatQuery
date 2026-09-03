@@ -3,6 +3,7 @@ from typing import Any
 import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.exc import SQLAlchemyError
 
 from backend.api import jobs
 from backend.config import settings
@@ -38,7 +39,7 @@ def health_check() -> dict[str, Any]:
     try:
         from backend.database import check_db_connection
         postgres = check_db_connection()
-    except Exception as exc:
+    except (ImportError, SQLAlchemyError) as exc:
         postgres = {"status": "unreachable", "error": str(exc)}
 
     return {
