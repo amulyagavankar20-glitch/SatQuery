@@ -1,13 +1,13 @@
 {
   "name": "SatQuery",
   "short_name": "SatQuery",
-  "description": "SAC / ISRO satellite query console",
+  "description": "Natural-language analysis for GeoTIFF satellite scenes.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#050910",
-  "theme_color": "#050910",
+  "background_color": "#121417",
+  "theme_color": "#121417",
   "icons": [
     { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" },
-    { "src": "/apple-touch-icon.jpg", "sizes": "180x180", "type": "image/jpeg" }
+    { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
   ]
 }

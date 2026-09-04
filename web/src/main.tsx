@@ -1,15 +1,13 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  Outlet,
-  RouterProvider,
-  createRootRoute,
-  createRoute,
-  createRouter,
-} from "@tanstack/react-router";
-import { AnalyzePage } from "@/pages/AnalyzePage";
+import { Outlet, RouterProvider, createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
+
+import { GlobalOverlays } from "@/components/GlobalOverlays";
+import { ConsolePage } from "@/pages/ConsolePage";
+import { AboutPage } from "@/pages/AboutPage";
 import { ExplorePage } from "@/pages/ExplorePage";
+import { ConsoleProvider } from "@/state/console";
 import "./index.css";
 
 const queryClient = new QueryClient({
@@ -17,17 +15,24 @@ const queryClient = new QueryClient({
 });
 
 function RootLayout() {
-  return <Outlet />;
+  return (
+    <ConsoleProvider>
+      <Outlet />
+      <GlobalOverlays />
+    </ConsoleProvider>
+  );
 }
 
 const rootRoute = createRootRoute({ component: RootLayout });
-const analyzeRoute = createRoute({
+const consoleRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
-  validateSearch: (search: Record<string, unknown>): { job?: string } => ({
-    job: typeof search.job === "string" && search.job.length > 0 ? search.job : undefined,
-  }),
-  component: AnalyzePage,
+  component: ConsolePage,
+});
+const aboutRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/about",
+  component: AboutPage,
 });
 const exploreRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -35,7 +40,7 @@ const exploreRoute = createRoute({
   component: ExplorePage,
 });
 
-const routeTree = rootRoute.addChildren([analyzeRoute, exploreRoute]);
+const routeTree = rootRoute.addChildren([consoleRoute, aboutRoute, exploreRoute]);
 const router = createRouter({ routeTree });
 
 declare module "@tanstack/react-router" {

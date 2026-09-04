@@ -1,32 +1,15 @@
-# React + TypeScript + Vite
+# SatQuery console
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Operator console for SatQuery AI (SIH26167). Attach one or two GeoTIFFs, ask a question in English, and read the answer as prose plus map evidence with an auditable trace. Works offline with three demo scenes; talks to the FastAPI backend when `POST /ingest` and `GET /jobs/{id}` are reachable.
 
-Currently, two official plugins are available:
+Palette: ground `#121417`, surface `#1A1E22`, raised `#22282E`, hairline `#2C343C`, ink `#E8E4DC`, mute `#8B959E`, accent `#5E8F8A`.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+pnpm i && pnpm dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Open http://localhost:5173. Optional: set `VITE_API_BASE` (default `http://127.0.0.1:8000`).
+
+**Explore** (`/explore`) is a 2D map of packaged scenes. Click a scene and send it to the console, or drop a GeoTIFF / PNG onto the map.
+
+**Keys.** `Ctrl/⌘ K` command palette · `/` composer · `Ctrl/⌘ Enter` send · `Ctrl/⌘ O` attach · `1–5` official questions · `F` fit scene · `I` inspect · `?` shortcuts · `Esc` close.

@@ -82,3 +82,5 @@ package-lock.json
 !web/
 !web/public/
 !web/public/**
+!web/src/lib/
+!web/src/lib/**

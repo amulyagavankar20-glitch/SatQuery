@@ -4,10 +4,10 @@
 
 <br/>
 
-<!-- Animated typewriter — saffron to match SatQuery primary -->
+<!-- Animated typewriter — teal to match SatQuery primary #5E8F8A -->
 <p align="center">
   <img
-    src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=28&duration=2800&pause=1000&color=F0842A&center=true&vCenter=true&multiline=false&width=920&height=48&lines=SatQuery+AI;SIH26167+Satellite+Query+Agent;Qwen+routes.+InternVL+talks.+GIS+grounds.;Cartosat.+RISAT.+Ask+the+scene.;The+agent+decides+WHAT.+Specialists+analyse."
+    src="https://readme-typing-svg.demolab.com?font=IBM+Plex+Sans&weight=500&size=28&duration=2800&pause=1000&color=5E8F8A&center=true&vCenter=true&multiline=false&width=920&height=48&lines=SatQuery+AI;SIH26167+Satellite+Query+Agent;Qwen+routes.+InternVL+talks.+GIS+grounds.;Cartosat.+RISAT.+Ask+the+scene.;The+agent+decides+WHAT.+Specialists+analyse."
     alt="SatQuery typing animation"
   />
 </p>
@@ -37,7 +37,7 @@
   <img src="https://img.shields.io/badge/FastAPI-0.139-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI" />
   <img src="https://img.shields.io/badge/LangGraph-0.2-1C3C3C?style=for-the-badge" alt="LangGraph" />
   <img src="https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python" />
-  <img src="https://img.shields.io/badge/Qwen2.5-3B_Instruct-F0842A?style=for-the-badge" alt="Qwen2.5-3B" />
+  <img src="https://img.shields.io/badge/Qwen2.5-3B_Instruct-5E8F8A?style=for-the-badge" alt="Qwen2.5-3B" />
 </p>
 
 <!-- Frontend & GIS -->
@@ -46,7 +46,7 @@
   <img src="https://img.shields.io/badge/Vite-8-646CFF?style=for-the-badge&logo=vite&logoColor=white" alt="Vite" />
   <img src="https://img.shields.io/badge/TypeScript-5.9-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" />
   <img src="https://img.shields.io/badge/Tailwind_CSS-4-38BDF8?style=for-the-badge&logo=tailwindcss&logoColor=white" alt="Tailwind CSS" />
-  <img src="https://img.shields.io/badge/MapLibre-5-4AD4D4?style=for-the-badge" alt="MapLibre" />
+  <img src="https://img.shields.io/badge/MapLibre-5-5E8F8A?style=for-the-badge" alt="MapLibre" />
 </p>
 
 <!-- Persistence & models -->
@@ -54,16 +54,16 @@
   <img src="https://img.shields.io/badge/PostgreSQL-18-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL" />
   <img src="https://img.shields.io/badge/PostGIS-3.6-74B743?style=for-the-badge" alt="PostGIS" />
   <img src="https://img.shields.io/badge/Ollama-local-000000?style=for-the-badge" alt="Ollama" />
-  <img src="https://img.shields.io/badge/InternVL3-1B-4AD4D4?style=for-the-badge" alt="InternVL3-1B" />
+  <img src="https://img.shields.io/badge/InternVL3-1B-5E8F8A?style=for-the-badge" alt="InternVL3-1B" />
   <img src="https://img.shields.io/badge/uv-venv-DE5FE9?style=for-the-badge" alt="uv" />
 </p>
 
 <!-- Meta -->
 <p>
-  <img src="https://img.shields.io/badge/version-1.0.0-F0842A?style=for-the-badge" alt="Version 1.0.0" />
-  <img src="https://img.shields.io/badge/License-MIT-F59E0B?style=for-the-badge" alt="License" />
-  <img src="https://img.shields.io/badge/SIH-26167-0A1520?style=for-the-badge" alt="SIH 26167" />
-  <img src="https://img.shields.io/badge/Contract-JobView-4AD4D4?style=for-the-badge" alt="JobView" />
+  <img src="https://img.shields.io/badge/version-1.0.0-5E8F8A?style=for-the-badge" alt="Version 1.0.0" />
+  <img src="https://img.shields.io/badge/License-MIT-8B959E?style=for-the-badge" alt="License" />
+  <img src="https://img.shields.io/badge/SIH-26167-121417?style=for-the-badge" alt="SIH 26167" />
+  <img src="https://img.shields.io/badge/Contract-JobView-5E8F8A?style=for-the-badge" alt="JobView" />
   <img src="https://img.shields.io/badge/No-Redis%20%7C%20Kafka-7f96ad?style=for-the-badge" alt="No Redis Kafka" />
   <img src="https://img.shields.io/github/last-commit/amulyagavankar20-glitch/SatQuery?style=for-the-badge&label=Updated" alt="Last commit" />
   <img src="https://img.shields.io/github/stars/amulyagavankar20-glitch/SatQuery?style=for-the-badge&label=Stars" alt="Stars" />
@@ -73,9 +73,9 @@
 
 [![Open Repository](https://img.shields.io/badge/Open-Repository-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/amulyagavankar20-glitch/SatQuery)
 [![Read the Spec](https://img.shields.io/badge/Read-API_Spec-0F172A?style=for-the-badge)](./docs/api-spec.md)
-[![Contributing](https://img.shields.io/badge/Contributing-Guide-F0842A?style=for-the-badge)](./CONTRIBUTING.md)
-[![Security](https://img.shields.io/badge/Security-Policy-e05b56?style=for-the-badge)](./SECURITY.md)
-[![Code of Conduct](https://img.shields.io/badge/Code-of_Conduct-4AD4D4?style=for-the-badge)](./CODE_OF_CONDUCT.md)
+[![Contributing](https://img.shields.io/badge/Contributing-Guide-5E8F8A?style=for-the-badge)](./CONTRIBUTING.md)
+[![Security](https://img.shields.io/badge/Security-Policy-B4554A?style=for-the-badge)](./SECURITY.md)
+[![Code of Conduct](https://img.shields.io/badge/Code-of_Conduct-5E8F8A?style=for-the-badge)](./CODE_OF_CONDUCT.md)
 
 </div>
 
@@ -112,10 +112,10 @@ flowchart LR
   J --> PG[("Postgres + PostGIS")]
   J --> D[("data/jobs/{id}")]
 
-  style U fill:#0a1520,stroke:#f0842a,color:#eef4fb
-  style Q fill:#0a1520,stroke:#f0842a,color:#eef4fb
-  style J fill:#0a1520,stroke:#4ad4d4,color:#eef4fb
-  style UI fill:#0a1520,stroke:#4ad4d4,color:#eef4fb
+  style U fill:#121417,stroke:#5e8f8a,color:#e8e4dc
+  style Q fill:#121417,stroke:#5e8f8a,color:#e8e4dc
+  style J fill:#1a1e22,stroke:#5e8f8a,color:#e8e4dc
+  style UI fill:#1a1e22,stroke:#5e8f8a,color:#e8e4dc
 ```
 
 Live memory is an in-process `dict[session_id → SessionContext]`. When the graph ends, Postgres remembers the job; rasters stay on disk.
@@ -178,11 +178,11 @@ flowchart TD
   AU --> RG[report_generator]
   RG --> END([END])
 
-  style QR fill:#1a1208,stroke:#f0842a,color:#eef4fb
-  style GV fill:#081418,stroke:#4ad4d4,color:#eef4fb
-  style GD fill:#081418,stroke:#4ad4d4,color:#eef4fb
-  style RF fill:#1a0a0a,stroke:#e05b56,color:#eef4fb
-  style EF fill:#0a1520,stroke:#3dba7a,color:#eef4fb
+  style QR fill:#1a1e22,stroke:#5e8f8a,color:#e8e4dc
+  style GV fill:#1a1e22,stroke:#5e8f8a,color:#e8e4dc
+  style GD fill:#1a1e22,stroke:#5e8f8a,color:#e8e4dc
+  style RF fill:#1a1e22,stroke:#b4554a,color:#e8e4dc
+  style EF fill:#1a1e22,stroke:#8b959e,color:#e8e4dc
 ```
 
 | Role | Runtime | Notes |
@@ -196,14 +196,14 @@ flowchart TD
 > [!WARNING]
 > BIT, SAM, and optical–SAR fusion still return **mock specialist results**. The talking VLM backend is `mock` until InternVL is loaded (`TALKING_VLM_BACKEND=internvl`). `GET /jobs/{id}/report.pdf` is **501**. The graph, JobView contract, ingest, router, and Analyze UI are live.
 
-## Analyze console
+## Console
 
-The UI is an **analysis operations console**, not a 3D marketing site. One `JobView` object drives every panel.
+The UI is an **analysis operations console**, not a 3D marketing site. One `JobView` object drives a thread of answers, map evidence, and an auditable trace. Palette: warm-black `#121417`, surfaces `#1A1E22` / `#22282E`, one accent `#5E8F8A`.
 
 ```mermaid
 sequenceDiagram
   actor Analyst
-  participant UI as Analyze UI :5173
+  participant UI as Console :5173
   participant API as FastAPI :8000
   participant Qwen as Ollama Qwen 3B
   participant PG as PostGIS
@@ -225,11 +225,13 @@ sequenceDiagram
 
 | Surface | Behaviour |
 |---|---|
-| Status LEDs | API / Ollama / Postgres from `GET /health` |
-| Question chips | Official queries from the API spec (not free-form only) |
-| Evidence map | MapLibre, footprint toggle, cursor lon/lat, zoom |
-| Trace rail | LangGraph node events as they land in JobView |
-| Keyboard | `Ctrl+Enter` run · `O` open file · `K` focus query · `?` shortcuts |
+| Local / mock | Quiet status from `GET /health` — no fake telemetry |
+| Question chips | Official queries; insert text, do not auto-send |
+| Evidence map | MapLibre inside the assistant turn; layers, fit, cursor, opacity |
+| Explore | `/explore` — 2D catalog of packaged scenes; drop a GeoTIFF/PNG to analyse |
+| Trace | Collapsed accordion of tool ids after a run |
+| Command palette | `Ctrl/⌘ K` |
+| Keyboard | `Ctrl+Enter` send · `Ctrl+O` attach · `/` composer · `F` fit · `I` inspect · `?` shortcuts |
 
 Dev URLs: API `http://127.0.0.1:8000` · UI `http://127.0.0.1:5173` (CORS locked to those origins).
 
@@ -285,12 +287,11 @@ export PROJ_DATA="$PROJ_LIB"
 uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
 
-### 4. Analyze UI
+### 4. Console
 
 ```bash
 cd web
-npm install
-npx vite --host 127.0.0.1 --port 5173
+pnpm i && pnpm dev
 ```
 
 ### 5. Smoke a Cartosat scene
