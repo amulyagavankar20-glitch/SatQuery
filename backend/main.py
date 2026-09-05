@@ -6,13 +6,24 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend.api import jobs
+from backend.api.v1 import auth, query, assets
 from backend.config import settings
+from backend.middleware.request_tracking import RequestTrackingMiddleware
+import redis.asyncio as redis
+from fastapi_limiter import FastAPILimiter
 
 app = FastAPI(
     title="SatQuery AI API",
     description="SIH26167 SatQuery backend for Agentic Orchestration",
     version="1.0.0",
 )
+
+@app.on_event("startup")
+async def startup():
+    redis_client = redis.from_url(settings.REDIS_URL, encoding="utf-8", decode_responses=True)
+    await FastAPILimiter.init(redis_client)
+
+app.add_middleware(RequestTrackingMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -23,6 +34,9 @@ app.add_middleware(
 )
 
 app.include_router(jobs.router)
+app.include_router(auth.router)
+app.include_router(query.router)
+app.include_router(assets.router)
 
 
 @app.get("/health")

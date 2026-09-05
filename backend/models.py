@@ -16,11 +16,40 @@ from sqlalchemy import (
     String,
     Text,
     func,
+    Enum,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+import enum
 
 from backend.database import Base
+
+
+class Role(str, enum.Enum):
+    STANDARD = "standard"
+    ADMIN = "admin"
+    API = "api"
+
+
+class User(Base):
+    """User model for authentication and RBAC."""
+
+    __tablename__ = "users"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[Role] = mapped_column(Enum(Role), default=Role.STANDARD, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
 
 
 class Project(Base):

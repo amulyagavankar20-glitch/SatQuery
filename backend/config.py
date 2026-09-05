@@ -25,10 +25,24 @@ class Settings(BaseSettings):
     POSTGRES_PORT: int = 5432
     POSTGRES_DB: str = "satquery"
     DATABASE_URL: str | None = None
+    DATABASE_REPLICA_URL: str | None = None
     DB_POOL_SIZE: int = 10
     DB_MAX_OVERFLOW: int = 20
     DB_POOL_TIMEOUT: int = 30
     DB_ECHO: bool = False
+
+    # Security & JWT
+    JWT_SECRET_KEY: str = "your-super-secret-jwt-key"  # Change in production
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440 # 24 hours
+
+    # Redis & Celery
+    REDIS_URL: str = "redis://127.0.0.1:6379/0"
+    CELERY_BROKER_URL: str = "redis://127.0.0.1:6379/1"
+
+    # Vector DB (Qdrant)
+    QDRANT_HOST: str = "127.0.0.1"
+    QDRANT_PORT: int = 6333
 
     # Environment & Logging
     ENVIRONMENT: str = "development"
@@ -58,14 +72,16 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def assemble_database_url(self) -> "Settings":
-        if self.DATABASE_URL:
-            return self
         user = quote_plus(self.POSTGRES_USER)
         password = quote_plus(self.POSTGRES_PASSWORD)
-        self.DATABASE_URL = (
-            f"postgresql+psycopg://{user}:{password}"
-            f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
-        )
+        base_url = f"postgresql+psycopg://{user}:{password}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        
+        if not self.DATABASE_URL:
+            self.DATABASE_URL = base_url
+        if not self.DATABASE_REPLICA_URL:
+            # Fallback to primary for replica if not explicitly set
+            self.DATABASE_REPLICA_URL = self.DATABASE_URL
+            
         return self
 
     @property
