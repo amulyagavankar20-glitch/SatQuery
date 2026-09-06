@@ -32,7 +32,7 @@ export function JobsDrawer() {
                       restoreJob(job.id);
                       void navigate({ to: "/console" });
                     }}
-                    className="hover:bg-raised w-full rounded-xl px-3 py-3 text-left"
+                    className="hover:bg-raised/80 w-full rounded-xl px-3 py-3 text-left transition-colors"
                   >
                     <div className="line-clamp-2 text-[13px] leading-snug text-ink">{job.query}</div>
                     <div className="mt-1.5 truncate text-[11px] text-mute">

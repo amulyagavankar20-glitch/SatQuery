@@ -19,7 +19,7 @@ export function Composer() {
   };
 
   return (
-    <div className="shrink-0 border-t border-hairline bg-background/80 px-4 py-3 backdrop-blur-md md:px-6">
+    <div className="sq-glow-border shrink-0 border-t border-hairline bg-background/80 px-4 py-3 backdrop-blur-md md:px-6" style={{ background: "linear-gradient(180deg, rgb(22 26 31 / 0.85), rgb(18 20 23 / 0.95))" }}>
       <div className="mx-auto w-full max-w-4xl">
         <div className="sq-chips flex gap-2 overflow-x-auto pb-1">
           {OFFICIAL_CHIPS.map((chip, i) => {
@@ -31,12 +31,7 @@ export function Composer() {
                 disabled={!hasScene}
                 onClick={() => insertChip(chip)}
                 title={`${i + 1}`}
-                className={cn(
-                  "shrink-0 rounded-lg border px-2.5 py-1 text-[12px] leading-snug disabled:opacity-40",
-                  selected
-                    ? "border-primary text-primary"
-                    : "border-hairline text-mute hover:border-primary/40 hover:text-ink",
-                )}
+                className={cn("sq-chip shrink-0 leading-snug disabled:opacity-40", selected && "sq-chip-on")}
               >
                 {chip}
               </button>

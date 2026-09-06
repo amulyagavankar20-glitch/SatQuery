@@ -17,7 +17,7 @@ export function AppHeader() {
   const mod = useModLabel();
 
   return (
-    <header className="sq-header-glass relative flex h-12 shrink-0 items-center gap-3 border-b border-hairline px-3 sm:px-4">
+    <header className="sq-header-glass relative z-20 flex h-12 shrink-0 items-center gap-3 border-b border-hairline px-3 sm:px-4">
       <Wordmark />
 
       <div className="ml-auto flex items-center gap-0.5 sm:gap-1">
@@ -58,7 +58,7 @@ export function AppHeader() {
           className="ml-2 hidden items-center gap-2 text-[12px] text-mute sm:inline-flex"
           title={apiUp ? "Local · API connected" : "Local · mock"}
         >
-          <span className={cn("size-1.5 rounded-full", apiUp ? "bg-primary" : "bg-mute")} />
+          <span className={cn("size-1.5 rounded-full", apiUp ? "sq-live bg-primary" : "bg-mute")} />
           {apiUp ? "local" : "mock"}
         </span>
       </div>

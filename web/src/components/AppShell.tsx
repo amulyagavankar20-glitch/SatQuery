@@ -3,7 +3,10 @@ import type { ReactNode } from "react";
 
 import { AppHeader } from "@/components/AppHeader";
 import { Footer } from "@/components/Footer";
+import { Grain } from "@/components/Grain";
+import { ScenePills } from "@/components/ScenePills";
 import { SceneRail } from "@/components/SceneRail";
+import { Viewport } from "@/components/Viewport";
 import { useModLabel } from "@/hooks/use-mod-label";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useConsole } from "@/state/console";
@@ -26,12 +29,16 @@ export function AppShell({ children }: { children: ReactNode }) {
         onDrop(Array.from(e.dataTransfer.files));
       }}
     >
+      <Grain />
       <AppHeader />
-      <div className="flex min-h-0 flex-1">
-        <aside className="hidden w-[280px] shrink-0 border-r border-hairline lg:block">
-          <SceneRail idPrefix="rail" />
-        </aside>
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        <div className="order-2 flex min-h-0 min-w-0 flex-1 flex-col border-hairline lg:order-1 lg:w-[42%] lg:flex-none lg:border-r">
+          <ScenePills />
+          {children}
+        </div>
+        <div className="relative order-1 min-h-[42vh] min-w-0 lg:order-2 lg:min-h-0 lg:flex-1">
+          <Viewport />
+        </div>
       </div>
       <Footer hint={`${mod}+Enter send · ${mod}+K commands`} />
       <Sheet open={sceneSheetOpen} onOpenChange={setSceneSheetOpen}>

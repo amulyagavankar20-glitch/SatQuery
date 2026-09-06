@@ -24,8 +24,10 @@ export type SceneSlot = {
   crs: string;
   date: string | null;
   bands: number | null;
+  gsd?: string | null;
   bounds: BBox;
   previewUrl: string;
+  objectPos?: string;
   file?: File;
 };
 

@@ -1,33 +1,25 @@
-import { Aperture, CircleDashed, Focus, GitCompare, Radio } from "lucide-react";
 import maplibregl, { type GeoJSONSource } from "maplibre-gl";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
-import { Checkbox } from "@/components/ui/checkbox";
-import { LAYER_LABELS } from "@/lib/constants";
 import { registerMapFit } from "@/lib/map-registry";
 import type { BBox, LayerId, OverlayCollection } from "@/lib/types";
-import { formatLngLat } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { useConsole } from "@/state/console";
 
 type Props = {
   bounds: BBox;
   opticalUrl: string | null;
   sarUrl: string | null;
-  compareUrl: string | null;
+  wipeUrl: string | null;
   overlays?: OverlayCollection;
   layers: Record<LayerId, boolean>;
-  onLayer: (id: LayerId, on: boolean) => void;
   hasSar: boolean;
-  instanceId: string;
+  t1Date?: string | null;
+  t2Date?: string | null;
+  fill?: boolean;
 };
 
 const EMPTY: OverlayCollection = { type: "FeatureCollection", features: [] };
-
-const LAYER_ICONS: Record<LayerId, ReactNode> = {
-  optical: <Aperture className="size-3" />,
-  sar: <Radio className="size-3" />,
-  change: <GitCompare className="size-3" />,
-  uncertain: <CircleDashed className="size-3" />,
-};
 
 function imageCoords(bounds: BBox): [[number, number], [number, number], [number, number], [number, number]] {
   const [west, south, east, north] = bounds;
@@ -47,19 +39,23 @@ export function MapEvidence({
   bounds,
   opticalUrl,
   sarUrl,
-  compareUrl,
+  wipeUrl,
   overlays,
   layers,
-  onLayer,
   hasSar,
-  instanceId,
+  t1Date,
+  t2Date,
+  fill,
 }: Props) {
+  const { evidencePulse, setAnswerFocus } = useConsole();
+  const boxRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const [ready, setReady] = useState(false);
-  const [cursor, setCursor] = useState<{ lng: number; lat: number } | null>(null);
-  const [opacity, setOpacity] = useState(0.9);
   const [split, setSplit] = useState(50);
+  const [frame, setFrame] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
+  const frameRef = useRef(frame);
+  frameRef.current = frame;
 
   const fit = () => {
     const map = mapRef.current;
@@ -86,34 +82,34 @@ export function MapEvidence({
           overlays: { type: "geojson", data: EMPTY },
         },
         layers: [
-          { id: "bg", type: "background", paint: { "background-color": "#1A1E22" } },
+          { id: "bg", type: "background", paint: { "background-color": "#121417" } },
           {
             id: "change-fill",
             type: "fill",
             source: "overlays",
             filter: ["==", ["get", "kind"], "change"],
-            paint: { "fill-color": "#5E8F8A", "fill-opacity": 0.32 },
+            paint: { "fill-color": "#5E8F8A", "fill-opacity": 0.22 },
           },
           {
             id: "change-line",
             type: "line",
             source: "overlays",
             filter: ["==", ["get", "kind"], "change"],
-            paint: { "line-color": "#5E8F8A", "line-width": 1.4 },
+            paint: { "line-color": "#5E8F8A", "line-width": 1.5 },
           },
           {
             id: "uncertain-fill",
             type: "fill",
             source: "overlays",
             filter: ["==", ["get", "kind"], "uncertain"],
-            paint: { "fill-color": "#8B959E", "fill-opacity": 0.18 },
+            paint: { "fill-color": "#5E8F8A", "fill-opacity": 0.1 },
           },
           {
             id: "uncertain-line",
             type: "line",
             source: "overlays",
             filter: ["==", ["get", "kind"], "uncertain"],
-            paint: { "line-color": "#8B959E", "line-width": 1.2, "line-dasharray": [2, 2] },
+            paint: { "line-color": "#5E8F8A", "line-width": 1.5, "line-dasharray": [2, 2] },
           },
         ],
       },
@@ -123,14 +119,27 @@ export function MapEvidence({
       ],
       fitBoundsOptions: { padding: 16, maxZoom: 15 },
       attributionControl: false,
-      scrollZoom: false,
+      scrollZoom: true,
       dragRotate: false,
       pitchWithRotate: false,
     });
-    map.addControl(new maplibregl.NavigationControl({ showCompass: false, visualizePitch: false }), "top-right");
-    map.on("load", () => setReady(true));
-    map.on("mousemove", (e) => setCursor({ lng: e.lngLat.lng, lat: e.lngLat.lat }));
-    map.on("mouseout", () => setCursor(null));
+    map.on("load", () => {
+      map.resize();
+      setReady(true);
+      const pulseAnswer = () => {
+        setAnswerFocus(true);
+        document.getElementById("sq-answer")?.scrollIntoView({ behavior: "smooth", block: "center" });
+        document.getElementById("sq-trace")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      };
+      map.on("click", "change-fill", pulseAnswer);
+      map.on("click", "uncertain-fill", pulseAnswer);
+      map.on("mouseenter", "change-fill", () => {
+        map.getCanvas().style.cursor = "pointer";
+      });
+      map.on("mouseleave", "change-fill", () => {
+        map.getCanvas().style.cursor = "";
+      });
+    });
     mapRef.current = map;
 
     const ro = new ResizeObserver(() => map.resize());
@@ -181,19 +190,20 @@ export function MapEvidence({
       );
     };
     const apply = () => {
-      applyRaster("optical", opticalUrl, opacity);
-      applyRaster("sar", sarUrl, Math.min(0.75, opacity));
+      applyRaster("optical", opticalUrl, 0.92);
+      applyRaster("sar", sarUrl, 0.72);
+      map.resize();
     };
     if (map.isStyleLoaded()) apply();
     else map.once("load", apply);
-  }, [opticalUrl, sarUrl, bounds, opacity]);
+  }, [opticalUrl, sarUrl, bounds]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
     const apply = () => {
       setVis(map, "optical", layers.optical);
-      setVis(map, "sar", layers.sar);
+      setVis(map, "sar", layers.sar && hasSar);
       setVis(map, "change-fill", layers.change);
       setVis(map, "change-line", layers.change);
       setVis(map, "uncertain-fill", layers.uncertain);
@@ -201,81 +211,123 @@ export function MapEvidence({
     };
     if (map.isStyleLoaded()) apply();
     else map.once("load", apply);
-  }, [layers]);
+  }, [layers, hasSar]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !wipeUrl || !ready) return;
+    const update = () => {
+      const [w, s, e, n] = bounds;
+      const tl = map.project([w, n]);
+      const br = map.project([e, s]);
+      setFrame({ left: tl.x, top: tl.y, width: Math.max(1, br.x - tl.x), height: Math.max(1, br.y - tl.y) });
+    };
+    update();
+    map.on("move", update);
+    map.on("zoom", update);
+    map.on("resize", update);
+    return () => {
+      map.off("move", update);
+      map.off("zoom", update);
+      map.off("resize", update);
+    };
+  }, [wipeUrl, bounds, ready]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map?.getLayer("change-line")) return;
+    map.setPaintProperty("change-line", "line-width", evidencePulse ? 2.6 : 1.5);
+    map.setPaintProperty("change-fill", "fill-opacity", evidencePulse ? 0.38 : 0.22);
+    map.setPaintProperty("uncertain-line", "line-width", evidencePulse ? 2.4 : 1.5);
+    map.setPaintProperty("uncertain-fill", "fill-opacity", evidencePulse ? 0.22 : 0.1);
+  }, [evidencePulse]);
+
+  const moveSplit = (clientX: number) => {
+    const box = boxRef.current;
+    const fr = frameRef.current;
+    if (!box) return;
+    const rect = box.getBoundingClientRect();
+    if (fr) {
+      const next = ((clientX - rect.left - fr.left) / fr.width) * 100;
+      setSplit(Math.min(96, Math.max(4, next)));
+      return;
+    }
+    const next = ((clientX - rect.left) / rect.width) * 100;
+    setSplit(Math.min(96, Math.max(4, next)));
+  };
+
+  const onHandlePointer = (e: ReactPointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    moveSplit(e.clientX);
+  };
 
   return (
-    <div className="relative mt-4 overflow-hidden rounded-xl border border-hairline" style={{ height: 480 }}>
+    <div
+      ref={boxRef}
+      className={cn("relative overflow-hidden", fill ? "h-full min-h-0" : "mt-4 h-[480px] rounded-xl border border-hairline")}
+    >
       {!ready ? <div className="sq-shimmer pointer-events-none absolute inset-0 z-[1] bg-surface" /> : null}
       <div ref={containerRef} className="h-full w-full" />
-      {compareUrl ? (
+      {wipeUrl && frame ? (
         <>
           <div
-            className="pointer-events-none absolute inset-0 z-[4] overflow-hidden"
-            style={{ clipPath: `inset(0 ${100 - split}% 0 0)` }}
+            className="pointer-events-none absolute z-[4] overflow-hidden"
+            style={{
+              left: frame.left,
+              top: frame.top,
+              width: frame.width,
+              height: frame.height,
+              clipPath: `inset(0 0 0 ${split}%)`,
+            }}
           >
-            <img src={compareUrl} alt="T2" className="h-full w-full object-cover" />
+            <img src={wipeUrl} alt="" className="h-full w-full object-fill" />
           </div>
-          <div className="pointer-events-none absolute inset-y-0 z-[5] w-px bg-primary" style={{ left: `${split}%` }} />
-          <div className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-md border border-hairline bg-surface/95 px-2 py-1 font-mono text-[10px] text-mute">
-            T1
-            <input
-              type="range"
-              min={4}
-              max={96}
-              value={split}
-              onChange={(e) => setSplit(Number(e.target.value))}
-              className="h-1 w-28 cursor-ew-resize accent-primary"
-              aria-label="Compare T1 and T2"
-            />
-            T2
+          <p
+            className="pointer-events-none absolute z-[7] font-mono text-[10px] text-mute tabular-nums"
+            style={{
+              top: frame.top + frame.height - 22,
+              right: `calc(100% - ${frame.left + (split / 100) * frame.width}px + 10px)`,
+            }}
+          >
+            T1{t1Date ? `: ${t1Date}` : ""}
+          </p>
+          <p
+            className="pointer-events-none absolute z-[7] font-mono text-[10px] text-mute tabular-nums"
+            style={{
+              top: frame.top + frame.height - 22,
+              left: frame.left + (split / 100) * frame.width + 10,
+            }}
+          >
+            T2{t2Date ? `: ${t2Date}` : ""}
+          </p>
+          <div
+            className="absolute z-[6] w-4 -translate-x-1/2 cursor-ew-resize touch-none select-none"
+            style={{
+              left: frame.left + (split / 100) * frame.width,
+              top: frame.top,
+              height: frame.height,
+            }}
+            onPointerDown={onHandlePointer}
+            onPointerMove={(e) => {
+              if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+              moveSplit(e.clientX);
+            }}
+            role="slider"
+            aria-label="T1 T2 wipe"
+            aria-valuemin={4}
+            aria-valuemax={96}
+            aria-valuenow={Math.round(split)}
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowLeft") setSplit((s) => Math.max(4, s - 2));
+              if (e.key === "ArrowRight") setSplit((s) => Math.min(96, s + 2));
+            }}
+          >
+            <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-primary" />
+            <div className="sq-glass absolute top-1/2 left-1/2 h-[8px] w-[24px] -translate-x-1/2 -translate-y-1/2 rounded-sm border border-white/15" />
           </div>
         </>
-      ) : null}
-      <div className="absolute top-3 left-3 z-10 rounded-lg border border-hairline bg-surface/95 p-2.5">
-        <ul className="flex flex-col gap-1.5">
-          {LAYER_LABELS.map((layer) => {
-            const disabled = layer.id === "sar" && !hasSar;
-            return (
-              <li key={layer.id} className="flex items-center gap-2">
-                <Checkbox
-                  checked={layers[layer.id]}
-                  disabled={disabled}
-                  onCheckedChange={(v) => onLayer(layer.id, v === true)}
-                  id={`map-${instanceId}-${layer.id}`}
-                />
-                <span className="text-mute">{LAYER_ICONS[layer.id]}</span>
-                <label htmlFor={`map-${instanceId}-${layer.id}`} className="text-[11px] text-ink">
-                  {layer.label}
-                </label>
-              </li>
-            );
-          })}
-        </ul>
-        <div className="mt-2 flex items-center gap-2">
-          <input
-            type="range"
-            min={0.2}
-            max={1}
-            step={0.05}
-            value={opacity}
-            onChange={(e) => setOpacity(Number(e.target.value))}
-            className="w-full accent-primary"
-            aria-label="Raster opacity"
-          />
-        </div>
-        <button
-          type="button"
-          onClick={fit}
-          className="text-mute hover:text-ink mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-hairline py-1 text-[11px]"
-        >
-          <Focus className="size-3" />
-          Fit
-        </button>
-      </div>
-      {cursor ? (
-        <div className="font-mono pointer-events-none absolute bottom-3 left-3 z-10 rounded-md border border-hairline bg-surface/95 px-2 py-1 text-[10px] text-mute">
-          {formatLngLat(cursor.lng, cursor.lat)}
-        </div>
       ) : null}
     </div>
   );

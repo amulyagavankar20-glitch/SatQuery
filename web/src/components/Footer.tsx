@@ -10,7 +10,7 @@ function GitHubMark({ className }: { className?: string }) {
 
 export function Footer({ hint }: { hint?: string }) {
   return (
-    <footer className="shrink-0 border-t border-hairline bg-background">
+    <footer className="shrink-0 bg-background/70 backdrop-blur-md" style={{ borderTop: "1px solid transparent", backgroundImage: "linear-gradient(rgb(18 20 23 / 0.9), rgb(18 20 23 / 0.9)), linear-gradient(90deg, transparent, rgb(94 143 138 / 0.2), transparent)", backgroundOrigin: "padding-box, border-box", backgroundClip: "padding-box, border-box" }}>
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-2.5 md:px-6">
         <p className="text-[11px] text-mute">SIH26167</p>
         {hint ? <p className="hidden text-[11px] text-mute lg:block">{hint}</p> : null}

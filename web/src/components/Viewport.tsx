@@ -1,0 +1,236 @@
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
+
+import { Kbd } from "@/components/Kbd";
+import { downloadExport } from "@/lib/api";
+import { LAYER_LABELS } from "@/lib/constants";
+import { downloadGeoJSON, downloadSceneRasters } from "@/lib/exports";
+import { fitLatestMap } from "@/lib/map-registry";
+import type { AssistantTurn, LayerId } from "@/lib/types";
+import { cn } from "@/lib/utils";
+import { useConsole } from "@/state/console";
+
+const MapEvidence = lazy(() => import("@/components/MapEvidence").then((m) => ({ default: m.MapEvidence })));
+
+const LAYER_GROUPS: { title: string; ids: LayerId[] }[] = [
+  { title: "Base", ids: ["optical", "sar"] },
+  { title: "Overlays", ids: ["change"] },
+  { title: "Confidence", ids: ["uncertain"] },
+];
+
+export function Viewport() {
+  const {
+    hasScene,
+    hasSar,
+    slots,
+    turns,
+    layers,
+    setLayer,
+    openFilePicker,
+    apiUp,
+    toast,
+    activeSlot,
+  } = useConsole();
+
+  const latest = [...turns].reverse().find((t): t is AssistantTurn => t.role === "assistant");
+  const completed = latest?.status === "completed" ? latest : null;
+  const t1 = slots.find((s) => s.slot === "T1") ?? slots[0];
+  const t2 = slots.find((s) => s.slot === "T2");
+  const pair = Boolean(t2);
+  const base = (activeSlot === "T2" && t2) || t1;
+  const [wipe, setWipe] = useState(false);
+  const [panel, setPanel] = useState<null | "layers" | "export">(null);
+  const chromeRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!pair) setWipe(false);
+  }, [pair]);
+
+  useEffect(() => {
+    if (!panel) return;
+    const onDoc = (e: MouseEvent) => {
+      if (chromeRef.current && !chromeRef.current.contains(e.target as Node)) setPanel(null);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [panel]);
+
+  if (!hasScene || !base) {
+    return (
+      <div className="flex h-full items-center justify-center p-6">
+        <button
+          type="button"
+          onClick={openFilePicker}
+          className="flex max-w-sm flex-col items-center gap-3 rounded-xl border border-dashed border-hairline px-8 py-10 text-center text-[13px] text-mute hover:border-primary/40 hover:text-ink"
+        >
+          Drop single GeoTIFF or temporal pair (T1, T2)
+        </button>
+      </div>
+    );
+  }
+
+  const opticalUrl =
+    base.modality === "OPTICAL"
+      ? (activeSlot === "T1" ? (completed?.opticalUrl ?? base.previewUrl) : base.previewUrl)
+      : null;
+  const sarUrl =
+    base.modality === "SAR"
+      ? base.previewUrl
+      : (completed?.sarUrl ?? slots.find((s) => s.modality === "SAR")?.previewUrl ?? null);
+  const wipeUrl = wipe && t2 ? t2.previewUrl : null;
+
+  const exportGeoJSON = async () => {
+    if (!completed?.overlays) {
+      toast("Nothing to export", "bad");
+      return;
+    }
+    if (apiUp && completed.jobId) {
+      try {
+        await downloadExport(completed.jobId, "geojson");
+        return;
+      } catch {
+        /* local */
+      }
+    }
+    downloadGeoJSON(completed.jobId, completed.overlays);
+  };
+
+  const exportGeoTIFF = () => {
+    if (downloadSceneRasters(slots)) return;
+    toast("Upload a GeoTIFF to export the raster", "bad");
+  };
+
+  return (
+    <div className="relative h-full min-h-0">
+      <Suspense fallback={<div className="sq-shimmer h-full" />}>
+        <MapEvidence
+          bounds={completed?.bounds ?? base.bounds}
+          opticalUrl={opticalUrl}
+          sarUrl={sarUrl}
+          wipeUrl={wipeUrl}
+          overlays={completed?.overlays}
+          layers={layers}
+          hasSar={hasSar}
+          t1Date={t1?.date}
+          t2Date={t2?.date}
+          fill
+        />
+      </Suspense>
+
+      <div ref={chromeRef} className="absolute top-3 right-3 z-20 w-max max-w-[calc(100%-1.25rem)]">
+        <div className="sq-glass flex flex-wrap justify-end rounded-lg px-0.5 py-1">
+          <ChromeButton onClick={() => fitLatestMap()}>
+            Fit
+            <Kbd className="ml-1">F</Kbd>
+          </ChromeButton>
+          <ChromeButton
+            on={panel === "layers"}
+            onClick={() => setPanel((p) => (p === "layers" ? null : "layers"))}
+          >
+            Layers
+          </ChromeButton>
+          {pair ? (
+            <ChromeButton
+              on={wipe}
+              onClick={() => {
+                setWipe((w) => !w);
+                setPanel(null);
+              }}
+            >
+              <span className="hidden sm:inline">T1/T2 </span>Wipe
+            </ChromeButton>
+          ) : null}
+          <ChromeButton
+            on={panel === "export"}
+            onClick={() => setPanel((p) => (p === "export" ? null : "export"))}
+          >
+            Export
+          </ChromeButton>
+        </div>
+
+        {panel === "layers" ? (
+          <div className="sq-glass mt-2 min-w-[11rem] rounded-lg p-3">
+            {LAYER_GROUPS.map((group) => (
+              <div key={group.title} className="mb-3 last:mb-0">
+                <p className="font-mono text-[10px] tracking-wide text-mute uppercase">{group.title}</p>
+                <ul className="mt-1.5 flex flex-col gap-1">
+                  {group.ids.map((id) => {
+                    const layer = LAYER_LABELS.find((l) => l.id === id);
+                    if (!layer) return null;
+                    const disabled = id === "sar" && !hasSar;
+                    const on = layers[id] && !disabled;
+                    return (
+                      <li key={id}>
+                        <button
+                          type="button"
+                          disabled={disabled}
+                          aria-pressed={on}
+                          onClick={() => setLayer(id, !layers[id])}
+                          className={cn(
+                            "flex w-full items-center justify-between rounded-md px-1 py-1 font-mono text-[11px] disabled:opacity-40",
+                            on ? "text-primary" : "text-mute hover:text-ink",
+                          )}
+                        >
+                          {layer.label}
+                          <span className={cn("size-1.5 rounded-full", on ? "bg-primary" : "bg-hairline")} />
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        {panel === "export" ? (
+          <div className="sq-glass mt-2 min-w-[10rem] rounded-lg p-2">
+            <button
+              type="button"
+              className="flex w-full rounded-md px-2 py-1.5 text-left font-mono text-[11px] text-mute hover:text-primary"
+              onClick={() => {
+                void exportGeoJSON();
+                setPanel(null);
+              }}
+            >
+              GeoJSON
+            </button>
+            <button
+              type="button"
+              className="flex w-full rounded-md px-2 py-1.5 text-left font-mono text-[11px] text-mute hover:text-primary"
+              onClick={() => {
+                exportGeoTIFF();
+                setPanel(null);
+              }}
+            >
+              GeoTIFF
+            </button>
+          </div>
+        ) : null}
+      </div>
+
+    </div>
+  );
+}
+
+function ChromeButton({
+  children,
+  on,
+  onClick,
+}: {
+  children: ReactNode;
+  on?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "inline-flex items-center rounded-md px-1.5 py-1 font-mono text-[11px] tracking-wide",
+        on ? "text-primary" : "text-mute hover:text-ink",
+      )}
+    >
+      {children}
+    </button>
+  );
+}

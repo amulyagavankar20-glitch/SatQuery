@@ -1,11 +1,12 @@
 import { Link } from "@tanstack/react-router";
-import { Map, Upload } from "lucide-react";
+import { Map } from "lucide-react";
 
+import { DemoThumb } from "@/components/DemoThumb";
 import { DEMOS } from "@/lib/demos";
 import { useConsole } from "@/state/console";
 
 export function EmptyState() {
-  const { loadDemo, openFilePicker } = useConsole();
+  const { loadDemo } = useConsole();
 
   return (
     <div className="mx-auto flex h-full w-full max-w-4xl flex-col px-6 py-8">
@@ -14,7 +15,7 @@ export function EmptyState() {
         Official questions sit in the composer.{" "}
         <Link to="/explore" className="text-primary inline-flex items-center gap-1 hover:underline">
           <Map className="size-3.5" />
-          Explore on the map
+          Explore scenes
         </Link>
       </p>
 
@@ -28,29 +29,18 @@ export function EmptyState() {
             className="sq-glass sq-enter group overflow-hidden rounded-xl text-left hover:border-primary/50"
             style={{ animationDelay: `${i * 40}ms` }}
           >
-            <div className="overflow-hidden">
-              <img
-                src={demo.thumb}
-                alt=""
-                className="h-32 w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-              />
+            <div className="aspect-[4/3] overflow-hidden">
+              <DemoThumb demo={demo} className="h-full w-full transition-transform duration-300 group-hover:scale-[1.03]" />
             </div>
             <div className="p-3">
-              <div className="text-[13px] font-medium text-ink">{demo.title}</div>
+              <div className="font-mono text-[11px] tracking-wide text-mute">
+                {String(i + 1).padStart(2, "0")} // {demo.title}
+              </div>
               <div className="mt-1 text-[12px] leading-snug text-mute">{demo.blurb}</div>
             </div>
           </button>
         ))}
       </div>
-
-      <button
-        type="button"
-        onClick={openFilePicker}
-        className="mt-6 flex min-h-[160px] flex-1 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-hairline bg-surface/30 text-[14px] text-mute backdrop-blur-sm hover:border-primary/40 hover:text-ink"
-      >
-        <Upload className="size-5" />
-        Drop a GeoTIFF here
-      </button>
     </div>
   );
 }

@@ -1,119 +1,110 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowRight } from "lucide-react";
 
 import { EntryHeader } from "@/components/EntryHeader";
 import { Footer } from "@/components/Footer";
-import { NightSky } from "@/components/NightSky";
+import { Grain } from "@/components/Grain";
+import { ScenePlate } from "@/components/ScenePlate";
+
+const INTAKE = [
+  {
+    n: "01",
+    title: "Scene",
+    body: "One GeoTIFF, or a pair. Optical, SAR, or both over the same ground.",
+  },
+  {
+    n: "02",
+    title: "Router",
+    body: "Qwen2.5-3B reads the question and the input class, then picks one specialist.",
+  },
+  {
+    n: "03",
+    title: "Specialist",
+    body: "A frozen graph runs one path — GeoChat for talk and grounding, change and fusion as specialist tools. Nothing is invented at runtime.",
+  },
+] as const;
+
+const RETURNS = [
+  { title: "Prose", body: "An English answer about this scene, not a generic caption." },
+  { title: "Pixel mark", body: "Sage vectors on the raster — shoreline, change, or the grounded phrase." },
+  { title: "Trace", body: "The tool path, collapsed, so you can see what ran." },
+] as const;
+
+const BENCH = [
+  ["Router", "Qwen2.5-3B-Instruct · text only · JSON schema"],
+  ["Talk", "GeoChat-7B · geochat_vqa / geochat_describe"],
+  ["Change", "align → bit_cd → vectorize"],
+  ["Fusion", "Optical + SAR, co-registered over the intersection"],
+] as const;
 
 export function AboutPage() {
   return (
-    <div className="relative flex h-dvh min-w-0 flex-col overflow-x-hidden bg-background">
-      <NightSky />
+    <div className="relative flex h-dvh min-w-0 flex-col overflow-x-hidden">
+      <div className="pointer-events-none fixed inset-0 z-0">
+        <ScenePlate />
+        <Grain />
+      </div>
       <EntryHeader />
       <article className="sq-scroll relative z-10 min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
-        <div className="mx-auto w-full min-w-0 max-w-3xl overflow-x-hidden px-6 py-16 pb-24 sm:py-24">
+        <div className="mx-auto flex w-full min-w-0 max-w-5xl flex-1 flex-col px-6 py-12 sm:px-10 sm:py-16 lg:px-16 lg:py-20">
           <p className="text-[12px] tracking-[0.14em] text-mute">About</p>
-          <h1 className="sq-title mt-5 max-w-xl text-[1.5rem] font-medium leading-[1.2] tracking-[-0.025em] sm:text-[2.05rem]">
-            Satellites write
-            <br className="sm:hidden" /> measurement grids.
+          <h1 className="mt-5 max-w-xl text-[2.05rem] font-medium leading-[1.08] tracking-[-0.035em] text-ink sm:text-[2.7rem] lg:text-[3.05rem]">
+            <span className="block">Satellites write</span>
+            <span className="sq-kicker-soft mt-[0.08em] block">measurement grids.</span>
           </h1>
-          <p className="mt-6 max-w-md text-[16px] leading-[1.65] text-mute">
-            People ask. A router picks a specialist.
-            <span className="mt-3 block text-ink/80">The specialist answers in words and in pixels.</span>
+          <p className="mt-8 max-w-[28rem] text-[16px] leading-[1.65] text-mute sm:text-[17px]">
+            Ask a Cartosat or RISAT scene a question.
+            <span className="mt-2.5 block text-ink/80">
+              A router picks one specialist. You get words, a mark on the pixels, and a receipt.
+            </span>
           </p>
 
-          <figure className="sq-glass mt-16 w-full min-w-0 overflow-hidden rounded-xl px-4 py-6 sm:px-8 sm:py-8">
-            <div className="flex flex-col gap-2 sm:hidden">
-              {(
-                [
-                  ["Scene", "GeoTIFF"],
-                  ["Router", "picks a specialist"],
-                  ["Specialist", "one tool path"],
-                ] as const
-              ).map(([title, sub], i) => (
-                <div key={title}>
-                  {i > 0 ? <div className="mx-auto mb-2 h-4 w-px bg-primary/80" /> : null}
-                  <div className="rounded-xl border border-hairline bg-background/50 px-4 py-3">
-                    <div className="text-[14px] text-ink">{title}</div>
-                    <div className="mt-0.5 text-[12px] text-mute">{sub}</div>
+          <figure className="mt-14 w-full max-w-3xl sm:mt-16">
+            <ol className="grid gap-4 sm:grid-cols-3 sm:gap-3">
+              {INTAKE.map((step, i) => (
+                <li key={step.n} className="sq-glass-card rounded-xl p-4">
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-[11px] tracking-wide text-primary">{step.n}</span>
+                    {i < INTAKE.length - 1 ? <span className="hidden h-px flex-1 bg-primary/40 sm:block" /> : null}
                   </div>
-                </div>
+                  <h2 className="mt-4 text-[16px] font-medium text-ink">{step.title}</h2>
+                  <p className="mt-2 max-w-[16rem] text-[13px] leading-relaxed text-mute">{step.body}</p>
+                </li>
               ))}
-              <div className="mx-auto h-4 w-px bg-primary/80" />
-              <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-xl border border-primary/70 bg-background/50 px-3 py-3 text-center text-[14px] text-ink">
-                  Words
-                </div>
-                <div className="rounded-xl border border-primary/70 bg-background/50 px-3 py-3 text-center text-[14px] text-ink">
-                  Map evidence
-                </div>
-              </div>
+            </ol>
+
+            <div className="mt-12 pt-8">
+              <div className="sq-gradient-divider mb-8" />
+              <p className="font-mono text-[11px] tracking-wide text-primary">Returns</p>
+              <ol className="mt-5 grid gap-4 sm:grid-cols-3 sm:gap-3">
+                {RETURNS.map((item) => (
+                  <li key={item.title} className="sq-glass-card rounded-xl p-4">
+                    <h3 className="text-[16px] font-medium text-ink">{item.title}</h3>
+                    <p className="mt-2 max-w-[16rem] text-[13px] leading-relaxed text-mute">{item.body}</p>
+                  </li>
+                ))}
+              </ol>
             </div>
-            <svg
-              viewBox="0 0 560 220"
-              className="hidden w-full sm:block"
-              style={{ height: "auto" }}
-              preserveAspectRatio="xMidYMid meet"
-              role="img"
-              aria-label="Scene to router to specialist, then words and map evidence"
-            >
-              <rect x="8" y="24" width="148" height="64" rx="12" fill="#121417" stroke="#2C343C" />
-              <text x="82" y="50" textAnchor="middle" fill="#E8E4DC" fontSize="14" fontFamily="IBM Plex Sans, sans-serif">
-                Scene
-              </text>
-              <text x="82" y="70" textAnchor="middle" fill="#8B959E" fontSize="11" fontFamily="IBM Plex Sans, sans-serif">
-                GeoTIFF
-              </text>
-
-              <path d="M156 56 H196" stroke="#5E8F8A" strokeWidth="1.5" />
-              <path d="M188 50 L196 56 L188 62" fill="none" stroke="#5E8F8A" strokeWidth="1.5" />
-
-              <rect x="196" y="24" width="148" height="64" rx="12" fill="#121417" stroke="#2C343C" />
-              <text x="270" y="50" textAnchor="middle" fill="#E8E4DC" fontSize="14" fontFamily="IBM Plex Sans, sans-serif">
-                Router
-              </text>
-              <text x="270" y="70" textAnchor="middle" fill="#8B959E" fontSize="11" fontFamily="IBM Plex Sans, sans-serif">
-                picks a specialist
-              </text>
-
-              <path d="M344 56 H384" stroke="#5E8F8A" strokeWidth="1.5" />
-              <path d="M376 50 L384 56 L376 62" fill="none" stroke="#5E8F8A" strokeWidth="1.5" />
-
-              <rect x="384" y="24" width="148" height="64" rx="12" fill="#121417" stroke="#2C343C" />
-              <text x="458" y="50" textAnchor="middle" fill="#E8E4DC" fontSize="14" fontFamily="IBM Plex Sans, sans-serif">
-                Specialist
-              </text>
-              <text x="458" y="70" textAnchor="middle" fill="#8B959E" fontSize="11" fontFamily="IBM Plex Sans, sans-serif">
-                one tool path
-              </text>
-
-              <path d="M458 88 V120" stroke="#5E8F8A" strokeWidth="1.5" />
-              <path d="M196 120 H458" stroke="#5E8F8A" strokeWidth="1.5" />
-              <path d="M196 120 V136" stroke="#5E8F8A" strokeWidth="1.5" />
-              <path d="M458 120 V136" stroke="#5E8F8A" strokeWidth="1.5" />
-
-              <rect x="122" y="136" width="148" height="56" rx="12" fill="#121417" stroke="#5E8F8A" />
-              <text x="196" y="169" textAnchor="middle" fill="#E8E4DC" fontSize="14" fontFamily="IBM Plex Sans, sans-serif">
-                Words
-              </text>
-
-              <rect x="384" y="136" width="148" height="56" rx="12" fill="#121417" stroke="#5E8F8A" />
-              <text x="458" y="169" textAnchor="middle" fill="#E8E4DC" fontSize="14" fontFamily="IBM Plex Sans, sans-serif">
-                Map evidence
-              </text>
-            </svg>
-            <figcaption className="mt-5 text-[13px] leading-relaxed text-mute">
-              One question. One specialist. A receipt you can audit.
-            </figcaption>
           </figure>
 
-          <p className="mt-14 max-w-md text-[13px] leading-relaxed text-mute">
+          <dl className="mt-14 max-w-xl">
+            {BENCH.map(([key, value]) => (
+              <div key={key} className="grid grid-cols-[5.5rem_1fr] gap-x-4 py-2.5 first:border-t-0 sm:grid-cols-[6.5rem_1fr]" style={{ borderTop: "1px solid rgb(94 143 138 / 0.12)" }}>
+                <dt className="font-mono text-[11px] tracking-wide text-primary">{key}</dt>
+                <dd className="font-mono text-[11px] leading-relaxed text-mute sm:text-[12px]">{value}</dd>
+              </div>
+            ))}
+          </dl>
+
+          <p className="mt-10 max-w-md text-[13px] leading-relaxed text-mute">
             Evaluated on SIH demo scenes. Overlay quality follows pair fitness and cloud — not a marketing score.
           </p>
           <p className="mt-8">
-            <Link to="/console" className="text-primary inline-flex items-center gap-2 text-[14px] hover:underline">
+            <Link
+              to="/console"
+              className="sq-glass sq-cta sq-glow-border inline-flex h-12 items-center rounded-xl px-7 text-[15px] font-medium text-ink"
+              style={{ borderColor: "rgba(94,143,138,0.5)" }}
+            >
               Open console
-              <ArrowRight className="size-4" />
             </Link>
           </p>
         </div>
@@ -122,3 +113,4 @@ export function AboutPage() {
     </div>
   );
 }
+

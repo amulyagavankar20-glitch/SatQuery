@@ -106,7 +106,7 @@ export function CommandPalette() {
         label: "Fit scene",
         kbd: "F",
         icon: <Focus className="size-3.5" />,
-        disabled: !ctx.latestJobId,
+        disabled: !ctx.hasScene,
         run: () => fitLatestMap(),
       },
       {
@@ -298,7 +298,7 @@ export function CommandPalette() {
           e.preventDefault();
           requestAnimationFrame(() => inputRef.current?.focus());
         }}
-        className="sq-palette top-[14%] left-1/2 w-[min(540px,calc(100%-2rem))] -translate-x-1/2 translate-y-0 gap-0 overflow-hidden bg-[#1A1E22] p-0"
+        className="sq-glass sq-palette top-[14%] left-1/2 w-[min(540px,calc(100%-2rem))] -translate-x-1/2 translate-y-0 gap-0 overflow-hidden p-0"
       >
         <DialogTitle className="sr-only">Command palette</DialogTitle>
         <DialogDescription className="sr-only">Search commands or type a question</DialogDescription>

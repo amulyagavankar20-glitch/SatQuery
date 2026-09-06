@@ -1,5 +1,14 @@
 import { downloadBlob } from "./utils";
-import type { OverlayCollection } from "./types";
+import type { OverlayCollection, SceneSlot } from "./types";
+
+export function downloadSceneRasters(slots: SceneSlot[]): boolean {
+  const rasters = slots.filter((s) => s.file);
+  if (!rasters.length) return false;
+  for (const slot of rasters) {
+    if (slot.file) downloadBlob(slot.filename, slot.file);
+  }
+  return true;
+}
 
 function escapePdf(text: string) {
   return text.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");

@@ -7,17 +7,17 @@
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
 
   --color-background: #121417;
-  --color-foreground: #e8e4dc;
+  --color-foreground: #f0f3f5;
   --color-card: #1a1e22;
-  --color-card-foreground: #e8e4dc;
+  --color-card-foreground: #f0f3f5;
   --color-popover: #1a1e22;
-  --color-popover-foreground: #e8e4dc;
+  --color-popover-foreground: #f0f3f5;
   --color-primary: #5e8f8a;
   --color-primary-foreground: #121417;
   --color-secondary: #22282e;
-  --color-secondary-foreground: #e8e4dc;
+  --color-secondary-foreground: #f0f3f5;
   --color-muted: #22282e;
-  --color-muted-foreground: #8b959e;
+  --color-muted-foreground: #7d8791;
   --color-accent: #22282e;
   --color-accent-foreground: #e8e4dc;
   --color-destructive: #b4554a;
@@ -29,8 +29,8 @@
   --color-surface: #1a1e22;
   --color-raised: #22282e;
   --color-hairline: #2c343c;
-  --color-ink: #e8e4dc;
-  --color-mute: #8b959e;
+  --color-ink: #f0f3f5;
+  --color-mute: #7d8791;
 
   --radius-sm: 8px;
   --radius-md: 10px;
@@ -47,7 +47,11 @@ body,
 }
 
 body {
-  background: var(--color-background);
+  background:
+    radial-gradient(ellipse 70% 45% at 100% -10%, rgb(94 143 138 / 0.18), transparent 58%),
+    radial-gradient(ellipse 40% 40% at 50% 50%, rgb(94 143 138 / 0.04), transparent 70%),
+    radial-gradient(ellipse 50% 35% at 0% 110%, rgb(26 30 34 / 0.85), transparent 52%),
+    var(--color-background);
   color: var(--color-foreground);
   font-family: var(--font-sans);
   font-feature-settings: "ss01" 0, "kern" 1;
@@ -81,6 +85,12 @@ textarea:focus-visible,
 textarea,
 input {
   caret-color: var(--color-primary);
+}
+
+.font-mono,
+kbd,
+.sq-chip {
+  font-variant-numeric: tabular-nums;
 }
 
 .sq-chips {
@@ -146,15 +156,6 @@ input {
   }
 }
 
-@keyframes sq-sweep {
-  0% {
-    transform: translateX(-40%);
-  }
-  100% {
-    transform: translateX(280%);
-  }
-}
-
 @keyframes sq-progress {
   0% {
     transform: translateX(-100%);
@@ -187,12 +188,12 @@ input {
 }
 
 .sq-orbit {
-  width: 12px;
-  height: 12px;
-  border: 1.5px solid var(--color-hairline);
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid color-mix(in srgb, var(--color-primary) 22%, transparent);
   border-top-color: var(--color-primary);
   border-radius: 50%;
-  animation: sq-spin 0.75s linear infinite;
+  animation: sq-spin 0.85s linear infinite;
 }
 
 .sq-shimmer {
@@ -203,9 +204,21 @@ input {
   content: "";
   position: absolute;
   inset: 0 auto 0 0;
-  width: 42%;
-  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--color-primary) 14%, transparent), transparent);
-  animation: sq-sweep 1.7s ease-in-out infinite;
+  width: 100%;
+  height: 22%;
+  background: linear-gradient(to bottom, transparent, rgb(94 143 138 / 0.2), transparent);
+  mix-blend-mode: screen;
+  animation: sq-scan 2.1s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes sq-scan {
+  0% {
+    transform: translateY(-120%);
+  }
+  100% {
+    transform: translateY(520%);
+  }
 }
 
 .sq-progress {
@@ -230,57 +243,95 @@ input {
 .sq-kicker {
   font-weight: 500;
   letter-spacing: 0.06em;
-  background: linear-gradient(100deg, #f4f0e8 0%, #e8e4dc 36%, #8fbfb9 100%);
+  background: linear-gradient(100deg, #f4f0e8 0%, #d5e8e5 30%, #8fbfb9 65%, #5e8f8a 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
 
 .sq-kicker-soft {
-  background: linear-gradient(180deg, #cfcbc3 0%, #8b959e 100%);
+  background: linear-gradient(180deg, #cfcbc3 0%, #a3b5b3 50%, #8b959e 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
 
 .sq-title {
-  background: linear-gradient(165deg, #f2eee6 0%, #e8e4dc 42%, #a3c7c2 100%);
+  background: linear-gradient(165deg, #f2eee6 0%, #e8e4dc 35%, #a3c7c2 70%, #5e8f8a 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
 
 .sq-glass {
-  background: rgb(26 30 34 / 0.55);
-  border: 1px solid rgb(94 143 138 / 0.26);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  background: linear-gradient(
+    135deg,
+    rgb(22 26 31 / 0.78),
+    rgb(26 30 34 / 0.65)
+  );
+  border: 1px solid rgb(255 255 255 / 0.08);
+  box-shadow:
+    0 8px 32px -4px rgb(0 0 0 / 0.5),
+    inset 0 1px 0 0 rgb(255 255 255 / 0.04);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
 }
 
 a.sq-glass,
 button.sq-glass {
   transition:
-    border-color 0.2s ease,
-    transform 0.2s ease,
-    box-shadow 0.2s ease;
+    border-color 0.25s ease,
+    transform 0.25s ease,
+    box-shadow 0.25s ease,
+    background 0.25s ease;
 }
 
 a.sq-glass:hover,
 button.sq-glass:hover {
   border-color: rgb(94 143 138 / 0.55);
+  background: linear-gradient(
+    135deg,
+    rgb(26 30 34 / 0.82),
+    rgb(34 40 46 / 0.7)
+  );
   transform: translateY(-2px);
-  box-shadow: 0 12px 28px -16px rgb(8 10 12 / 0.7);
+  box-shadow:
+    0 14px 34px -10px rgb(8 10 12 / 0.7),
+    0 0 18px -6px rgb(94 143 138 / 0.15),
+    inset 0 1px 0 0 rgb(255 255 255 / 0.06);
 }
 
 .sq-header-glass {
-  background: rgb(18 20 23 / 0.55);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: linear-gradient(
+    90deg,
+    rgb(22 26 31 / 0.8),
+    rgb(26 30 34 / 0.72),
+    rgb(22 26 31 / 0.8)
+  );
+  border-bottom-color: rgb(255 255 255 / 0.07);
+  backdrop-filter: blur(18px) saturate(1.3);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+  box-shadow: 0 1px 0 0 rgb(255 255 255 / 0.03);
 }
 
 .sq-earth-img {
   -webkit-mask-image: radial-gradient(ellipse 56% 64% at 66% 46%, #000 40%, transparent 74%);
   mask-image: radial-gradient(ellipse 56% 64% at 66% 46%, #000 40%, transparent 74%);
+}
+
+.sq-plate-img {
+  -webkit-mask-image: radial-gradient(ellipse 68% 78% at 86% 48%, #000 22%, transparent 72%);
+  mask-image: radial-gradient(ellipse 68% 78% at 86% 48%, #000 22%, transparent 72%);
+}
+
+.sq-plate-bloom {
+  position: absolute;
+  top: 18%;
+  right: -10%;
+  width: min(58vw, 520px);
+  height: min(58vw, 520px);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgb(94 143 138 / 0.1), transparent 70%);
 }
 
 .sq-sky {
@@ -342,16 +393,82 @@ button.sq-glass:hover {
 
 .sq-cta {
   transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease,
-    background-color 0.2s ease;
+    transform 0.25s ease,
+    box-shadow 0.25s ease,
+    background-color 0.25s ease,
+    border-color 0.25s ease;
+}
+
+.sq-cta:hover {
+  box-shadow:
+    0 0 24px -8px rgb(94 143 138 / 0.35),
+    0 8px 20px -8px rgb(0 0 0 / 0.4);
 }
 
 .sq-console-wash {
   background:
-    radial-gradient(ellipse 70% 45% at 100% -10%, rgb(94 143 138 / 0.13), transparent 58%),
+    radial-gradient(ellipse 70% 45% at 100% -10%, rgb(94 143 138 / 0.16), transparent 58%),
+    radial-gradient(ellipse 35% 25% at 80% 60%, rgb(94 143 138 / 0.05), transparent 60%),
     radial-gradient(ellipse 50% 35% at 0% 110%, rgb(26 30 34 / 0.85), transparent 52%),
     var(--color-background);
+}
+
+.sq-grain {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  opacity: 0.04;
+  mix-blend-mode: overlay;
+  background-image: url("/grain.svg");
+  background-size: 160px 160px;
+}
+
+.sq-live {
+  animation: sq-live 2.4s ease-in-out infinite;
+}
+
+@keyframes sq-live {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgb(94 143 138 / 0.4);
+  }
+  70% {
+    opacity: 0.75;
+    box-shadow: 0 0 0 5px rgb(94 143 138 / 0);
+  }
+}
+
+.sq-chip {
+  border-radius: 8px;
+  border: 1px solid var(--color-hairline);
+  padding: 0.25rem 0.625rem;
+  font-size: 12px;
+  color: var(--color-mute);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition:
+    border-color 0.2s ease,
+    color 0.2s ease,
+    background-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+.sq-chip:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--color-primary) 40%, transparent);
+  color: var(--color-ink);
+  background: rgb(94 143 138 / 0.06);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px -4px rgb(0 0 0 / 0.3);
+}
+
+.sq-chip-on {
+  border-color: color-mix(in srgb, var(--color-primary) 70%, transparent);
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  color: var(--color-primary);
+  box-shadow: 0 0 12px -4px rgb(94 143 138 / 0.2);
 }
 
 @keyframes sq-palette {
@@ -373,11 +490,82 @@ button,
 a,
 [role="button"] {
   transition:
-    color 0.15s ease,
-    background-color 0.15s ease,
-    border-color 0.15s ease,
-    opacity 0.15s ease,
-    transform 0.15s ease;
+    color 0.18s ease,
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    opacity 0.18s ease,
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+/* ── Floating ambient glow ─────────────────────── */
+@keyframes sq-float-glow {
+  0%, 100% {
+    opacity: 0.5;
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: translateY(-8px) scale(1.02);
+  }
+}
+
+.sq-float-glow {
+  animation: sq-float-glow 6s ease-in-out infinite;
+}
+
+/* ── Gradient border glow on focus-within ──────── */
+.sq-glow-border {
+  position: relative;
+}
+.sq-glow-border::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgb(94 143 138 / 0.3), transparent 50%, rgb(94 143 138 / 0.15));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  z-index: -1;
+}
+.sq-glow-border:hover::before,
+.sq-glow-border:focus-within::before {
+  opacity: 1;
+}
+
+/* ── Subtle glass card overlay for depth ───────── */
+.sq-glass-card {
+  background: linear-gradient(
+    145deg,
+    rgb(22 26 31 / 0.72),
+    rgb(30 34 40 / 0.58)
+  );
+  border: 1px solid rgb(255 255 255 / 0.06);
+  box-shadow:
+    0 8px 32px -4px rgb(0 0 0 / 0.45),
+    inset 0 1px 0 0 rgb(255 255 255 / 0.04);
+  backdrop-filter: blur(14px) saturate(1.15);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  transition:
+    border-color 0.25s ease,
+    box-shadow 0.25s ease,
+    transform 0.25s ease;
+}
+.sq-glass-card:hover {
+  border-color: rgb(94 143 138 / 0.3);
+  box-shadow:
+    0 12px 36px -8px rgb(0 0 0 / 0.55),
+    0 0 20px -8px rgb(94 143 138 / 0.12),
+    inset 0 1px 0 0 rgb(255 255 255 / 0.06);
+  transform: translateY(-1px);
+}
+
+/* ── Gradient divider ──────────────────────────── */
+.sq-gradient-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgb(94 143 138 / 0.3), transparent);
+  border: none;
 }
 
 .maplibregl-ctrl-group {
@@ -403,7 +591,8 @@ a,
   .sq-progress::after,
   .sq-enter,
   .sq-palette,
-  .sq-star {
+  .sq-star,
+  .sq-live {
     animation: none !important;
   }
 }

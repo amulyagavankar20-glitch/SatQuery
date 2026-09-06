@@ -1,39 +1,23 @@
-import { Braces, Copy, FileText, Hexagon, MapPinned } from "lucide-react";
-import { lazy, Suspense, type ReactNode } from "react";
-
-import { ThinkingStream } from "@/components/ThinkingStream";
+import { RoutingLine } from "@/components/RoutingLine";
 import { TraceAccordion } from "@/components/TraceAccordion";
-import { downloadExport } from "@/lib/api";
-import { downloadGeoJSON, downloadKml, downloadReportPdf } from "@/lib/exports";
-import { followUpQuestions, thinkingSteps } from "@/lib/thinking";
-import type { AssistantTurn as AssistantTurnModel, LayerId } from "@/lib/types";
+import { followUpQuestions, specialistId } from "@/lib/thinking";
+import type { AssistantTurn as AssistantTurnModel } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useConsole } from "@/state/console";
-
-const MapEvidence = lazy(() => import("@/components/MapEvidence").then((m) => ({ default: m.MapEvidence })));
 
 export function AssistantTurn({
   turn,
   query,
-  layers,
-  onLayer,
   hasSar,
 }: {
   turn: AssistantTurnModel;
   query: string;
-  layers: Record<LayerId, boolean>;
-  onLayer: (id: LayerId, on: boolean) => void;
   hasSar: boolean;
 }) {
-  const { copyJobId, copyAnswer, setInspectOpen, apiUp, toast, slots, insertChip } = useConsole();
+  const { insertChip, setEvidencePulse, answerFocus, setAnswerFocus } = useConsole();
 
   if (turn.status === "pending") {
-    return (
-      <div>
-        <ThinkingStream steps={thinkingSteps(query, slots.length > 1, hasSar)} />
-        <div className="sq-shimmer mt-5 h-[440px] rounded-xl border border-hairline bg-surface" />
-      </div>
-    );
+    return <RoutingLine query={query} sar={hasSar} />;
   }
 
   if (turn.status === "failed") {
@@ -44,120 +28,43 @@ export function AssistantTurn({
     );
   }
 
-  const exportVector = async (format: "geojson" | "kml") => {
-    if (apiUp && turn.jobId) {
-      try {
-        await downloadExport(turn.jobId, format);
-        return;
-      } catch {
-        /* fall through to local */
-      }
-    }
-    if (!turn.overlays) {
-      toast("Nothing to export", "bad");
-      return;
-    }
-    if (format === "geojson") downloadGeoJSON(turn.jobId, turn.overlays);
-    else downloadKml(turn.jobId, turn.overlays);
-  };
+  const routed =
+    turn.trace?.find((t) => t.tool === "router")?.params.specialist ??
+    turn.trace?.find((t) => t.tool !== "gate" && t.tool !== "router")?.tool ??
+    specialistId(query, hasSar);
+  const specialist = typeof routed === "string" ? routed : specialistId(query, hasSar);
 
   return (
     <div>
-      {turn.answer ? <p className="max-w-3xl text-[15px] leading-7 text-ink">{turn.answer}</p> : null}
-      {turn.confidence ? (
-        <p className="mt-3 text-[12px] text-mute">
-          {turn.confidence} confidence{slots.length > 1 ? " · pair" : ""}
+      <p className="font-mono text-[11px] tracking-wide text-mute">specialist: {specialist}</p>
+      {turn.answer ? (
+        <p
+          id="sq-answer"
+          className={cn(
+            "mt-2 max-w-3xl text-[15px] leading-7 font-normal text-ink transition-shadow",
+            answerFocus && "rounded-md ring-1 ring-primary/50",
+          )}
+          onMouseEnter={() => setEvidencePulse(true)}
+          onMouseLeave={() => {
+            setEvidencePulse(false);
+            setAnswerFocus(false);
+          }}
+        >
+          {turn.answer}
         </p>
       ) : null}
 
-      <Suspense fallback={<div className="sq-shimmer mt-4 h-[440px] rounded-xl border border-hairline bg-surface" />}>
-        <MapEvidence
-          bounds={turn.bounds}
-          opticalUrl={turn.opticalUrl}
-          sarUrl={turn.sarUrl}
-          compareUrl={turn.compareUrl}
-          overlays={turn.overlays}
-          layers={layers}
-          onLayer={onLayer}
-          hasSar={hasSar}
-          instanceId={turn.id}
-        />
-      </Suspense>
-
-      {turn.trace?.length ? <TraceAccordion steps={turn.trace} /> : null}
-
-      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-[13px]">
-        <ExportButton
-          icon={<FileText className="size-3.5" />}
-          onClick={() => turn.answer && downloadReportPdf(turn.jobId, query, turn.answer)}
-          disabled={!turn.answer}
-        >
-          PDF
-        </ExportButton>
-        <ExportButton
-          icon={<Hexagon className="size-3.5" />}
-          onClick={() => void exportVector("geojson")}
-          disabled={!turn.overlays && !apiUp}
-        >
-          GeoJSON
-        </ExportButton>
-        <ExportButton
-          icon={<MapPinned className="size-3.5" />}
-          onClick={() => void exportVector("kml")}
-          disabled={!turn.overlays && !apiUp}
-        >
-          KML
-        </ExportButton>
-        <span className="text-hairline">·</span>
-        <ExportButton icon={<Copy className="size-3.5" />} onClick={copyJobId}>
-          Job id
-        </ExportButton>
-        <ExportButton icon={<Copy className="size-3.5" />} onClick={copyAnswer} disabled={!turn.answer}>
-          Answer
-        </ExportButton>
-        <ExportButton icon={<Braces className="size-3.5" />} onClick={() => setInspectOpen(true)}>
-          JSON
-        </ExportButton>
-      </div>
+      {turn.trace?.length ? (
+        <TraceAccordion steps={turn.trace} confidence={turn.confidence} focus={answerFocus} />
+      ) : null}
 
       <div className="mt-5 flex flex-wrap gap-2">
         {followUpQuestions(query).map((chip) => (
-          <button
-            key={chip}
-            type="button"
-            onClick={() => insertChip(chip)}
-            className="rounded-lg border border-hairline px-2.5 py-1 text-[12px] text-mute hover:border-primary/40 hover:text-ink"
-          >
+          <button key={chip} type="button" onClick={() => insertChip(chip)} className="sq-chip">
             {chip}
           </button>
         ))}
       </div>
     </div>
-  );
-}
-
-function ExportButton({
-  children,
-  icon,
-  onClick,
-  disabled,
-}: {
-  children: string;
-  icon: ReactNode;
-  onClick: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        "text-mute hover:text-primary inline-flex items-center gap-1.5 disabled:pointer-events-none disabled:opacity-40",
-      )}
-    >
-      {icon}
-      {children}
-    </button>
   );
 }
