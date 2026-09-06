@@ -102,6 +102,10 @@ export const DEMOS: DemoScene[] = [
   },
 ];
 
+export function isDemoId(value: unknown): value is DemoId {
+  return value === "water" || value === "coastal" || value === "cloudy";
+}
+
 export function demoById(id: DemoId): DemoScene {
   const found = DEMOS.find((d) => d.id === id);
   if (!found) throw new Error(`Unknown demo: ${id}`);

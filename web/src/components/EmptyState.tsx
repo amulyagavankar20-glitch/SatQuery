@@ -9,7 +9,7 @@ export function EmptyState() {
 
   return (
     <div className="mx-auto flex h-full w-full max-w-4xl flex-col px-6 py-8">
-      <p className="text-[17px] leading-relaxed text-ink">Attach a GeoTIFF — or load a demo scene.</p>
+      <p className="sq-title text-[17px] leading-relaxed">Attach a GeoTIFF — or load a demo scene.</p>
       <p className="mt-2 text-[13px] text-mute">
         Official questions sit in the composer.{" "}
         <Link to="/explore" className="text-primary inline-flex items-center gap-1 hover:underline">
@@ -25,7 +25,7 @@ export function EmptyState() {
             type="button"
             onClick={() => loadDemo(demo.id)}
             aria-label={`Load demo: ${demo.title}`}
-            className="sq-enter group overflow-hidden rounded-xl border border-hairline bg-surface text-left hover:border-primary/50"
+            className="sq-glass sq-enter group overflow-hidden rounded-xl text-left hover:border-primary/50"
             style={{ animationDelay: `${i * 40}ms` }}
           >
             <div className="overflow-hidden">
@@ -46,7 +46,7 @@ export function EmptyState() {
       <button
         type="button"
         onClick={openFilePicker}
-        className="mt-6 flex min-h-[160px] flex-1 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-hairline bg-surface/40 text-[14px] text-mute hover:border-primary/40 hover:text-ink"
+        className="mt-6 flex min-h-[160px] flex-1 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-hairline bg-surface/30 text-[14px] text-mute backdrop-blur-sm hover:border-primary/40 hover:text-ink"
       >
         <Upload className="size-5" />
         Drop a GeoTIFF here

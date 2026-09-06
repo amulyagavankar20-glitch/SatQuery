@@ -30,7 +30,7 @@ export function JobsDrawer() {
                     type="button"
                     onClick={() => {
                       restoreJob(job.id);
-                      void navigate({ to: "/" });
+                      void navigate({ to: "/console" });
                     }}
                     className="hover:bg-raised w-full rounded-xl px-3 py-3 text-left"
                   >

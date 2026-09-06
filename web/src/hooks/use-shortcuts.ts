@@ -1,3 +1,4 @@
+import { useRouterState } from "@tanstack/react-router";
 import { useEffect } from "react";
 
 import { OFFICIAL_CHIPS } from "@/lib/constants";
@@ -7,16 +8,20 @@ import { useConsole } from "@/state/console";
 
 export function useShortcuts() {
   const ctx = useConsole();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const typing = isTypingTarget(e.target);
-      const meta = e.metaKey || e.ctrlKey;
-
       if (e.key === "Escape") {
         ctx.closeOverlays();
         return;
       }
+
+      const onProduct = pathname === "/console" || pathname === "/explore";
+      if (!onProduct) return;
+
+      const typing = isTypingTarget(e.target);
+      const meta = e.metaKey || e.ctrlKey;
       if (meta && e.key.toLowerCase() === "k") {
         e.preventDefault();
         ctx.setPaletteOpen(!ctx.paletteOpen);
@@ -90,5 +95,5 @@ export function useShortcuts() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [ctx]);
+  }, [ctx, pathname]);
 }

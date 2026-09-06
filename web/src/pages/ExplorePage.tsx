@@ -30,7 +30,7 @@ export function ExplorePage() {
 
   const ask = (id: DemoId) => {
     loadDemo(id);
-    void navigate({ to: "/" });
+    void navigate({ to: "/console" });
   };
 
   useEffect(() => {
@@ -141,7 +141,7 @@ export function ExplorePage() {
 
   return (
     <div
-      className="relative flex h-dvh flex-col bg-background"
+      className="sq-console-wash relative flex h-dvh flex-col"
       onDragEnter={(e) => {
         e.preventDefault();
         onDragEnter();
@@ -151,13 +151,13 @@ export function ExplorePage() {
       onDrop={(e) => {
         e.preventDefault();
         onDrop(Array.from(e.dataTransfer.files));
-        void navigate({ to: "/" });
+        void navigate({ to: "/console" });
       }}
     >
       <AppHeader />
       <div className="relative min-h-0 flex-1">
         <div ref={containerRef} className="h-full w-full" />
-        <aside className="absolute top-3 right-3 bottom-3 z-10 flex w-[min(320px,calc(100%-2rem))] flex-col overflow-hidden rounded-xl border border-hairline bg-[#1A1E22]">
+        <aside className="sq-glass absolute top-3 right-3 bottom-3 z-10 flex w-[min(320px,calc(100%-2rem))] flex-col overflow-hidden rounded-xl">
           <SceneCard demo={demo} onAsk={() => ask(demo.id)} />
           <ul className="sq-scroll border-t border-hairline p-2">
             {DEMOS.map((scene) => (
@@ -204,7 +204,7 @@ function SceneCard({ demo, onAsk }: { demo: DemoScene; onAsk: () => void }) {
         Ask this scene
         <ArrowRight className="size-4" />
       </Button>
-      <Link to="/" className="text-mute mt-2 block text-center text-[12px] hover:text-ink">
+      <Link to="/console" className="text-mute mt-2 block text-center text-[12px] hover:text-ink">
         Back to console
       </Link>
     </div>

@@ -13,11 +13,11 @@ export function AppHeader() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const onAbout = pathname === "/about";
   const onExplore = pathname === "/explore";
-  const onConsole = pathname === "/";
+  const onConsole = pathname === "/console";
   const mod = useModLabel();
 
   return (
-    <header className="relative flex h-12 shrink-0 items-center gap-3 border-b border-hairline px-3 sm:px-4">
+    <header className="sq-header-glass relative flex h-12 shrink-0 items-center gap-3 border-b border-hairline px-3 sm:px-4">
       <Wordmark />
 
       <div className="ml-auto flex items-center gap-0.5 sm:gap-1">
@@ -33,22 +33,10 @@ export function AppHeader() {
             Scene{hasScene ? ` · ${slots.length}` : ""}
           </Button>
         ) : null}
-        <Link
-          to="/explore"
-          className={cn(
-            "rounded-lg px-3 py-1.5 text-[13px] transition-colors",
-            onExplore ? "text-primary" : "text-mute hover:text-ink",
-          )}
-        >
+        <Link to="/explore" className={cn("sq-nav", onExplore && "sq-nav-on")}>
           Explore
         </Link>
-        <Link
-          to="/about"
-          className={cn(
-            "rounded-lg px-3 py-1.5 text-[13px] transition-colors",
-            onAbout ? "text-primary" : "text-mute hover:text-ink",
-          )}
-        >
+        <Link to="/about" className={cn("sq-nav", onAbout && "sq-nav-on")}>
           About
         </Link>
         <Button type="button" variant="ghost" size="sm" className="text-mute hover:text-ink" onClick={openJobs}>

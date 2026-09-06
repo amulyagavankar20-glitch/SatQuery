@@ -225,6 +225,8 @@ sequenceDiagram
 
 | Surface | Behaviour |
 |---|---|
+| Entry | `/` — quiet door; Open console, or a demo card into `/console?scene=` |
+| Console | `/console` — thread, scene rail, composer. Bookmarks skip the door |
 | Local / mock | Quiet status from `GET /health` — no fake telemetry |
 | Question chips | Official queries; insert text, do not auto-send |
 | Evidence map | MapLibre inside the assistant turn; layers, fit, cursor, opacity |

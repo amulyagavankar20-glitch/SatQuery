@@ -134,7 +134,7 @@ export function CommandPalette() {
         icon: <Layers className="size-3.5" />,
         run: () => {
           ctx.loadDemo(demo.id);
-          void nav({ to: "/" });
+          void nav({ to: "/console" });
         },
       })),
       ...ctx.jobs.slice(0, 5).map((job) => ({
@@ -145,7 +145,7 @@ export function CommandPalette() {
         icon: <History className="size-3.5" />,
         run: () => {
           ctx.restoreJob(job.id);
-          void nav({ to: "/" });
+          void nav({ to: "/console" });
         },
       })),
       {

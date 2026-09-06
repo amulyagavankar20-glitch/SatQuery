@@ -14,7 +14,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div
-      className="relative flex h-dvh flex-col bg-background"
+      className="sq-console-wash relative flex h-dvh flex-col"
       onDragEnter={(e) => {
         e.preventDefault();
         onDragEnter();
