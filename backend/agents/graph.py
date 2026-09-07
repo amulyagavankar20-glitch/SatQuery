@@ -1,3 +1,4 @@
+
 """SatQuery AI — LangGraph Stage 4 Orchestration Graph.
 
 ARCHITECTURE RULES ENFORCED HERE:
@@ -16,7 +17,7 @@ ARCHITECTURE RULES ENFORCED HERE:
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 from collections.abc import Mapping
 
 from langgraph.graph import StateGraph, END
@@ -809,7 +810,7 @@ def run_graph(session_id: str) -> GraphState:
     }
     session.status = "running"
 
-    result: GraphState = app.invoke(initial_state)
+    result = cast(GraphState, app.invoke(initial_state))
 
     session.status = result.get("status", "completed")
     session.task = result.get("detected_task") or session.task
