@@ -10,7 +10,7 @@ export function Toasts() {
         <div
           key={t.id}
           className={cn(
-            "sq-glass sq-enter rounded-xl px-3 py-2 text-[12px] text-ink",
+            "sq-glass sq-toast rounded-xl px-3 py-2 text-[12px] text-ink",
             t.kind === "bad" && "border-destructive/40 text-destructive",
           )}
         >

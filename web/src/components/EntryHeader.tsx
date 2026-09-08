@@ -8,7 +8,7 @@ export function EntryHeader() {
   const onAbout = pathname === "/about";
 
   return (
-    <header className="sq-header-glass relative z-20 flex h-12 w-full shrink-0 items-center gap-3 px-4 sm:px-6">
+    <header className="sq-header-glass sq-header-entrance relative z-20 flex h-12 w-full shrink-0 items-center gap-3 px-4 sm:px-6">
       <Wordmark />
       <Link
         to="/about"

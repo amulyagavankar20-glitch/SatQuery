@@ -17,7 +17,7 @@ export function AppHeader() {
   const mod = useModLabel();
 
   return (
-    <header className="sq-header-glass relative z-20 flex h-12 shrink-0 items-center gap-3 border-b border-hairline px-3 sm:px-4">
+    <header className="sq-header-glass sq-header-entrance relative z-20 flex h-12 shrink-0 items-center gap-3 border-b border-hairline px-3 sm:px-4">
       <Wordmark />
 
       <div className="ml-auto flex items-center gap-0.5 sm:gap-1">

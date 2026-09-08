@@ -65,7 +65,7 @@ export function Composer() {
             disabled={!hasScene}
             className="min-h-[44px] flex-1"
           />
-          <Button type="button" onClick={() => send()} disabled={!canSend} className="mb-0.5 min-w-11" aria-label="Send">
+          <Button type="button" onClick={() => send()} disabled={!canSend} className={cn("mb-0.5 min-w-11", canSend && "sq-send-ready")} aria-label="Send">
             <ArrowUp className="size-4" />
             <span className="hidden sm:inline">Send</span>
           </Button>

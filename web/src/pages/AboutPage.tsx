@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { ArrowRight } from "lucide-react";
 
 import { EntryHeader } from "@/components/EntryHeader";
 import { Footer } from "@/components/Footer";
@@ -46,12 +47,12 @@ export function AboutPage() {
       <EntryHeader />
       <article className="sq-scroll relative z-10 min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
         <div className="mx-auto flex w-full min-w-0 max-w-5xl flex-1 flex-col px-6 py-12 sm:px-10 sm:py-16 lg:px-16 lg:py-20">
-          <p className="text-[12px] tracking-[0.14em] text-mute">About</p>
+          <p className="sq-hero-in text-[12px] tracking-[0.14em] text-mute" style={{ animationDelay: "0.05s" }}>About</p>
           <h1 className="mt-5 max-w-xl text-[2.05rem] font-medium leading-[1.08] tracking-[-0.035em] text-ink sm:text-[2.7rem] lg:text-[3.05rem]">
-            <span className="block">Satellites write</span>
-            <span className="sq-kicker-soft mt-[0.08em] block">measurement grids.</span>
+            <span className="sq-hero-in block" style={{ animationDelay: "0.1s" }}>Satellites write</span>
+            <span className="sq-hero-in sq-kicker-soft mt-[0.08em] block" style={{ animationDelay: "0.22s" }}>measurement grids.</span>
           </h1>
-          <p className="mt-8 max-w-[28rem] text-[16px] leading-[1.65] text-mute sm:text-[17px]">
+          <p className="sq-hero-in mt-8 max-w-[28rem] text-[16px] leading-[1.65] text-mute sm:text-[17px]" style={{ animationDelay: "0.35s" }}>
             Ask a Cartosat or RISAT scene a question.
             <span className="mt-2.5 block text-ink/80">
               A router picks one specialist. You get words, a mark on the pixels, and a receipt.
@@ -61,12 +62,12 @@ export function AboutPage() {
           <figure className="mt-14 w-full max-w-3xl sm:mt-16">
             <ol className="grid gap-4 sm:grid-cols-3 sm:gap-3">
               {INTAKE.map((step, i) => (
-                <li key={step.n} className="sq-glass-card rounded-xl p-4">
+                <li key={step.n} className="sq-hero-in sq-glass-card group rounded-xl p-4 transition-all duration-200 hover:-translate-y-1 hover:border-primary/40 hover:shadow-[0_8px_20px_-8px_rgba(0,0,0,0.5)]" style={{ animationDelay: `${0.45 + i * 0.08}s` }}>
                   <div className="flex items-center gap-3">
-                    <span className="font-mono text-[11px] tracking-wide text-primary">{step.n}</span>
+                    <span className="font-mono text-[11px] tracking-wide text-primary transition-transform duration-200 group-hover:scale-110">{step.n}</span>
                     {i < INTAKE.length - 1 ? <span className="hidden h-px flex-1 bg-primary/40 sm:block" /> : null}
                   </div>
-                  <h2 className="mt-4 text-[16px] font-medium text-ink">{step.title}</h2>
+                  <h2 className="mt-4 text-[16px] font-medium text-ink transition-colors duration-150 group-hover:text-primary">{step.title}</h2>
                   <p className="mt-2 max-w-[16rem] text-[13px] leading-relaxed text-mute">{step.body}</p>
                 </li>
               ))}
@@ -76,9 +77,9 @@ export function AboutPage() {
               <div className="sq-gradient-divider mb-8" />
               <p className="font-mono text-[11px] tracking-wide text-primary">Returns</p>
               <ol className="mt-5 grid gap-4 sm:grid-cols-3 sm:gap-3">
-                {RETURNS.map((item) => (
-                  <li key={item.title} className="sq-glass-card rounded-xl p-4">
-                    <h3 className="text-[16px] font-medium text-ink">{item.title}</h3>
+                {RETURNS.map((item, i) => (
+                  <li key={item.title} className="sq-hero-in sq-glass-card group rounded-xl p-4 transition-all duration-200 hover:-translate-y-1 hover:border-primary/40 hover:shadow-[0_8px_20px_-8px_rgba(0,0,0,0.5)]" style={{ animationDelay: `${0.7 + i * 0.08}s` }}>
+                    <h3 className="text-[16px] font-medium text-ink transition-colors duration-150 group-hover:text-primary">{item.title}</h3>
                     <p className="mt-2 max-w-[16rem] text-[13px] leading-relaxed text-mute">{item.body}</p>
                   </li>
                 ))}
@@ -88,7 +89,7 @@ export function AboutPage() {
 
           <dl className="mt-14 max-w-xl">
             {BENCH.map(([key, value]) => (
-              <div key={key} className="grid grid-cols-[5.5rem_1fr] gap-x-4 py-2.5 first:border-t-0 sm:grid-cols-[6.5rem_1fr]" style={{ borderTop: "1px solid rgb(94 143 138 / 0.12)" }}>
+              <div key={key} className="sq-spec-row grid grid-cols-[5.5rem_1fr] gap-x-4 py-2.5 first:border-t-0 sm:grid-cols-[6.5rem_1fr]" style={{ borderTop: "1px solid rgb(94 143 138 / 0.12)" }}>
                 <dt className="font-mono text-[11px] tracking-wide text-primary">{key}</dt>
                 <dd className="font-mono text-[11px] leading-relaxed text-mute sm:text-[12px]">{value}</dd>
               </div>
@@ -101,10 +102,11 @@ export function AboutPage() {
           <p className="mt-8">
             <Link
               to="/console"
-              className="sq-glass sq-cta sq-glow-border inline-flex h-12 items-center rounded-xl px-7 text-[15px] font-medium text-ink"
+              className="sq-glass sq-cta sq-glow-border group inline-flex h-12 items-center gap-2 rounded-xl px-7 text-[15px] font-medium text-ink transition-all duration-200 active:scale-[0.98]"
               style={{ borderColor: "rgba(94,143,138,0.5)" }}
             >
               Open console
+              <ArrowRight className="size-4 text-primary transition-transform duration-200 group-hover:translate-x-1" />
             </Link>
           </p>
         </div>

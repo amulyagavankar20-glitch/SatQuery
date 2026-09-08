@@ -314,10 +314,6 @@ button.sq-glass:hover {
   box-shadow: 0 1px 0 0 rgb(255 255 255 / 0.03);
 }
 
-.sq-earth-img {
-  -webkit-mask-image: radial-gradient(ellipse 56% 64% at 66% 46%, #000 40%, transparent 74%);
-  mask-image: radial-gradient(ellipse 56% 64% at 66% 46%, #000 40%, transparent 74%);
-}
 
 .sq-plate-img {
   -webkit-mask-image: radial-gradient(ellipse 68% 78% at 86% 48%, #000 22%, transparent 72%);
@@ -584,6 +580,179 @@ a,
   display: none !important;
 }
 
+/* ── Hero staggered entrance ───────────────────── */
+@keyframes sq-hero-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: blur(0);
+  }
+}
+
+.sq-hero-in {
+  opacity: 0;
+  animation: sq-hero-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* ── Earth photographic shadow mask ───────────── */
+.sq-earth-img {
+  -webkit-mask-image: radial-gradient(circle at 58% 49%, #000 40%, transparent 73%);
+  mask-image: radial-gradient(circle at 58% 49%, #000 40%, transparent 73%);
+}
+
+/* ── NightSky subtle shimmer ──────────────────── */
+.sq-sky::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    transparent 30%,
+    rgb(94 143 138 / 0.03) 45%,
+    transparent 60%
+  );
+  animation: sq-sky-shimmer 12s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes sq-sky-shimmer {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
+}
+
+/* ── Explore map pin hover ────────────────────── */
+.sq-explore-pin {
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    border-color 0.18s ease,
+    background-color 0.18s ease;
+}
+.sq-explore-pin:hover {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 6px 16px -4px rgb(94 143 138 / 0.35);
+  background: var(--color-raised);
+}
+
+/* ── Toast slide entrance ─────────────────────── */
+@keyframes sq-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.sq-toast {
+  animation: sq-toast-in 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ── Send button glow pulse when active ───────── */
+@keyframes sq-send-glow {
+  0%, 100% {
+    box-shadow:
+      0 0 0 0 rgb(94 143 138 / 0),
+      0 2px 8px -2px rgb(0 0 0 / 0.3);
+  }
+  50% {
+    box-shadow:
+      0 0 16px -2px rgb(94 143 138 / 0.3),
+      0 2px 8px -2px rgb(0 0 0 / 0.3);
+  }
+}
+
+.sq-send-ready {
+  animation: sq-send-glow 2.4s ease-in-out infinite;
+}
+
+/* ── Drag-and-drop overlay ────────────────────── */
+@keyframes sq-drop-pulse {
+  0%, 100% { border-color: var(--color-primary); }
+  50% { border-color: color-mix(in srgb, var(--color-primary) 45%, transparent); }
+}
+
+.sq-drop-zone {
+  animation: sq-drop-pulse 1.2s ease-in-out infinite;
+  backdrop-filter: blur(8px) saturate(1.3);
+}
+
+/* ── Scene preview lightbox ───────────────────── */
+.sq-lightbox {
+  backdrop-filter: blur(12px) saturate(0.8);
+  animation: sq-enter 0.22s ease-out both;
+}
+.sq-lightbox img {
+  box-shadow: 0 24px 80px -12px rgb(0 0 0 / 0.7);
+}
+
+/* ── About spec row hover ─────────────────────── */
+.sq-spec-row {
+  transition: background-color 0.15s ease;
+  border-radius: 6px;
+  margin: 0 -0.5rem;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+.sq-spec-row:hover {
+  background: rgb(94 143 138 / 0.04);
+}
+
+/* ── Header entrance ──────────────────────────── */
+@keyframes sq-header-in {
+  from {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.sq-header-entrance {
+  animation: sq-header-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ── Chip pressed micro-feedback ──────────────── */
+.sq-chip:active:not(:disabled) {
+  transform: scale(0.96);
+  transition-duration: 0.06s;
+}
+
+/* ── Jobs list row hover ──────────────────────── */
+.sq-job-row {
+  transition:
+    background-color 0.15s ease,
+    transform 0.15s ease;
+}
+.sq-job-row:hover {
+  background: var(--color-raised);
+  transform: translateX(2px);
+}
+
+/* ── Pair fitness bar animated fill ───────────── */
+@keyframes sq-bar-fill {
+  from { width: 0; }
+}
+
+.sq-bar-fill {
+  animation: sq-bar-fill 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ── Console thread scroll fade ───────────────── */
+.sq-thread-fade {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 2rem, black calc(100% - 2rem), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, black 2rem, black calc(100% - 2rem), transparent 100%);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .sq-pending,
   .sq-orbit,
@@ -592,7 +761,22 @@ a,
   .sq-enter,
   .sq-palette,
   .sq-star,
-  .sq-live {
+  .sq-live,
+  .sq-hero-in,
+  .sq-earth-img,
+  .sq-sky::after,
+  .sq-toast,
+  .sq-send-ready,
+  .sq-drop-zone,
+  .sq-header-entrance,
+  .sq-bar-fill {
     animation: none !important;
+  }
+  .sq-hero-in {
+    opacity: 1 !important;
+    filter: none !important;
+  }
+  .sq-toast {
+    opacity: 1 !important;
   }
 }

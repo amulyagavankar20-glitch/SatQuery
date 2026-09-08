@@ -50,8 +50,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         </SheetContent>
       </Sheet>
       {dragging ? (
-        <div className="sq-enter pointer-events-none absolute inset-0 z-50 grid place-items-center bg-background/80">
-          <div className="flex items-center gap-3 rounded-xl border border-primary px-8 py-6 text-[15px] text-primary">
+        <div className="sq-enter pointer-events-none absolute inset-0 z-50 grid place-items-center bg-background/70">
+          <div className="sq-drop-zone flex items-center gap-3 rounded-xl border-2 border-primary px-8 py-6 text-[15px] text-primary">
             <Upload className="size-5" />
             Drop a GeoTIFF
           </div>

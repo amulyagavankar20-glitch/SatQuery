@@ -125,7 +125,7 @@ export function SceneRail({ className }: { className?: string; idPrefix?: string
           </div>
           <div className="mt-2 h-1 overflow-hidden rounded-full bg-hairline">
             <div
-              className="h-full rounded-full bg-primary transition-[width] duration-500"
+              className="sq-bar-fill h-full rounded-full bg-primary"
               style={{ width: `${Math.round(pairFitness * 100)}%` }}
             />
           </div>
@@ -144,7 +144,7 @@ export function SceneRail({ className }: { className?: string; idPrefix?: string
       {preview ? (
         <button
           type="button"
-          className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-8"
+          className="sq-lightbox fixed inset-0 z-50 grid place-items-center bg-black/50 p-8"
           onClick={() => setPreview(null)}
         >
           <img src={preview} alt="Scene preview" className="max-h-[80vh] max-w-[90vw] rounded-xl border border-hairline" />

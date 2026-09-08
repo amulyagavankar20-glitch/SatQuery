@@ -148,7 +148,7 @@ export function Viewport() {
         </div>
 
         {panel === "layers" ? (
-          <div className="sq-glass mt-2 min-w-[11rem] rounded-lg p-3">
+          <div className="sq-glass sq-palette mt-2 min-w-[11rem] rounded-lg p-3">
             {LAYER_GROUPS.map((group) => (
               <div key={group.title} className="mb-3 last:mb-0">
                 <p className="font-mono text-[10px] tracking-wide text-mute uppercase">{group.title}</p>
@@ -166,12 +166,12 @@ export function Viewport() {
                           aria-pressed={on}
                           onClick={() => setLayer(id, !layers[id])}
                           className={cn(
-                            "flex w-full items-center justify-between rounded-md px-1 py-1 font-mono text-[11px] disabled:opacity-40",
-                            on ? "text-primary" : "text-mute hover:text-ink",
+                            "flex w-full items-center justify-between rounded-md px-1.5 py-1 font-mono text-[11px] transition-colors duration-150 disabled:opacity-40",
+                            on ? "text-primary bg-primary/10" : "text-mute hover:text-ink hover:bg-white/[0.04]",
                           )}
                         >
                           {layer.label}
-                          <span className={cn("size-1.5 rounded-full", on ? "bg-primary" : "bg-hairline")} />
+                          <span className={cn("size-1.5 rounded-full transition-all duration-200", on ? "bg-primary shadow-[0_0_6px_rgba(94,143,138,0.7)] scale-110" : "bg-hairline")} />
                         </button>
                       </li>
                     );
@@ -183,10 +183,10 @@ export function Viewport() {
         ) : null}
 
         {panel === "export" ? (
-          <div className="sq-glass mt-2 min-w-[10rem] rounded-lg p-2">
+          <div className="sq-glass sq-palette mt-2 min-w-[10rem] rounded-lg p-2">
             <button
               type="button"
-              className="flex w-full rounded-md px-2 py-1.5 text-left font-mono text-[11px] text-mute hover:text-primary"
+              className="flex w-full rounded-md px-2 py-1.5 text-left font-mono text-[11px] text-mute hover:text-primary hover:bg-white/[0.04] transition-colors duration-150 active:scale-[0.98]"
               onClick={() => {
                 void exportGeoJSON();
                 setPanel(null);
@@ -196,7 +196,7 @@ export function Viewport() {
             </button>
             <button
               type="button"
-              className="flex w-full rounded-md px-2 py-1.5 text-left font-mono text-[11px] text-mute hover:text-primary"
+              className="flex w-full rounded-md px-2 py-1.5 text-left font-mono text-[11px] text-mute hover:text-primary hover:bg-white/[0.04] transition-colors duration-150 active:scale-[0.98]"
               onClick={() => {
                 exportGeoTIFF();
                 setPanel(null);
@@ -226,8 +226,8 @@ function ChromeButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "inline-flex items-center rounded-md px-1.5 py-1 font-mono text-[11px] tracking-wide",
-        on ? "text-primary" : "text-mute hover:text-ink",
+        "inline-flex items-center rounded-md px-2 py-1 font-mono text-[11px] tracking-wide transition-all duration-150 active:scale-95",
+        on ? "bg-primary/15 text-primary shadow-sm font-medium" : "text-mute hover:text-ink hover:bg-white/[0.04]",
       )}
     >
       {children}

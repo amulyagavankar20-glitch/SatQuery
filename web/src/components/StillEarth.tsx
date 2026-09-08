@@ -1,6 +1,13 @@
 export function StillEarth() {
   return (
     <div className="sq-earth pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden>
+      {/* Subtle circular atmospheric glow behind the earth */}
+      <div
+        className="pointer-events-none absolute top-1/2 right-0 aspect-square h-[min(92vh,760px)] -translate-y-1/2 opacity-35 blur-xl lg:h-[min(98vh,880px)]"
+        style={{
+          background: "radial-gradient(circle at 60% 48%, rgb(94 143 138 / 0.16) 0%, rgb(94 143 138 / 0.04) 34%, transparent 48%)",
+        }}
+      />
       <img
         src="/earth.jpg"
         alt=""

@@ -295,11 +295,20 @@ export function ExplorePage() {
           type="button"
           onClick={() => setSelectMode((on) => !on)}
           className={cn(
-            "sq-glass absolute top-3 left-3 z-10 px-3 py-1.5 font-mono text-[11px] tracking-wide",
-            selectMode ? "text-primary" : "text-mute hover:text-ink",
+            "sq-glass absolute top-3 left-3 z-10 flex items-center gap-2 rounded-lg px-3 py-1.5 font-mono text-[11px] tracking-wide transition-all duration-200 active:scale-95",
+            selectMode
+              ? "border-primary/50 text-primary shadow-[0_0_12px_-2px_rgba(94,143,138,0.4)]"
+              : "text-mute hover:text-ink hover:border-white/20",
           )}
         >
-          {selectMode ? "Drawing portion" : "Select portion"}
+          {selectMode ? (
+            <>
+              <span className="size-1.5 rounded-full bg-primary animate-pulse" />
+              Drawing portion
+            </>
+          ) : (
+            "Select portion"
+          )}
         </button>
         <aside className="sq-glass absolute top-3 right-3 z-10 hidden w-[min(320px,calc(100%-2rem))] flex-col overflow-hidden rounded-xl sm:bottom-3 sm:flex">
           <SceneCard demo={demo} onAsk={() => openFull(demo.id)} />
@@ -311,13 +320,13 @@ export function ExplorePage() {
                   onClick={() => setSelected(scene.id)}
                   onDoubleClick={() => openFull(scene.id)}
                   className={cn(
-                    "flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left",
-                    scene.id === selected ? "bg-raised" : "hover:bg-raised/50",
+                    "group flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-all duration-150 active:scale-[0.98]",
+                    scene.id === selected ? "bg-raised shadow-sm ring-1 ring-white/5" : "hover:bg-raised/60 hover:translate-x-0.5",
                   )}
                 >
-                  <DemoThumb demo={scene} className="size-9 shrink-0 rounded-md" />
+                  <DemoThumb demo={scene} className="size-9 shrink-0 rounded-md transition-transform duration-200 group-hover:scale-105" />
                   <span className="min-w-0">
-                    <span className="block truncate text-[13px] text-ink">{scene.title}</span>
+                    <span className={cn("block truncate text-[13px] transition-colors duration-150", scene.id === selected ? "text-primary font-medium" : "text-ink group-hover:text-primary")}>{scene.title}</span>
                     <span className="block truncate font-mono text-[11px] text-mute">{scene.place}</span>
                   </span>
                 </button>
@@ -332,8 +341,8 @@ export function ExplorePage() {
       <Footer hint="Select a scene, or draw a portion to send a PNG. Drop a GeoTIFF onto the map." />
       {dragging ? (
         <div className="sq-enter pointer-events-none absolute inset-0 z-50 grid place-items-center bg-background/80">
-          <div className="flex items-center gap-3 rounded-xl border border-primary px-8 py-6 text-[15px] text-primary">
-            <Upload className="size-5" />
+          <div className="sq-drop-zone flex items-center gap-3 rounded-xl border-2 border-primary px-8 py-6 text-[15px] text-primary">
+            <Upload className="size-5 animate-bounce" />
             Drop to analyse in the console
           </div>
         </div>
@@ -361,9 +370,9 @@ function SceneCard({ demo, onAsk }: { demo: DemoScene; onAsk: () => void }) {
         ))}
       </ul>
       <p className="mt-2 font-mono text-[10px] text-mute">{slot.bounds.map((n) => n.toFixed(3)).join(", ")}</p>
-      <Button type="button" className="mt-4 w-full" onClick={onAsk}>
+      <Button type="button" className="group mt-4 w-full transition-all duration-200 active:scale-[0.98]" onClick={onAsk}>
         Open in console
-        <ArrowRight className="size-4" />
+        <ArrowRight className="size-4 transition-transform duration-200 group-hover:translate-x-1" />
       </Button>
     </div>
   );
