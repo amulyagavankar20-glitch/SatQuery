@@ -1,14 +1,17 @@
+import { useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Command, History, Layers } from "lucide-react";
+import { Command, Cpu, History, Layers } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/Kbd";
 import { Wordmark } from "@/components/Wordmark";
+import { ModelSlotsDialog } from "@/components/ModelSlotsDialog";
 import { useModLabel } from "@/hooks/use-mod-label";
 import { cn } from "@/lib/utils";
 import { useConsole } from "@/state/console";
 
 export function AppHeader() {
+  const [modelsOpen, setModelsOpen] = useState(false);
   const { openJobs, setSceneSheetOpen, setPaletteOpen, hasScene, slots, sending, apiUp } = useConsole();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const onAbout = pathname === "/about";
@@ -39,6 +42,17 @@ export function AppHeader() {
         <Link to="/about" className={cn("sq-nav", onAbout && "sq-nav-on")}>
           About
         </Link>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="text-mute hover:text-ink"
+          onClick={() => setModelsOpen(true)}
+          title="Inspect 3-model slotting status"
+        >
+          <Cpu className="size-3.5" />
+          Models
+        </Button>
         <Button type="button" variant="ghost" size="sm" className="text-mute hover:text-ink" onClick={openJobs}>
           <History className="size-3.5" />
           Jobs
@@ -62,6 +76,7 @@ export function AppHeader() {
           {apiUp ? "local" : "mock"}
         </span>
       </div>
+      <ModelSlotsDialog open={modelsOpen} onOpenChange={setModelsOpen} />
       {sending ? <div className="sq-progress absolute inset-x-0 bottom-0" /> : null}
     </header>
   );

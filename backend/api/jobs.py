@@ -172,6 +172,16 @@ async def export_kml(job_id: str):
 
 @router.get("/jobs/{job_id}/report.pdf")
 async def export_pdf(job_id: str):
-    if get_job_view(job_id) is None:
+    view = get_job_view(job_id)
+    if view is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    raise HTTPException(status_code=501, detail="PDF report is not implemented yet")
+    try:
+        from backend.services.pdf_report import generate_job_pdf
+        pdf_bytes = generate_job_pdf(view)
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"inline; filename=satquery_report_{job_id}.pdf"},
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to render PDF: {exc}") from exc

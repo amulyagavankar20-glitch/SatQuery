@@ -57,7 +57,7 @@ typing-inspection==0.4.2
 typing_extensions==4.16.0
 urllib3==2.7.0
 uvicorn==0.50.2
-uvloop==0.22.1
+uvloop==0.22.1; sys_platform != 'win32'
 watchfiles==1.2.0
 websockets==16.0
 rasterio==1.5.1
@@ -65,3 +65,5 @@ pillow==12.3.0
 tifffile==2026.8.23
 affine==3.0.1
 langgraph==0.2.14
+reportlab==5.0.1
+pytest-asyncio>=1.4.0

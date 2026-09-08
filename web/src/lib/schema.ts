@@ -85,12 +85,27 @@ export const healthSchema = z.object({
     .optional(),
 });
 
+export const modelSlotSchema = z.object({
+  slot_id: z.string(),
+  name: z.string(),
+  target_model: z.string(),
+  status: z.string(),
+  backend_type: z.string(),
+  weights_path: z.string().nullable().optional(),
+  weights_expected_at: z.string(),
+  description: z.string(),
+  notes: z.string(),
+});
+
+export type ModelSlot = z.infer<typeof modelSlotSchema>;
+
 export const modelsSchema = z.object({
   router_model: z.string().optional(),
   router_ready: z.boolean().optional(),
   talking_vlm: z.string().optional(),
   talking_vlm_backend: z.string().optional(),
   available: z.array(z.string()).optional(),
+  model_slots: z.array(modelSlotSchema).optional().default([]),
 });
 
 export const TERMINAL_STATUSES = new Set(["completed", "failed", "refused"]);
