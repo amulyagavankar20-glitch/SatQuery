@@ -22,14 +22,17 @@ export function ThinkingStream({ steps }: { steps: string[] }) {
         return (
           <li
             key={step}
-            className={cn("sq-enter flex items-center gap-2.5 text-[14px]", live ? "text-ink" : "text-mute")}
+            className={cn(
+              "sq-enter flex items-center gap-2.5 text-[14px] transition-colors duration-200",
+              live ? "text-ink font-medium" : "text-mute",
+            )}
           >
             {live ? (
               <span className="sq-orbit shrink-0" />
             ) : (
-              <Check className="size-3.5 shrink-0 text-primary" strokeWidth={2.2} />
+              <Check className="size-3.5 shrink-0 text-primary transition-transform duration-150" strokeWidth={2.2} />
             )}
-            {step}
+            <span>{step}</span>
           </li>
         );
       })}

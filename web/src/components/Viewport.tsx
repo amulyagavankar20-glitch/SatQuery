@@ -111,7 +111,7 @@ export function Viewport() {
 
   return (
     <div className="relative h-full min-h-0">
-      <Suspense fallback={<div className="sq-shimmer h-full" />}>
+      <Suspense fallback={<ViewportLoader />}>
         <MapEvidence
           bounds={completed?.bounds ?? base.bounds}
           opticalUrl={opticalUrl}
@@ -271,5 +271,23 @@ function ChromeButton({
     >
       {children}
     </button>
+  );
+}
+
+function ViewportLoader() {
+  return (
+    <div className="sq-viewport-loader relative flex h-full w-full flex-col items-center justify-center overflow-hidden">
+      {/* Subtle reticle crosshair */}
+      <div className="pointer-events-none relative flex size-16 items-center justify-center">
+        <div className="absolute size-12 rounded-full border border-primary/20 animate-pulse" />
+        <div className="size-2 rounded-full bg-primary/70" />
+        <div className="absolute h-14 w-px bg-primary/25" />
+        <div className="absolute w-14 h-px bg-primary/25" />
+      </div>
+      <div className="mt-4 flex items-center gap-2 font-mono text-[10.5px] tracking-wider text-mute/80 uppercase">
+        <span className="size-1 rounded-full bg-primary animate-ping" />
+        <span>INITIALIZING GEOSPATIAL VIEWPORT…</span>
+      </div>
+    </div>
   );
 }

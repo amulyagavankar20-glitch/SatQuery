@@ -48,9 +48,9 @@ export function AboutPage() {
       <article className="sq-scroll relative z-10 min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
         <div className="mx-auto flex w-full min-w-0 max-w-5xl flex-1 flex-col px-6 py-12 sm:px-10 sm:py-16 lg:px-16 lg:py-20">
           <p className="sq-hero-in text-[12px] tracking-[0.14em] text-mute" style={{ animationDelay: "0.05s" }}>About</p>
-          <h1 className="mt-5 max-w-xl text-[2.05rem] font-medium leading-[1.08] tracking-[-0.035em] text-ink sm:text-[2.7rem] lg:text-[3.05rem]">
+          <h1 className="mt-5 max-w-xl text-[2.05rem] font-medium leading-[1.14] tracking-[-0.035em] text-ink sm:text-[2.7rem] lg:text-[3.05rem]">
             <span className="sq-hero-in block" style={{ animationDelay: "0.1s" }}>Satellites write</span>
-            <span className="sq-hero-in sq-kicker-soft mt-[0.08em] block" style={{ animationDelay: "0.22s" }}>measurement grids.</span>
+            <span className="sq-hero-in sq-kicker-soft mt-[0.08em] inline-block pb-1" style={{ animationDelay: "0.22s" }}>measurement grids.</span>
           </h1>
           <p className="sq-hero-in mt-8 max-w-[28rem] text-[16px] leading-[1.65] text-mute sm:text-[17px]" style={{ animationDelay: "0.35s" }}>
             Ask a Cartosat or RISAT scene a question.

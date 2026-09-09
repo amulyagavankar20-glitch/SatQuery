@@ -31,7 +31,10 @@ export function Composer() {
                 disabled={!hasScene}
                 onClick={() => insertChip(chip)}
                 title={`${i + 1}`}
-                className={cn("sq-chip shrink-0 leading-snug disabled:opacity-40", selected && "sq-chip-on")}
+                className={cn(
+                  "sq-chip shrink-0 leading-snug transition-all duration-150 active:scale-95 disabled:opacity-40 hover:border-white/20",
+                  selected && "sq-chip-on",
+                )}
               >
                 {chip}
               </button>
@@ -44,7 +47,7 @@ export function Composer() {
             type="button"
             variant="ghost"
             size="icon"
-            className="text-mute mb-0.5 shrink-0"
+            className="text-mute mb-0.5 shrink-0 transition-transform active:scale-95 hover:text-ink"
             onClick={openFilePicker}
             aria-label="Attach GeoTIFF"
           >
@@ -65,9 +68,22 @@ export function Composer() {
             disabled={!hasScene}
             className="min-h-[44px] flex-1"
           />
-          <Button type="button" onClick={() => send()} disabled={!canSend} className={cn("mb-0.5 min-w-11", canSend && "sq-send-ready")} aria-label="Send">
-            <ArrowUp className="size-4" />
-            <span className="hidden sm:inline">Send</span>
+          <Button
+            type="button"
+            onClick={() => send()}
+            disabled={!canSend}
+            className={cn(
+              "mb-0.5 min-w-11 gap-1.5 transition-all duration-150 active:scale-95",
+              canSend && "sq-send-ready",
+            )}
+            aria-label="Send"
+          >
+            {sending ? (
+              <span className="sq-orbit size-3.5" />
+            ) : (
+              <ArrowUp className="size-4" />
+            )}
+            <span className="hidden sm:inline">{sending ? "Running…" : "Send"}</span>
           </Button>
         </div>
       </div>

@@ -1,4 +1,9 @@
+import { useState } from "react";
+import { cn } from "@/lib/utils";
+
 export function StillEarth() {
+  const [isLoaded, setIsLoaded] = useState(false);
+
   return (
     <div className="sq-earth pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden>
       {/* Subtle circular atmospheric glow behind the earth */}
@@ -13,8 +18,16 @@ export function StillEarth() {
         alt=""
         width={1024}
         height={1024}
+        loading="eager"
+        decoding="async"
+        // @ts-expect-error - fetchPriority supported in modern browsers
+        fetchpriority="high"
         draggable={false}
-        className="sq-earth-img absolute top-1/2 right-0 h-[min(92vh,760px)] w-auto max-w-none -translate-y-1/2 object-contain opacity-[0.72] sm:opacity-[0.84] lg:h-[min(98vh,880px)] lg:opacity-[0.94]"
+        onLoad={() => setIsLoaded(true)}
+        className={cn(
+          "sq-earth-img absolute top-1/2 right-0 h-[min(92vh,760px)] w-auto max-w-none -translate-y-1/2 object-contain transition-opacity duration-700 ease-out",
+          isLoaded ? "opacity-[0.72] sm:opacity-[0.84] lg:opacity-[0.94]" : "opacity-0",
+        )}
       />
     </div>
   );

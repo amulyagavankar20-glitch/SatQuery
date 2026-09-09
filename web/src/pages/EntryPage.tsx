@@ -17,9 +17,9 @@ export function EntryPage() {
           <StillEarth />
           <Grain />
           <div className="relative z-10 w-full min-w-0 max-w-[40rem]">
-            <h1 className="text-[2.35rem] font-medium leading-[1.05] tracking-[-0.035em] text-ink sm:text-[3.15rem] lg:text-[3.75rem]">
+            <h1 className="text-[2.35rem] font-medium leading-[1.12] tracking-[-0.035em] text-ink sm:text-[3.15rem] lg:text-[3.75rem]">
               <span className="sq-hero-in block" style={{ animationDelay: "0.1s" }}>Ask a scene.</span>
-              <span className="sq-hero-in sq-kicker-soft mt-[0.08em] block" style={{ animationDelay: "0.25s" }}>Get words and a mark.</span>
+              <span className="sq-hero-in sq-kicker-soft mt-[0.08em] inline-block pb-1" style={{ animationDelay: "0.25s" }}>Get words and a mark.</span>
             </h1>
             <p className="sq-hero-in mt-8 max-w-[26rem] text-[16px] leading-[1.65] text-mute sm:text-[17px]" style={{ animationDelay: "0.4s" }}>
               Optical, SAR, or a pair.

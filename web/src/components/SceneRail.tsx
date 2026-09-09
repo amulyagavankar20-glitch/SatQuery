@@ -20,9 +20,9 @@ function SlotCard({
 }) {
   if (!slot) {
     return (
-      <div className="flex items-center gap-3 rounded-xl border border-dashed border-hairline px-3 py-3 transition-all duration-200 hover:border-primary/30 hover:bg-white/[0.02]">
+      <div className="flex items-center gap-3 rounded-xl border border-dashed border-hairline px-3 py-3 transition-all duration-200 hover:border-primary/40 hover:bg-white/[0.02] active:scale-[0.99]">
         <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-background text-mute">
-          <Upload className="size-4" />
+          <Upload className="size-4 transition-transform duration-200 group-hover:-translate-y-0.5" />
         </div>
         <div className="min-w-0">
           <div className="text-[12px] font-medium text-mute">{label}</div>
@@ -33,14 +33,18 @@ function SlotCard({
   }
 
   return (
-      <div className="sq-glass-card rounded-xl p-3">
+    <div className="sq-glass-card rounded-xl p-3 transition-all duration-200 hover:border-white/15">
       <div className="flex items-start gap-2.5">
         {slot.previewUrl ? (
-          <button type="button" onClick={() => onPreview(slot.previewUrl)} className="shrink-0">
+          <button
+            type="button"
+            onClick={() => onPreview(slot.previewUrl)}
+            className="group shrink-0 overflow-hidden rounded-lg transition-transform duration-200 hover:scale-105 active:scale-95 ring-1 ring-white/10"
+          >
             <img
               src={slot.previewUrl}
               alt=""
-              className="size-10 rounded-lg object-cover"
+              className="size-10 rounded-lg object-cover transition-transform duration-300 group-hover:scale-110"
               style={slot.objectPos ? { objectPosition: slot.objectPos } : undefined}
             />
           </button>
@@ -58,7 +62,7 @@ function SlotCard({
         <button
           type="button"
           onClick={onRemove}
-          className="text-mute hover:text-ink rounded-lg p-1"
+          className="text-mute hover:text-ink hover:bg-white/5 rounded-lg p-1 transition-all active:scale-90"
           aria-label={`Remove ${label}`}
         >
           <X className="size-3.5" />
@@ -79,9 +83,9 @@ function Chip({ children, tone }: { children: ReactNode; tone?: "sar" | "optical
   return (
     <span
       className={cn(
-        "font-mono rounded-md px-1.5 py-0.5 text-[10px] tracking-wide uppercase",
-        tone === "sar" && "border border-primary/45 text-primary",
-        tone === "optical" && "border border-hairline text-mute",
+        "font-mono rounded-md px-1.5 py-0.5 text-[10px] tracking-wide uppercase transition-colors duration-150",
+        tone === "sar" && "border border-primary/45 text-primary bg-primary/5",
+        tone === "optical" && "border border-hairline text-mute hover:border-white/20",
         !tone && "bg-background text-mute",
       )}
     >

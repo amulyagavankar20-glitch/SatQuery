@@ -19,6 +19,11 @@ export function AppHeader() {
   const onConsole = pathname === "/console";
   const mod = useModLabel();
 
+  const prefetchAbout = () => {
+    const img = new Image();
+    img.src = "/about-plate.jpg";
+  };
+
   return (
     <header className="sq-header-glass sq-header-entrance relative z-20 flex h-12 shrink-0 items-center gap-3 border-b border-hairline px-3 sm:px-4">
       <Wordmark />
@@ -29,17 +34,22 @@ export function AppHeader() {
             type="button"
             variant="ghost"
             size="sm"
-            className="text-mute lg:hidden"
+            className="text-mute lg:hidden transition-transform active:scale-95"
             onClick={() => setSceneSheetOpen(true)}
           >
             <Layers className="size-3.5" />
             Scene{hasScene ? ` · ${slots.length}` : ""}
           </Button>
         ) : null}
-        <Link to="/explore" className={cn("sq-nav", onExplore && "sq-nav-on")}>
+        <Link to="/explore" className={cn("sq-nav transition-all active:scale-95", onExplore && "sq-nav-on")}>
           Explore
         </Link>
-        <Link to="/about" className={cn("sq-nav", onAbout && "sq-nav-on")}>
+        <Link
+          to="/about"
+          onMouseEnter={prefetchAbout}
+          onFocus={prefetchAbout}
+          className={cn("sq-nav transition-all active:scale-95", onAbout && "sq-nav-on")}
+        >
           About
         </Link>
         <Button

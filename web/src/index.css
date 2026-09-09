@@ -236,6 +236,61 @@ kbd,
   animation: sq-progress 1.1s ease-in-out infinite;
 }
 
+.sq-reasoning-buffer {
+  position: relative;
+  overflow: hidden;
+  border-radius: 6px;
+  background: rgb(255 255 255 / 0.03);
+}
+.sq-reasoning-buffer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent 0%, rgb(94 143 138 / 0.12) 50%, transparent 100%);
+  animation: sq-shimmer-slide 1.8s ease-in-out infinite;
+}
+
+@keyframes sq-shimmer-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.sq-viewport-loader {
+  background:
+    radial-gradient(circle at 50% 50%, rgb(94 143 138 / 0.06), transparent 60%),
+    linear-gradient(to right, rgb(255 255 255 / 0.02) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 0.02) 1px, transparent 1px);
+  background-size: 100% 100%, 48px 48px, 48px 48px;
+}
+
+.sq-send-ready {
+  box-shadow: 0 0 12px -2px rgb(94 143 138 / 0.45);
+  transition: box-shadow 0.2s ease, transform 0.15s ease;
+}
+.sq-send-ready:hover {
+  box-shadow: 0 0 16px 0 rgb(94 143 138 / 0.65);
+}
+
+.sq-spec-row {
+  transition: background-color 0.15s ease, padding-left 0.15s ease;
+  border-radius: 6px;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+.sq-spec-row:hover {
+  background-color: rgb(255 255 255 / 0.025);
+  padding-left: 8px;
+}
+.sq-spec-row:hover dt {
+  color: var(--color-primary);
+  text-shadow: 0 0 8px rgb(94 143 138 / 0.3);
+}
+
 .sq-enter {
   animation: sq-enter 0.28s ease-out both;
 }
@@ -243,24 +298,30 @@ kbd,
 .sq-kicker {
   font-weight: 500;
   letter-spacing: 0.06em;
-  background: linear-gradient(100deg, #f4f0e8 0%, #d5e8e5 30%, #8fbfb9 65%, #5e8f8a 100%);
+  background: linear-gradient(100deg, #f4f0e8 0%, #d5e8e5 30%, #a2d2cc 65%, #6ea49f 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  padding-bottom: 0.12em;
+  margin-bottom: -0.12em;
 }
 
 .sq-kicker-soft {
-  background: linear-gradient(180deg, #cfcbc3 0%, #a3b5b3 50%, #8b959e 100%);
+  background: linear-gradient(180deg, #f0ebe1 0%, #cbdcd9 45%, #9bc5bf 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  padding-bottom: 0.2em;
+  margin-bottom: -0.2em;
 }
 
 .sq-title {
-  background: linear-gradient(165deg, #f2eee6 0%, #e8e4dc 35%, #a3c7c2 70%, #5e8f8a 100%);
+  background: linear-gradient(165deg, #f2eee6 0%, #e8e4dc 35%, #aed5d0 70%, #6da19c 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  padding-bottom: 0.12em;
+  margin-bottom: -0.12em;
 }
 
 .sq-glass {
