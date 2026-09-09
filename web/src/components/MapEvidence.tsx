@@ -98,6 +98,20 @@ export function MapEvidence({
             paint: { "line-color": "#5E8F8A", "line-width": 1.5 },
           },
           {
+            id: "grounding-fill",
+            type: "fill",
+            source: "overlays",
+            filter: ["in", ["get", "kind"], ["literal", ["grounding", "sar_detection", "detection"]]],
+            paint: { "fill-color": "#00f0ff", "fill-opacity": 0.18 },
+          },
+          {
+            id: "grounding-line",
+            type: "line",
+            source: "overlays",
+            filter: ["in", ["get", "kind"], ["literal", ["grounding", "sar_detection", "detection"]]],
+            paint: { "line-color": "#00f0ff", "line-width": 2.0 },
+          },
+          {
             id: "uncertain-fill",
             type: "fill",
             source: "overlays",
@@ -133,10 +147,17 @@ export function MapEvidence({
       };
       map.on("click", "change-fill", pulseAnswer);
       map.on("click", "uncertain-fill", pulseAnswer);
+      map.on("click", "grounding-fill", pulseAnswer);
       map.on("mouseenter", "change-fill", () => {
         map.getCanvas().style.cursor = "pointer";
       });
       map.on("mouseleave", "change-fill", () => {
+        map.getCanvas().style.cursor = "";
+      });
+      map.on("mouseenter", "grounding-fill", () => {
+        map.getCanvas().style.cursor = "pointer";
+      });
+      map.on("mouseleave", "grounding-fill", () => {
         map.getCanvas().style.cursor = "";
       });
     });
@@ -206,6 +227,8 @@ export function MapEvidence({
       setVis(map, "sar", layers.sar && hasSar);
       setVis(map, "change-fill", layers.change);
       setVis(map, "change-line", layers.change);
+      setVis(map, "grounding-fill", true);
+      setVis(map, "grounding-line", true);
       setVis(map, "uncertain-fill", layers.uncertain);
       setVis(map, "uncertain-line", layers.uncertain);
     };
@@ -238,6 +261,10 @@ export function MapEvidence({
     if (!map?.getLayer("change-line")) return;
     map.setPaintProperty("change-line", "line-width", evidencePulse ? 2.6 : 1.5);
     map.setPaintProperty("change-fill", "fill-opacity", evidencePulse ? 0.38 : 0.22);
+    if (map.getLayer("grounding-line")) {
+      map.setPaintProperty("grounding-line", "line-width", evidencePulse ? 3.0 : 2.0);
+      map.setPaintProperty("grounding-fill", "fill-opacity", evidencePulse ? 0.35 : 0.18);
+    }
     map.setPaintProperty("uncertain-line", "line-width", evidencePulse ? 2.4 : 1.5);
     map.setPaintProperty("uncertain-fill", "fill-opacity", evidencePulse ? 0.22 : 0.1);
   }, [evidencePulse]);

@@ -1,3 +1,4 @@
+import { MarkdownView } from "@/components/MarkdownView";
 import { RoutingLine } from "@/components/RoutingLine";
 import { TraceAccordion } from "@/components/TraceAccordion";
 import { followUpQuestions, specialistId } from "@/lib/thinking";
@@ -38,11 +39,13 @@ export function AssistantTurn({
     <div>
       <p className="font-mono text-[11px] tracking-wide text-mute">specialist: {specialist}</p>
       {turn.answer ? (
-        <p
+        <div
           id="sq-answer"
           className={cn(
-            "mt-2 max-w-3xl text-[15px] leading-7 font-normal text-ink transition-shadow",
-            answerFocus && "rounded-md ring-1 ring-primary/50",
+            "mt-3 max-w-3xl rounded-lg p-3 text-ink transition-all",
+            answerFocus
+              ? "bg-primary/5 ring-1 ring-primary/50"
+              : "bg-surface/30 border border-white/5",
           )}
           onMouseEnter={() => setEvidencePulse(true)}
           onMouseLeave={() => {
@@ -50,8 +53,8 @@ export function AssistantTurn({
             setAnswerFocus(false);
           }}
         >
-          {turn.answer}
-        </p>
+          <MarkdownView content={turn.answer} />
+        </div>
       ) : null}
 
       {turn.trace?.length ? (

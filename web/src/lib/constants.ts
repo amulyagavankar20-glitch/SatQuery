@@ -1,5 +1,7 @@
 export const OFFICIAL_CHIPS = [
+  "What objects are visible in this SAR image?",
   "Describe land-cover and major objects",
+  "Describe this SAR scene",
   "Highlight the water body",
   "What changed between these two dates, and where?",
   "Use optical and SAR together for built-up and water",

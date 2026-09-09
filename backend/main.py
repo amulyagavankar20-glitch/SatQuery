@@ -17,6 +17,27 @@ app = FastAPI(
     version="1.0.0",
 )
 
+@app.on_event("startup")
+async def startup():
+    try:
+        from backend.database import SessionLocal
+        from backend.services.tool_catalog import seed_tool_registry
+        db = SessionLocal()
+        try:
+            seed_tool_registry(db)
+        finally:
+            db.close()
+    except Exception:
+        pass
+
+    try:
+        import redis.asyncio as redis
+        from fastapi_limiter import FastAPILimiter
+        redis_client = redis.from_url(settings.REDIS_URL, encoding="utf-8", decode_responses=True)
+        await FastAPILimiter.init(redis_client)
+    except Exception:
+        pass
+
 app.add_middleware(RequestTrackingMiddleware)
 
 app.add_middleware(

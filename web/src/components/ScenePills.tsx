@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { useConsole } from "@/state/console";
 
 export function ScenePills() {
-  const { slots, hasScene, openFilePicker, activeSlot, setActiveSlot } = useConsole();
+  const { slots, hasScene, openFilePicker, activeSlot, setActiveSlot, toggleSlotModality } = useConsole();
   const active = slots.find((s) => s.slot === activeSlot) ?? slots[0];
   const pair = slots.length > 1;
 
@@ -36,7 +36,19 @@ export function ScenePills() {
             />
           ) : null}
           <span className="max-w-[7rem] truncate font-mono text-[11px] text-ink sm:max-w-[10rem]">{active.filename}</span>
-          <span className="font-mono text-[10px] tracking-wide text-primary uppercase">{active.modality}</span>
+          <button
+            type="button"
+            onClick={() => toggleSlotModality(active.slot)}
+            title="Click to toggle modality (SAR / OPTICAL)"
+            className={cn(
+              "cursor-pointer rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wide uppercase transition-colors",
+              active.modality === "SAR"
+                ? "bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/30"
+                : "bg-primary/20 text-primary hover:bg-primary/30 border border-primary/30"
+            )}
+          >
+            {active.modality}
+          </button>
           {active.date ? <span className="font-mono text-[10px] text-mute">{active.date}</span> : null}
         </div>
         {pair ? (

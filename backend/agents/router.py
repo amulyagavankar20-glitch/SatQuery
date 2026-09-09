@@ -5,7 +5,7 @@ import httpx
 from pydantic import ValidationError
 
 from backend.config import settings
-from backend.schemas import RouteRequest, RouteResponse, RouterTask
+from backend.schemas import RouteRequest, RouteResponse, RouterTask, RouterTool
 
 
 class QwenRouterError(Exception):
@@ -137,7 +137,9 @@ Input Class / Normalized Metadata: {json.dumps(request.manifest, default=str)}
                 response.raise_for_status()
                 return self._parse_response(response.json())
         except httpx.HTTPError as e:
-            raise QwenRouterError(f"Failed to communicate with Qwen router: {e}")
+            from src.logger import logging
+            logging.warning(f"[Router] Ollama unreachable ({e}), using deterministic fallback intent classifier.")
+            return self._fallback_route(request)
         except ValidationError as e:
             raise QwenRouterError(f"Router produced invalid structured output: {e}")
         except json.JSONDecodeError as e:
@@ -164,11 +166,51 @@ Input Class / Normalized Metadata: {json.dumps(request.manifest, default=str)}
                 response.raise_for_status()
                 return self._parse_response(response.json())
         except httpx.HTTPError as e:
-            raise QwenRouterError(f"Failed to communicate with Qwen router: {e}")
+            from src.logger import logging
+            logging.warning(f"[Router] Ollama unreachable ({e}), using deterministic fallback intent classifier.")
+            return self._fallback_route(request)
         except ValidationError as e:
             raise QwenRouterError(f"Router produced invalid structured output: {e}")
         except json.JSONDecodeError as e:
             raise QwenRouterError(f"Router output was not valid JSON: {e}")
+
+    def _fallback_route(self, request: RouteRequest) -> RouteResponse:
+        """Heuristic fallback used when Ollama server is offline/unreachable in dev environment."""
+        q = (request.query or "").lower()
+
+        if any(w in q for w in ["change", "changed", "difference", "compare", "between", "increased", "decreased"]):
+            task = RouterTask.CHANGE_VQA if ("?" in q or any(w in q for w in ["what", "how", "has", "did"])) else RouterTask.CHANGE_DETECTION
+            return RouteResponse(
+                task=task,
+                requires_change_analysis=True,
+                tools=[RouterTool.GEOSPATIAL_VALIDATOR, RouterTool.BIT_CD],
+            )
+        
+        if any(w in q for w in ["ground", "locate", "segment", "highlight", "bounding", "box"]):
+            return RouteResponse(
+                task=RouterTask.GROUNDING,
+                requires_grounding=True,
+                tools=[RouterTool.GEOSPATIAL_VALIDATOR, RouterTool.GEOCHAT_VQA],
+            )
+
+        if any(w in q for w in ["fuse", "fusion", "optical and sar", "sar and optical"]):
+            return RouteResponse(
+                task=RouterTask.OPTICAL_SAR_ANALYSIS,
+                requires_optical_sar_analysis=True,
+                tools=[RouterTool.GEOSPATIAL_VALIDATOR, RouterTool.FUSION_S1S2],
+            )
+
+        if any(w in q for w in ["describe", "caption", "overview"]):
+            return RouteResponse(
+                task=RouterTask.CAPTIONING,
+                tools=[RouterTool.GEOSPATIAL_VALIDATOR, RouterTool.GEOCHAT_DESCRIBE],
+            )
+
+        # Default single-image visual question answering
+        return RouteResponse(
+            task=RouterTask.SINGLE_VQA,
+            tools=[RouterTool.GEOSPATIAL_VALIDATOR, RouterTool.GEOCHAT_VQA],
+        )
 
     def _build_payload(self, prompt: str) -> dict[str, Any]:
         return {

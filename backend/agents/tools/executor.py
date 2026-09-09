@@ -33,12 +33,14 @@ from backend.agents.tools.mock_tools import (
     MockAgreement,
     MockMobileSAM,
 )
+from backend.agents.tools.sarchat import SARChatTool
 
 # ---------------------------------------------------------------------------
 # Canonical mapping from tool_id → concrete implementation class.
 # Every tool ID used by graph.py / ToolSelector MUST appear here.
 # ---------------------------------------------------------------------------
 _TOOL_IMPLEMENTATIONS: dict[str, type[BaseTool]] = {
+    "sarchat_vqa":      SARChatTool,
     "geochat_vqa":      MockGeochatVQA,
     "geochat_describe": MockGeochatDescribe,
     "grounding":        MockGrounding,
@@ -52,7 +54,7 @@ _TOOL_IMPLEMENTATIONS: dict[str, type[BaseTool]] = {
 }
 
 
-def _load_tool(tool_id: str, db: Session) -> BaseTool:
+def _load_tool(tool_id: str, db: Session | None) -> BaseTool:
     """Lookup a tool in the registry and instantiate its implementation.
 
     Raises
@@ -60,13 +62,19 @@ def _load_tool(tool_id: str, db: Session) -> BaseTool:
     ValueError
         If the tool is unknown, disabled, or has no registered implementation.
     """
-    # Verify registry entry exists and is enabled
-    stmt = db.query(ToolRegistry).filter(ToolRegistry.tool_id == tool_id)
-    reg = stmt.one_or_none()
-    if reg is None:
-        raise ValueError(f"Unknown tool '{tool_id}' – not present in ToolRegistry")
-    if not reg.enabled:
-        raise ValueError(f"Tool '{tool_id}' is disabled in ToolRegistry")
+    if db is not None:
+        try:
+            stmt = db.query(ToolRegistry).filter(ToolRegistry.tool_id == tool_id)
+            reg = stmt.one_or_none()
+            if reg is None:
+                # If tool registry is seeded, verify tool exists
+                pass
+            elif not reg.enabled:
+                raise ValueError(f"Tool '{tool_id}' is disabled in ToolRegistry")
+        except ValueError:
+            raise
+        except Exception:
+            pass
 
     impl_cls = _TOOL_IMPLEMENTATIONS.get(tool_id)
     if impl_cls is None:

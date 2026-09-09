@@ -38,6 +38,7 @@ export function Viewport() {
   const pair = Boolean(t2);
   const base = (activeSlot === "T2" && t2) || t1;
   const [wipe, setWipe] = useState(false);
+  const [sarMode, setSarMode] = useState<"composite" | "vv" | "vh" | "overlay">("composite");
   const [panel, setPanel] = useState<null | "layers" | "export">(null);
   const chromeRef = useRef<HTMLDivElement | null>(null);
 
@@ -72,10 +73,19 @@ export function Viewport() {
     base.modality === "OPTICAL"
       ? (activeSlot === "T1" ? (completed?.opticalUrl ?? base.previewUrl) : base.previewUrl)
       : null;
-  const sarUrl =
+
+  let sarUrl =
     base.modality === "SAR"
       ? base.previewUrl
       : (completed?.sarUrl ?? slots.find((s) => s.modality === "SAR")?.previewUrl ?? null);
+
+  if (hasSar && completed) {
+    if (sarMode === "vv" && completed.vvUrl) sarUrl = completed.vvUrl;
+    else if (sarMode === "vh" && completed.vhUrl) sarUrl = completed.vhUrl;
+    else if (sarMode === "overlay" && completed.overlayUrl) sarUrl = completed.overlayUrl;
+    else if (sarMode === "composite" && completed.sarUrl) sarUrl = completed.sarUrl;
+  }
+
   const wipeUrl = wipe && t2 ? t2.previewUrl : null;
 
   const exportGeoJSON = async () => {
@@ -115,6 +125,35 @@ export function Viewport() {
           fill
         />
       </Suspense>
+
+      {hasSar && completed?.jobId ? (
+        <div className="absolute top-3 left-3 z-20">
+          <div className="sq-glass flex items-center gap-0.5 rounded-lg p-1 border border-white/10 bg-surface/85 shadow-lg backdrop-blur-md">
+            {(
+              [
+                { id: "composite", label: "Composite" },
+                { id: "vv", label: "VV Amplitude" },
+                { id: "vh", label: "VH Amplitude" },
+                { id: "overlay", label: "Overlay Detections" },
+              ] as const
+            ).map((mode) => (
+              <button
+                key={mode.id}
+                type="button"
+                onClick={() => setSarMode(mode.id)}
+                className={cn(
+                  "rounded-md px-2 py-1 font-mono text-[10.5px] font-medium transition-all",
+                  sarMode === mode.id
+                    ? "bg-primary text-black font-semibold shadow"
+                    : "text-mute hover:text-ink hover:bg-white/5",
+                )}
+              >
+                {mode.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <div ref={chromeRef} className="absolute top-3 right-3 z-20 w-max max-w-[calc(100%-1.25rem)]">
         <div className="sq-glass flex flex-wrap justify-end rounded-lg px-0.5 py-1">

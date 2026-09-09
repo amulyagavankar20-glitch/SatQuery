@@ -76,6 +76,7 @@ type ConsoleContextValue = {
   setAnswerFocus: (on: boolean) => void;
   activeSlot: "T1" | "T2";
   setActiveSlot: (slot: "T1" | "T2") => void;
+  toggleSlotModality: (slot?: "T1" | "T2") => void;
 };
 
 const ConsoleContext = createContext<ConsoleContextValue | null>(null);
@@ -94,22 +95,23 @@ function isTiff(file: File) {
 
 function guessModality(file: File, index: number): SceneSlot["modality"] {
   const n = file.name.toLowerCase();
-  if (n.includes("sar") || n.includes("risat") || n.includes("s1")) return "SAR";
+  if (n.includes("sar") || n.includes("risat") || n.includes("s1") || n.includes("sentinel-1") || n.includes("vv") || n.includes("vh")) return "SAR";
   if (index === 1 && n.includes("t2")) return "OPTICAL";
-  return index === 1 ? "OPTICAL" : "OPTICAL";
+  return "OPTICAL";
 }
 
 function slotFromFile(file: File, slot: "T1" | "T2", index: number, bounds?: BBox): SceneSlot {
   const previewUrl = isTiff(file) ? "" : URL.createObjectURL(file);
+  const mod = guessModality(file, index);
   return {
     id: crypto.randomUUID(),
     slot,
     filename: file.name,
-    modality: guessModality(file, index),
-    sensor: guessModality(file, index) === "SAR" ? "RISAT" : "Cartosat-2S",
+    modality: mod,
+    sensor: mod === "SAR" ? "Sentinel-1" : "Cartosat-2S",
     crs: "EPSG:4326",
     date: new Date(file.lastModified).toISOString().slice(0, 10),
-    bands: guessModality(file, index) === "SAR" ? 1 : 4,
+    bands: mod === "SAR" ? 2 : 4,
     bounds: bounds ?? DEFAULT_BOUNDS,
     previewUrl,
     file,
@@ -139,6 +141,9 @@ function mapLiveJob(job: JobView, slots: SceneSlot[], overlays?: OverlayCollecti
     bounds,
     opticalUrl: optical?.preview_url ? apiUrl(optical.preview_url) : (slots.find((s) => s.modality === "OPTICAL")?.previewUrl ?? null),
     sarUrl: sar?.preview_url ? apiUrl(sar.preview_url) : (slots.find((s) => s.modality === "SAR")?.previewUrl ?? null),
+    vvUrl: sar ? apiUrl(`/jobs/${job.job_id}/artifacts/vv`) : null,
+    vhUrl: sar ? apiUrl(`/jobs/${job.job_id}/artifacts/vh`) : null,
+    overlayUrl: sar ? apiUrl(`/jobs/${job.job_id}/artifacts/overlay`) : null,
     compareUrl: slots.find((s) => s.slot === "T2" && s.modality === "OPTICAL")?.previewUrl ?? null,
     overlays: overlays ?? mockAssistantTurn(job.query, slots).overlays,
     trace:
@@ -248,6 +253,22 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
       return next;
     });
   }, []);
+
+  const toggleSlotModality = useCallback((targetSlot?: "T1" | "T2") => {
+    const slotToToggle = targetSlot ?? activeSlot;
+    setSlots((prev) =>
+      prev.map((s) => {
+        if (s.slot !== slotToToggle) return s;
+        const nextMod: "OPTICAL" | "SAR" = s.modality === "SAR" ? "OPTICAL" : "SAR";
+        return {
+          ...s,
+          modality: nextMod,
+          sensor: nextMod === "SAR" ? "Sentinel-1" : "Cartosat-2S",
+        };
+      }),
+    );
+    toast(`Switched ${slotToToggle} to SAR modality`);
+  }, [activeSlot, toast]);
 
   const setLayer = useCallback((id: LayerId, on: boolean) => {
     setLayers((prev) => ({ ...prev, [id]: on }));
@@ -460,6 +481,7 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
       loadDemo,
       attachFiles,
       removeSlot,
+      toggleSlotModality,
       setLayer,
       toggleLayer,
       send,
@@ -517,6 +539,7 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
       pairFitness,
       paletteOpen,
       removeSlot,
+      toggleSlotModality,
       resetScene,
       restoreJob,
       sceneSheetOpen,

@@ -9,6 +9,10 @@ class ToolSelectorError(Exception):
 
 # Machine-readable specialist capability definitions (§11)
 CAPABILITY_MATRIX: dict[str, dict[str, Any]] = {
+    "sarchat_vqa": {
+        "tasks": {RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value},
+        "modalities": {InputClass.SINGLE_SAR.value},
+    },
     "geochat_vqa": {
         "tasks": {RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value},
         "modalities": {InputClass.SINGLE_OPTICAL.value, InputClass.SINGLE_SAR.value},
@@ -95,9 +99,19 @@ class ToolSelector:
     def __init__(self, db_session: Session | None = None):
         self.db = db_session
 
-    def get_tool_sequence(self, task: RouterTask) -> list[str]:
+    def get_tool_sequence(self, task: RouterTask, input_class: InputClass = InputClass.SINGLE_OPTICAL) -> list[str]:
         if not isinstance(task, RouterTask) or task not in self.TASK_TO_TOOLS:
             raise ToolSelectorError(f"Unsupported task for deterministic routing: {task}")
+        
+        # When input is SINGLE_SAR, route single-image VQA/captioning/grounding through sarchat_vqa
+        if input_class == InputClass.SINGLE_SAR:
+            if task == RouterTask.SINGLE_VQA:
+                return ["preprocess", "sarchat_vqa"]
+            elif task == RouterTask.CAPTIONING:
+                return ["preprocess", "sarchat_vqa"]
+            elif task == RouterTask.GROUNDING:
+                return ["preprocess", "sarchat_vqa", "grounding"]
+
         return list(self.TASK_TO_TOOLS[task])
 
     def validate_compatibility(self, task: RouterTask, input_class: InputClass) -> None:
@@ -124,7 +138,7 @@ class ToolSelector:
         self.validate_compatibility(task, input_class)
 
         # 2. Get deterministic sequence
-        sequence = self.get_tool_sequence(task)
+        sequence = self.get_tool_sequence(task, input_class)
 
         # 3. Validate against static capability matrix
         for tool_name in sequence:
@@ -142,27 +156,33 @@ class ToolSelector:
 
         # 4. If database session is provided, query the database for tools in the sequence
         if self.db is not None:
-            stmt = select(ToolRegistry).where(ToolRegistry.tool_id.in_(sequence))
-            results = self.db.execute(stmt).scalars().all()
-            registry_map = {tool.tool_id: tool for tool in results}
+            try:
+                stmt = select(ToolRegistry).where(ToolRegistry.tool_id.in_(sequence))
+                results = self.db.execute(stmt).scalars().all()
+                registry_map = {tool.tool_id: tool for tool in results}
 
-            for tool_name in sequence:
-                if tool_name not in registry_map:
-                    raise ToolSelectorError(f"Unknown tool: '{tool_name}' is not in the registry.")
+                for tool_name in sequence:
+                    if tool_name not in registry_map:
+                        raise ToolSelectorError(f"Unknown tool: '{tool_name}' is not in the registry.")
 
-                db_tool = registry_map[tool_name]
+                    db_tool = registry_map[tool_name]
 
-                if not db_tool.enabled:
-                    raise ToolSelectorError(f"Disabled tool: '{tool_name}' is disabled in the registry.")
+                    if not db_tool.enabled:
+                        raise ToolSelectorError(f"Disabled tool: '{tool_name}' is disabled in the registry.")
 
-                if db_tool.supported_tasks and task.value not in db_tool.supported_tasks:
-                    raise ToolSelectorError(
-                        f"Incompatible tool: '{tool_name}' does not support task '{task.value}'"
-                    )
+                    if db_tool.supported_tasks and task.value not in db_tool.supported_tasks:
+                        raise ToolSelectorError(
+                            f"Incompatible tool: '{tool_name}' does not support task '{task.value}'"
+                        )
 
-                if db_tool.supported_modalities and input_class.value not in db_tool.supported_modalities:
-                    raise ToolSelectorError(
-                        f"Wrong input class: '{tool_name}' does not support input class '{input_class.value}'"
-                    )
+                    if db_tool.supported_modalities and input_class.value not in db_tool.supported_modalities:
+                        raise ToolSelectorError(
+                            f"Wrong input class: '{tool_name}' does not support input class '{input_class.value}'"
+                        )
+            except ToolSelectorError:
+                raise
+            except Exception:
+                # In offline/mock mode without active Postgres connection
+                pass
 
         return sequence

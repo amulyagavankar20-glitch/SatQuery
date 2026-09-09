@@ -48,6 +48,16 @@ TOOL_CATALOG: list[dict[str, Any]] = [
         supported_modalities=_ALL_CLASSES,
     ),
     _tool(
+        "sarchat_vqa",
+        "SARChat VQA",
+        "VLM",
+        model_name="SARChat-InternVL2.5-2B",
+        model_version="sarchat-internvl2.5-2b-v1",
+        description="Specialized SAR vision-language model for radar image understanding, VQA, and interpretation.",
+        supported_tasks=[RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value],
+        supported_modalities=[InputClass.SINGLE_SAR.value],
+    ),
+    _tool(
         "geochat_vqa",
         "GeoChat VQA",
         "VLM",

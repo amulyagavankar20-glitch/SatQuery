@@ -72,6 +72,10 @@ class Settings(BaseSettings):
     SAM_WEIGHTS_PATH: str | None = None
     FUSION_WEIGHTS_PATH: str | None = None
 
+    # SARChat-InternVL2.5-2B (Specialized SAR Model)
+    SARCHAT_MODEL_PATH: str = ""
+    SARCHAT_DEVICE: str | None = None
+
     CORS_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     @property

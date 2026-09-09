@@ -108,7 +108,24 @@ class MockGrounding(BaseTool):
         return dict(params)
 
     def infer(self, params: Mapping[str, Any]) -> Any:
-        return f"MOCK_GROUNDING_RESULT for '{params['text']}'"
+        target = params.get("text", "object")
+        return {
+            "grounding_target": target,
+            "status": "success",
+            "message": f"GeoGround successfully localized '{target}' in the spatial scene.",
+            "detections": [
+                {
+                    "label": target,
+                    "bbox_norm": [0.061, 0.170, 0.075, 0.182],
+                    "image_position": "bottom-left",
+                },
+                {
+                    "label": target,
+                    "bbox_norm": [0.118, 0.094, 0.131, 0.105],
+                    "image_position": "center",
+                },
+            ],
+        }
 
     def postprocess(self, raw_output: Any) -> Any:
         return raw_output

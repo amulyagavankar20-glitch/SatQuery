@@ -3,10 +3,10 @@ import type { TraceStep } from "./types";
 
 export function specialistId(query: string, sar: boolean): string {
   const q = query.toLowerCase();
+  if (sar || q.includes("sar") || q.includes("sentinel-1") || q.includes("radar")) return "sarchat_vqa";
   if (q.includes("water body") || q.includes("highlight the water")) return "water_delineation";
   if (q.includes("increased") || q.includes("decreased") || q.includes("stayed the same")) return "change_detection";
   if (q.includes("changed") || q.includes("where?")) return "change_detection";
-  if ((q.includes("optical") && q.includes("sar")) || sar) return "optical_sar";
   if (q.includes("land-cover") || q.includes("objects")) return "describe";
   return "describe";
 }
