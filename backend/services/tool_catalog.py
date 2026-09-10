@@ -24,6 +24,7 @@ def _tool(
     description: str,
     supported_tasks: list[str],
     supported_modalities: list[str],
+    enabled: bool = True,
 ) -> dict[str, Any]:
     return {
         "tool_id": tool_id,
@@ -34,7 +35,7 @@ def _tool(
         "description": description,
         "supported_tasks": supported_tasks,
         "supported_modalities": supported_modalities,
-        "enabled": True,
+        "enabled": enabled,
     }
 
 
@@ -84,6 +85,7 @@ TOOL_CATALOG: list[dict[str, Any]] = [
         description="Talking VLM for single-image VQA and captioning.",
         supported_tasks=[RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value],
         supported_modalities=[InputClass.SINGLE_OPTICAL.value, InputClass.SINGLE_SAR.value],
+        enabled=False,
     ),
     _tool(
         "geochat_describe",
@@ -94,6 +96,7 @@ TOOL_CATALOG: list[dict[str, Any]] = [
         description="Describe a change crop or optical–SAR fusion result.",
         supported_tasks=[RouterTask.CHANGE_VQA.value, RouterTask.OPTICAL_SAR_ANALYSIS.value],
         supported_modalities=[InputClass.BI_TEMPORAL.value, InputClass.OPTICAL_SAR.value],
+        enabled=False,
     ),
     _tool(
         "grounding",
@@ -104,6 +107,7 @@ TOOL_CATALOG: list[dict[str, Any]] = [
         description="Ground a GeoChat phrase onto the image with MobileSAM.",
         supported_tasks=[RouterTask.GROUNDING.value],
         supported_modalities=[InputClass.SINGLE_OPTICAL.value, InputClass.SINGLE_SAR.value],
+        enabled=False,
     ),
     _tool(
         "mobile_sam",
@@ -114,6 +118,7 @@ TOOL_CATALOG: list[dict[str, Any]] = [
         description="Optional grounding fallback from a GeoChat phrase.",
         supported_tasks=[RouterTask.GROUNDING.value],
         supported_modalities=[InputClass.SINGLE_OPTICAL.value, InputClass.SINGLE_SAR.value],
+        enabled=False,
     ),
     _tool(
         "align",
@@ -122,6 +127,7 @@ TOOL_CATALOG: list[dict[str, Any]] = [
         description="Co-register a bitemporal pair onto a shared grid.",
         supported_tasks=[RouterTask.CHANGE_DETECTION.value, RouterTask.CHANGE_VQA.value],
         supported_modalities=[InputClass.BI_TEMPORAL.value],
+        enabled=False,
     ),
     _tool(
         "bit_cd",
@@ -132,6 +138,7 @@ TOOL_CATALOG: list[dict[str, Any]] = [
         description="Silent pixel-level change mask on 256 tiles.",
         supported_tasks=[RouterTask.CHANGE_DETECTION.value, RouterTask.CHANGE_VQA.value],
         supported_modalities=[InputClass.BI_TEMPORAL.value],
+        enabled=False,
     ),
     _tool(
         "vectorize",
@@ -140,6 +147,7 @@ TOOL_CATALOG: list[dict[str, Any]] = [
         description="Polygonize a change mask into CRS-aware GeoJSON.",
         supported_tasks=[RouterTask.CHANGE_DETECTION.value, RouterTask.CHANGE_VQA.value],
         supported_modalities=[InputClass.BI_TEMPORAL.value],
+        enabled=False,
     ),
     _tool(
         "coregister",
@@ -148,6 +156,7 @@ TOOL_CATALOG: list[dict[str, Any]] = [
         description="Resample SAR onto the optical grid over the intersection.",
         supported_tasks=[RouterTask.OPTICAL_SAR_ANALYSIS.value],
         supported_modalities=[InputClass.OPTICAL_SAR.value],
+        enabled=False,
     ),
     _tool(
         "fusion_s1s2",
@@ -158,6 +167,7 @@ TOOL_CATALOG: list[dict[str, Any]] = [
         description="Small dual-encoder fusion head for optical + SAR.",
         supported_tasks=[RouterTask.OPTICAL_SAR_ANALYSIS.value],
         supported_modalities=[InputClass.OPTICAL_SAR.value],
+        enabled=False,
     ),
     _tool(
         "agreement",
@@ -166,6 +176,7 @@ TOOL_CATALOG: list[dict[str, Any]] = [
         description="Agreement / uncertain overlay between optical and SAR evidence.",
         supported_tasks=[RouterTask.OPTICAL_SAR_ANALYSIS.value],
         supported_modalities=[InputClass.OPTICAL_SAR.value],
+        enabled=False,
     ),
     _tool(
         "geospatial_validator",
@@ -174,6 +185,7 @@ TOOL_CATALOG: list[dict[str, Any]] = [
         description="CRS, overlap, and pair-fitness checks before specialist tools.",
         supported_tasks=_ALL_TASKS,
         supported_modalities=_ALL_CLASSES,
+        enabled=False,
     ),
 ]
 

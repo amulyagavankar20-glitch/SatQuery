@@ -134,7 +134,17 @@ def metadata_parser(state: GraphState) -> dict[str, Any]:
 def pair_fitness_gate(state: GraphState) -> dict[str, Any]:
     _record_event(state, "PAIR_FITNESS_CHECKED", "pair_fitness_gate")
     updates = _visit(state, "pair_fitness_gate")
-    # pair_fitness signals are recorded in state; warnings propagated downstream
+    fitness = state.get("pair_fitness") or {}
+    classification = (state.get("asset_metadata") or {}).get("classification") or {}
+    valid = classification.get("valid", True) if isinstance(classification, dict) else True
+    overlap_ok = fitness.get("has_sufficient_overlap", fitness.get("valid", True)) if isinstance(fitness, dict) else True
+    if not valid or not overlap_ok:
+        reason = (
+            classification.get("refusal_reason") or fitness.get("refusal_reason") or
+            "The supplied image pair is not fit for a temporal comparison."
+        )
+        updates.update({"status": "refused", "refusal_reason": reason})
+        _record_event(state, "REFUSED", "pair_fitness_gate", message=reason)
     return updates
 
 
@@ -312,6 +322,8 @@ def preprocess(state: GraphState) -> dict[str, Any]:
         warnings: list[str] = list(state.get("warnings", []))  # type: ignore[arg-type]
         warnings.append(f"Preprocessing failed: {exc}")
         updates["warnings"] = warnings
+        updates["status"] = "failed"
+        updates["failure_reason"] = f"Preprocessing failed: {exc}"
         updates["_preprocess_image_refs"] = []  # type: ignore[typeddict-unknown-key]
         _record_event(state, "FAILED", "preprocess", message=str(exc))
 
@@ -424,10 +436,15 @@ def bit_analyze(state: GraphState) -> dict[str, Any]:
     pre = state.get("preprocessing_result")
     tile_pairs: list[dict[str, Any]] = []
     if pre is not None and pre.tile_pairs:
-        tile_pairs = [
-            {"before_image": pair.file_path_1, "after_image": pair.file_path_2, "tile_index": pair.pair_index}
-            for pair in pre.tile_pairs
-        ]
+        refs = {ref.tile_id: ref for ref in pre.tile_references}
+        for pair in pre.tile_pairs:
+            ref = refs.get(pair.tile_id_1)
+            metadata = ref.model_dump(mode="json") if ref else {"bounds": pair.bounds, "crs": pair.crs}
+            tile_pairs.append({
+                "before_image": pair.file_path_1, "after_image": pair.file_path_2,
+                "tile_index": pair.pair_index, "pair_index": pair.pair_index,
+                "tile_metadata": metadata,
+            })
     else:
         refs = _image_refs(state)
         if len(refs) >= 2:
@@ -664,6 +681,8 @@ def evidence_fusion(state: GraphState) -> dict[str, Any]:
         for msg in validation.messages:
             if msg not in warnings:
                 warnings.append(msg)
+        updates["status"] = "failed"
+        updates["failure_reason"] = "; ".join(validation.messages)
     updates["warnings"] = warnings
 
     return updates
@@ -815,6 +834,8 @@ def _after_tool_selector(state: GraphState) -> str:
 
 
 def after_preprocess(state: GraphState) -> str:
+    if state.get("status") in {"failed", "refused"}:
+        return "refusal"
     input_class = state.get("input_class", "")
     if input_class == InputClass.SINGLE_SAR.value:
         return "sarchat_vqa"
@@ -835,9 +856,6 @@ def after_geochat_vqa(state: GraphState) -> str:
 
 
 def after_sarchat_vqa(state: GraphState) -> str:
-    task = state.get("detected_task", "")
-    if task == RouterTask.GROUNDING.value:
-        return "grounding"
     return "evidence_fusion"
 
 
@@ -874,15 +892,6 @@ for name, fn in {
     "bit_analyze":      bit_analyze,
     "temporal_semantic_specialist": temporal_semantic_specialist,
     "cross_modal_specialists": cross_modal_specialists,
-    "geochat_vqa":      geochat_vqa,
-    "grounding":        grounding,
-    "align":            align,
-    "bit_cd":           bit_cd,
-    "vectorize":        vectorize,
-    "geochat_describe": geochat_describe,
-    "coregister":       coregister,
-    "fusion_s1s2":      fusion_s1s2,
-    "agreement":        agreement,
     "evidence_fusion":  evidence_fusion,
     "final_qwen_reasoning": final_qwen_reasoning,
     "audit_logger":     audit_logger,
@@ -926,7 +935,7 @@ workflow.add_conditional_edges(
 # SARChat VQA path
 workflow.add_conditional_edges(
     "sarchat_vqa", after_sarchat_vqa,
-    {"grounding": "grounding", "evidence_fusion": "evidence_fusion"},
+    {"evidence_fusion": "evidence_fusion"},
 )
 workflow.add_edge("geoground_analyze", "evidence_fusion")
 workflow.add_edge("cross_modal_specialists", "evidence_fusion")
@@ -937,31 +946,12 @@ workflow.add_conditional_edges(
 workflow.add_edge("temporal_semantic_specialist", "evidence_fusion")
 
 # GeoChat VQA path
-workflow.add_conditional_edges(
-    "geochat_vqa", after_geochat_vqa,
-    {"grounding": "grounding", "evidence_fusion": "evidence_fusion"},
-)
-workflow.add_edge("grounding", "evidence_fusion")
 
 # CHANGE_DETECTION / CHANGE_VQA paths
-workflow.add_edge("align", "bit_cd")
-workflow.add_edge("bit_cd", "vectorize")
-workflow.add_conditional_edges(
-    "vectorize", after_vectorize,
-    {
-        "evidence_fusion": "evidence_fusion",
-        "geochat_describe": "geochat_describe",
-        "refusal": "refusal",
-    },
-)
 
 # OPTICAL_SAR_ANALYSIS path: coregister → fusion_s1s2 → agreement → geochat_describe
-workflow.add_edge("coregister",  "fusion_s1s2")
-workflow.add_edge("fusion_s1s2", "agreement")
-workflow.add_edge("agreement",   "geochat_describe")
 
 # geochat_describe always leads to evidence_fusion
-workflow.add_edge("geochat_describe", "evidence_fusion")
 
 # Final tail – common to all successful paths
 workflow.add_edge("evidence_fusion",  "final_qwen_reasoning")

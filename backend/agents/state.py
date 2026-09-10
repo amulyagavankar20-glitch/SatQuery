@@ -56,6 +56,7 @@ class GraphState(TypedDict, total=False):
     # ── Status & Errors ───────────────────────────────────────────────────────
     warnings: list[str]
     refusal_reason: str | None
+    failure_reason: str | None
     final_answer: str | None
     report_paths: list[str]
     status: str

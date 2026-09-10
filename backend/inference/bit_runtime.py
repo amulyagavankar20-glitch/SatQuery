@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import sys
 import threading
+import json
 from pathlib import Path
 from typing import Any
 
@@ -109,15 +110,41 @@ class BITRuntime:
             array = array[0]
         return (array > 0).astype(np.uint8)
 
-    def _artifact_dir(self, before_path: str) -> Path:
+    def _artifact_dirs(self, before_path: str) -> dict[str, Path]:
         path = Path(before_path).resolve()
         # Expected paired-tile layout: data/jobs/<job>/tiles/t1/<tile>.png.
         job_dir = path.parent.parent.parent if path.parent.name in {"t1", "t2"} else path.parent
-        out = job_dir / "masks"
-        out.mkdir(parents=True, exist_ok=True)
-        return out
+        dirs = {name: job_dir / name for name in ("masks", "regions", "overlays")}
+        for directory in dirs.values():
+            directory.mkdir(parents=True, exist_ok=True)
+        return dirs
 
-    def analyze(self, before_path: str, after_path: str, *, artifact_prefix: str = "bit") -> dict[str, Any]:
+    @staticmethod
+    def _region_geometry(region: dict[str, Any], metadata: dict[str, Any]) -> None:
+        """Attach local, global-pixel, native-CRS and WGS84 bounds when available."""
+        x1, y1, x2, y2 = region["bbox"]
+        region["local_bbox"] = [x1, y1, x2, y2]
+        col_off, row_off = int(metadata.get("col_off", 0)), int(metadata.get("row_off", 0))
+        region["global_pixel_bbox"] = [col_off + x1, row_off + y1, col_off + x2, row_off + y2]
+        region["tile_id"] = metadata.get("tile_id")
+        region["crs"] = metadata.get("crs")
+        transform = metadata.get("transform") or []
+        if len(transform) >= 6:
+            a, b, c, d, e, f = (float(value) for value in transform[:6])
+            corners = [(a * x + b * y + c, d * x + e * y + f) for x, y in ((x1, y1), (x2, y1), (x2, y2), (x1, y2))]
+            region["native_crs_polygon"] = [[round(px, 8), round(py, 8)] for px, py in corners]
+            region["native_crs_bbox"] = [min(p[0] for p in corners), min(p[1] for p in corners), max(p[0] for p in corners), max(p[1] for p in corners)]
+        bounds = metadata.get("bounds_wgs84")
+        width, height = int(metadata.get("width", 0)), int(metadata.get("height", 0))
+        if bounds and len(bounds) == 4 and width and height:
+            min_lon, min_lat, max_lon, max_lat = (float(value) for value in bounds)
+            def to_wgs(x: int, y: int) -> list[float]:
+                return [round(min_lon + x / width * (max_lon - min_lon), 8), round(max_lat - y / height * (max_lat - min_lat), 8)]
+            corners = [to_wgs(x, y) for x, y in ((x1, y1), (x2, y1), (x2, y2), (x1, y2))]
+            region["wgs84_polygon"] = corners
+            region["bbox_wgs84"] = [min(p[0] for p in corners), min(p[1] for p in corners), max(p[0] for p in corners), max(p[1] for p in corners)]
+
+    def analyze(self, before_path: str, after_path: str, *, artifact_prefix: str = "bit", tile_metadata: dict[str, Any] | None = None) -> dict[str, Any]:
         if not self.is_available():
             raise RuntimeError(
                 "BIT is not configured. Set BIT_ROOT or BIT_CHECKPOINT_PATH to the validated "
@@ -159,27 +186,33 @@ class BITRuntime:
                 })
         regions.sort(key=lambda region: region["area"], reverse=True)
 
-        out_dir = self._artifact_dir(before_path)
-        raw_mask_path = out_dir / f"{artifact_prefix}_raw_change_mask.png"
+        artifact_dirs = self._artifact_dirs(before_path)
+        raw_mask_path = artifact_dirs["masks"] / f"{artifact_prefix}_raw_change_mask.png"
         Image.fromarray((raw_mask * 255).astype(np.uint8)).save(raw_mask_path)
-        mask_path = out_dir / f"{artifact_prefix}_change_mask.png"
+        mask_path = artifact_dirs["masks"] / f"{artifact_prefix}_change_mask.png"
         Image.fromarray((mask * 255).astype(np.uint8)).save(mask_path)
         after_image = np.asarray(Image.open(after_path).convert("RGB"))
         resized_mask = cv2.resize(mask, (after_image.shape[1], after_image.shape[0]), interpolation=cv2.INTER_NEAREST)
         overlay = after_image.copy()
         overlay[resized_mask > 0] = [255, 0, 0]
-        overlay_path = out_dir / f"{artifact_prefix}_change_overlay.png"
+        overlay_path = artifact_dirs["overlays"] / f"{artifact_prefix}_change_overlay.png"
         Image.fromarray(cv2.addWeighted(after_image, 0.55, overlay, 0.45, 0)).save(overlay_path)
         crop_paths: list[str] = []
         for region in regions:
             x1, y1, x2, y2 = region["bbox"]
+            self._region_geometry(region, tile_metadata or {})
+            region["before_tile_path"] = before_path
+            region["after_tile_path"] = after_path
             crop = after_image[y1:y2, x1:x2]
             if crop.size == 0:
                 continue
-            crop_path = out_dir / f"{artifact_prefix}_region_{region['id']:03d}.png"
+            crop_path = artifact_dirs["regions"] / f"{artifact_prefix}_region_{region['id']:03d}.png"
             Image.fromarray(crop).save(crop_path)
             region["crop_path"] = str(crop_path)
             crop_paths.append(str(crop_path))
+
+        regions_path = artifact_dirs["regions"] / f"{artifact_prefix}_regions.json"
+        regions_path.write_text(json.dumps(regions, indent=2), encoding="utf-8")
 
         return {
             "model": "BIT", "before_size": list(before_size), "after_size": list(after_size),
@@ -188,7 +221,8 @@ class BITRuntime:
             "change_percentage": round((changed_pixels / total_pixels * 100) if total_pixels else 0.0, 4),
             "regions": regions, "num_regions": len(regions),
             "region_crops": crop_paths,
-            "artifact_paths": [str(raw_mask_path), str(mask_path), str(overlay_path), *crop_paths],
+            "regions_path": str(regions_path),
+            "artifact_paths": [str(raw_mask_path), str(mask_path), str(overlay_path), str(regions_path), *crop_paths],
         }
 
 

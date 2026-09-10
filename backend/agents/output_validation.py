@@ -38,19 +38,18 @@ class Evidence(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
 
 
-def _required_tools_for_task(task: str) -> list[str]:
+def _required_tools_for_task(task: str, input_class: str = "") -> list[str]:
     """Return the list of tool identifiers that must have produced results for *task*.
 
     The mapping mirrors the graph paths defined in ``backend.agents.graph``.
     """
     mapping: dict[str, list[str]] = {
-        "SINGLE_VQA":           ["geochat_vqa"],
-        "CAPTIONING":           ["geochat_vqa"],
-        "GROUNDING":            ["geochat_vqa", "grounding"],
-        "CHANGE_DETECTION":     ["align", "bit_cd", "vectorize"],
-        "CHANGE_VQA":           ["align", "bit_cd", "vectorize", "geochat_describe"],
-        "OPTICAL_SAR_ANALYSIS": ["coregister", "fusion_s1s2", "agreement", "geochat_describe"],
+        "CHANGE_DETECTION":     ["bit_analyze"],
+        "CHANGE_VQA":           ["bit_analyze"],
+        "OPTICAL_SAR_ANALYSIS": ["geoground_analyze", "sarchat_vqa"],
     }
+    if task in {"SINGLE_VQA", "CAPTIONING", "GROUNDING"}:
+        return ["sarchat_vqa"] if input_class == "SINGLE_SAR" else ["geoground_analyze"]
     return mapping.get(task, [])
 
 
@@ -58,13 +57,13 @@ def _collect_evidence(state: "GraphState") -> Evidence:
     ev = Evidence()
     for tr in state.get("specialist_results", []):  # type: ignore[union-attr]
         # Model evidence – tools that produce a textual or semantic answer
-        if tr.tool_id in {"geochat_vqa", "grounding", "geochat_describe"}:
+        if tr.tool_id in {"geoground_analyze", "sarchat_vqa"}:
             ev.model_evidence.append(tr)
         # Temporal evidence – tools that operate on a time series
-        if tr.tool_id in {"bit_cd", "vectorize", "align"}:
+        if tr.tool_id == "bit_analyze":
             ev.temporal_evidence.append(tr)
         # Cross-modal evidence – fusion and agreement tools
-        if tr.tool_id in {"fusion_s1s2", "agreement", "coregister"}:
+        if tr.tool_id in {"geoground_analyze", "sarchat_vqa"} and state.get("input_class") == "OPTICAL_SAR":
             ev.cross_modal_evidence.append(tr)
         # Spatial evidence – any spatial_refs attached to the result
         if tr.spatial_refs:
@@ -80,9 +79,10 @@ def _validate_spatial_refs(spatial_refs: list[dict[str, Any]]) -> bool:
     for geo in spatial_refs:
         if not isinstance(geo, dict):
             return False
-        if "type" not in geo or "coordinates" not in geo:
-            return False
-        if not geo["type"] or not geo["coordinates"]:
+        if {"type", "coordinates"}.issubset(geo):
+            if geo["type"] and geo["coordinates"]:
+                continue
+        if "bbox" not in geo and "local_bbox" not in geo and "bbox_wgs84" not in geo:
             return False
     return True
 
@@ -102,7 +102,7 @@ def _aggregate_signals(state: "GraphState", evidence: Evidence) -> list[str]:
 
     # Tool success – all required tools completed without error
     task = state.get("detected_task", "") or ""
-    required = _required_tools_for_task(task)
+    required = _required_tools_for_task(task, str(state.get("input_class", "")))
     tool_ids = {tr.tool_id for tr in state.get("specialist_results", [])  # type: ignore[union-attr]
                 if tr.status == "success"}
     if required and set(required).issubset(tool_ids):
@@ -113,7 +113,7 @@ def _aggregate_signals(state: "GraphState", evidence: Evidence) -> list[str]:
         signals.append("spatial_consistency")
 
     # Cross-modal agreement – both fusion and agreement ran successfully
-    if "fusion_s1s2" in tool_ids and "agreement" in tool_ids:
+    if {"geoground_analyze", "sarchat_vqa"}.issubset(tool_ids):
         signals.append("cross_modal_agreement")
 
     # Evidence completeness – we have at least one model evidence item
@@ -194,7 +194,7 @@ def validate_output(state: "GraphState") -> ValidationResult:
                 )
 
     # 2. Required output existence
-    required_tools = _required_tools_for_task(task)
+    required_tools = _required_tools_for_task(task, str(state.get("input_class", "")))
     available_tools = {tr.tool_id for tr in state.get("specialist_results", [])}  # type: ignore[union-attr]
     missing = set(required_tools) - available_tools
     if missing:
@@ -218,9 +218,8 @@ def validate_output(state: "GraphState") -> ValidationResult:
         messages.append("No model evidence was generated.")
 
     # 7. Cross-modal agreement where applicable
-    if task == "OPTICAL_SAR_ANALYSIS":
-        if not ("fusion_s1s2" in available_tools and "agreement" in available_tools):
-            messages.append("Cross-modal agreement evidence missing for OPTICAL_SAR_ANALYSIS.")
+    if task == "OPTICAL_SAR_ANALYSIS" and not {"geoground_analyze", "sarchat_vqa"}.issubset(available_tools):
+        messages.append("Independent GeoGround and SARChat evidence is required for OPTICAL_SAR_ANALYSIS.")
 
     is_valid = len(messages) == 0
 

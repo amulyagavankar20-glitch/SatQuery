@@ -35,13 +35,14 @@ class BITTool(BaseTool):
             runtime.analyze(
                 str(pair["before_image"]), str(pair["after_image"]),
                 artifact_prefix=f"bit_tile_{int(pair.get('tile_index', index)):04d}",
+                tile_metadata=dict(pair.get("tile_metadata") or {}),
             )
             for index, pair in enumerate(pairs)
         ]
         changed = sum(int(result["changed_pixel_count"]) for result in tile_results)
         total = sum(int(result["total_pixels"]) for result in tile_results)
         regions = [
-            {**region, "tile_index": int(pair.get("tile_index", index))}
+            {**region, "tile_index": int(pair.get("tile_index", index)), "pair_index": int(pair.get("pair_index", index))}
             for index, (pair, result) in enumerate(zip(pairs, tile_results, strict=True))
             for region in result["regions"]
         ]

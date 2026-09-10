@@ -121,8 +121,7 @@ Input Class / Normalized Metadata: {json.dumps(request.manifest, default=str)}
 
     async def route(self, request: RouteRequest) -> RouteResponse:
         available_tools = [
-            "geospatial_validator", "geochat_vqa", "geochat_describe", 
-            "bit_cd", "fusion_s1s2", "mobilesam", "vectorizer"
+            "geoground_analyze", "sarchat_vqa", "bit_analyze"
         ]
         constraints = [
             "Never hallucinate tool names. Only use tools from the provided list.",
@@ -196,33 +195,33 @@ Input Class / Normalized Metadata: {json.dumps(request.manifest, default=str)}
             return RouteResponse(
                 task=task,
                 requires_change_analysis=True,
-                tools=[RouterTool.GEOSPATIAL_VALIDATOR, RouterTool.BIT_CD],
+                tools=[RouterTool.BIT_ANALYZE],
             )
         
         if any(w in q for w in ["ground", "locate", "segment", "highlight", "bounding", "box"]):
             return RouteResponse(
                 task=RouterTask.GROUNDING,
                 requires_grounding=True,
-                tools=[RouterTool.GEOSPATIAL_VALIDATOR, RouterTool.GEOCHAT_VQA],
+                tools=[RouterTool.GEOGROUND_ANALYZE],
             )
 
         if any(w in q for w in ["fuse", "fusion", "optical and sar", "sar and optical"]):
             return RouteResponse(
                 task=RouterTask.OPTICAL_SAR_ANALYSIS,
                 requires_optical_sar_analysis=True,
-                tools=[RouterTool.GEOSPATIAL_VALIDATOR, RouterTool.FUSION_S1S2],
+                tools=[RouterTool.GEOGROUND_ANALYZE, RouterTool.SARCHAT_VQA],
             )
 
         if any(w in q for w in ["describe", "caption", "overview"]):
             return RouteResponse(
                 task=RouterTask.CAPTIONING,
-                tools=[RouterTool.GEOSPATIAL_VALIDATOR, RouterTool.GEOCHAT_DESCRIBE],
+                tools=[RouterTool.GEOGROUND_ANALYZE],
             )
 
         # Default single-image visual question answering
         return RouteResponse(
             task=RouterTask.SINGLE_VQA,
-            tools=[RouterTool.GEOSPATIAL_VALIDATOR, RouterTool.GEOCHAT_VQA],
+            tools=[RouterTool.GEOGROUND_ANALYZE],
         )
 
     def _apply_manifest_constraints(self, route: RouteResponse, request: RouteRequest) -> RouteResponse:

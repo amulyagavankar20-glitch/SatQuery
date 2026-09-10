@@ -39,6 +39,9 @@ class RouterInputMode(str, Enum):
     OPTICAL_SAR = "OPTICAL_SAR"
 
 class RouterTool(str, Enum):
+    GEOGROUND_ANALYZE = "geoground_analyze"
+    SARCHAT_VQA = "sarchat_vqa"
+    BIT_ANALYZE = "bit_analyze"
     GEOSPATIAL_VALIDATOR = "geospatial_validator"
     GEOCHAT_VQA = "geochat_vqa"
     GEOCHAT_DESCRIBE = "geochat_describe"
@@ -102,6 +105,7 @@ class TileReference(BaseModel):
     bounds_wgs84: list[float] | None = Field(None, description="[min_lon, min_lat, max_lon, max_lat]")
     bbox_wkt: str | None = Field(None, description="WKT polygon in spatial CRS")
     crs: str = Field(..., description="CRS of the tile coordinates")
+    transform: list[float] | None = Field(None, description="Affine transform for this tile (a, b, c, d, e, f[, ...])")
     pair_tag: str | None = Field(None, description="Tag for paired tiles (t1, t2, optical, sar)")
     pair_tile_id: str | None = Field(None, description="Corresponding tile_id in paired modality/timestamp")
     acquisition_date: datetime | None = None
