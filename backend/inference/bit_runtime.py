@@ -65,6 +65,8 @@ class BITRuntime:
             args.checkpoint_root = str(self.root / "checkpoints")
             args.project_name = settings.BIT_PROJECT_NAME
             args.checkpoint_dir = os.path.join(args.checkpoint_root, args.project_name)
+            args.output_folder = str(self.root / "samples" / "satquery_output")
+            Path(args.output_folder).mkdir(parents=True, exist_ok=True)
             args.net_G = "base_transformer_pos_s4_dd8_dedim8"
             args.n_class = 2
             args.embed_dim = 256
@@ -134,6 +136,16 @@ class BITRuntime:
             self.model._forward_pass(batch)
             mask = self._prediction_to_mask(self.model.G_pred)
 
+        # Exact post-processing from the final BIT notebook cell: connect
+        # nearby change pixels, remove isolated noise, then extract regions.
+        raw_mask = mask
+        mask_uint8 = raw_mask * 255
+        close_kernel = np.ones((settings.BIT_CLOSE_KERNEL_SIZE, settings.BIT_CLOSE_KERNEL_SIZE), np.uint8)
+        open_kernel = np.ones((settings.BIT_OPEN_KERNEL_SIZE, settings.BIT_OPEN_KERNEL_SIZE), np.uint8)
+        clean_mask = cv2.morphologyEx(mask_uint8, cv2.MORPH_CLOSE, close_kernel)
+        clean_mask = cv2.morphologyEx(clean_mask, cv2.MORPH_OPEN, open_kernel)
+        mask = (clean_mask > 0).astype(np.uint8)
+
         changed_pixels = int(mask.sum())
         total_pixels = int(mask.size)
         count, _, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
@@ -148,6 +160,8 @@ class BITRuntime:
         regions.sort(key=lambda region: region["area"], reverse=True)
 
         out_dir = self._artifact_dir(before_path)
+        raw_mask_path = out_dir / f"{artifact_prefix}_raw_change_mask.png"
+        Image.fromarray((raw_mask * 255).astype(np.uint8)).save(raw_mask_path)
         mask_path = out_dir / f"{artifact_prefix}_change_mask.png"
         Image.fromarray((mask * 255).astype(np.uint8)).save(mask_path)
         after_image = np.asarray(Image.open(after_path).convert("RGB"))
@@ -169,12 +183,12 @@ class BITRuntime:
 
         return {
             "model": "BIT", "before_size": list(before_size), "after_size": list(after_size),
-            "mask_path": str(mask_path), "overlay_path": str(overlay_path),
+            "raw_mask_path": str(raw_mask_path), "mask_path": str(mask_path), "overlay_path": str(overlay_path),
             "changed_pixel_count": changed_pixels, "total_pixels": total_pixels,
             "change_percentage": round((changed_pixels / total_pixels * 100) if total_pixels else 0.0, 4),
             "regions": regions, "num_regions": len(regions),
             "region_crops": crop_paths,
-            "artifact_paths": [str(mask_path), str(overlay_path), *crop_paths],
+            "artifact_paths": [str(raw_mask_path), str(mask_path), str(overlay_path), *crop_paths],
         }
 
 
