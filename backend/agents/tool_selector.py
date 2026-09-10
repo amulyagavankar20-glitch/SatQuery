@@ -9,9 +9,19 @@ class ToolSelectorError(Exception):
 
 # Machine-readable specialist capability definitions (§11)
 CAPABILITY_MATRIX: dict[str, dict[str, Any]] = {
+    "geoground_analyze": {
+        "tasks": {RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value,
+                  RouterTask.CHANGE_VQA.value, RouterTask.OPTICAL_SAR_ANALYSIS.value},
+        "modalities": {InputClass.SINGLE_OPTICAL.value, InputClass.BI_TEMPORAL.value, InputClass.OPTICAL_SAR.value},
+    },
+    "bit_analyze": {
+        "tasks": {RouterTask.CHANGE_DETECTION.value, RouterTask.CHANGE_VQA.value},
+        "modalities": {InputClass.BI_TEMPORAL.value},
+    },
     "sarchat_vqa": {
-        "tasks": {RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value},
-        "modalities": {InputClass.SINGLE_SAR.value},
+        "tasks": {RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value,
+                  RouterTask.CHANGE_VQA.value, RouterTask.OPTICAL_SAR_ANALYSIS.value},
+        "modalities": {InputClass.SINGLE_SAR.value, InputClass.BI_TEMPORAL.value, InputClass.OPTICAL_SAR.value},
     },
     "geochat_vqa": {
         "tasks": {RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value},
@@ -75,12 +85,12 @@ TASK_INPUT_COMPATIBILITY: dict[RouterTask, set[InputClass]] = {
 
 # Locked deterministic routing sequences (§5, §9)
 TASK_TO_TOOLS: dict[RouterTask, list[str]] = {
-    RouterTask.SINGLE_VQA: ["preprocess", "geochat_vqa"],
-    RouterTask.CAPTIONING: ["preprocess", "geochat_vqa"],
-    RouterTask.GROUNDING: ["preprocess", "geochat_vqa", "grounding"],
-    RouterTask.CHANGE_DETECTION: ["preprocess", "align", "bit_cd", "vectorize"],
-    RouterTask.CHANGE_VQA: ["preprocess", "align", "bit_cd", "vectorize", "geochat_describe"],
-    RouterTask.OPTICAL_SAR_ANALYSIS: ["preprocess", "coregister", "fusion_s1s2", "agreement", "geochat_describe"],
+    RouterTask.SINGLE_VQA: ["preprocess", "geoground_analyze"],
+    RouterTask.CAPTIONING: ["preprocess", "geoground_analyze"],
+    RouterTask.GROUNDING: ["preprocess", "geoground_analyze"],
+    RouterTask.CHANGE_DETECTION: ["preprocess", "bit_analyze"],
+    RouterTask.CHANGE_VQA: ["preprocess", "bit_analyze"],
+    RouterTask.OPTICAL_SAR_ANALYSIS: ["preprocess", "geoground_analyze", "sarchat_vqa"],
 }
 
 
@@ -111,6 +121,9 @@ class ToolSelector:
                 return ["preprocess", "sarchat_vqa"]
             elif task == RouterTask.GROUNDING:
                 return ["preprocess", "sarchat_vqa", "grounding"]
+
+        if input_class == InputClass.OPTICAL_SAR:
+            return ["preprocess", "geoground_analyze", "sarchat_vqa"]
 
         return list(self.TASK_TO_TOOLS[task])
 

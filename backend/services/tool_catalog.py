@@ -40,6 +40,24 @@ def _tool(
 
 TOOL_CATALOG: list[dict[str, Any]] = [
     _tool(
+        "geoground_analyze",
+        "GeoGround optical analysis",
+        "VLM",
+        model_name="GeoGround",
+        description="S2-only optical VQA, scene understanding, and grounding evidence.",
+        supported_tasks=[RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value, RouterTask.CHANGE_VQA.value, RouterTask.OPTICAL_SAR_ANALYSIS.value],
+        supported_modalities=[InputClass.SINGLE_OPTICAL.value, InputClass.BI_TEMPORAL.value, InputClass.OPTICAL_SAR.value],
+    ),
+    _tool(
+        "bit_analyze",
+        "BIT temporal change detector",
+        "CHANGE_DETECTOR",
+        model_name="BIT",
+        description="Local BIT change detection returning masks, statistics, and change regions.",
+        supported_tasks=[RouterTask.CHANGE_DETECTION.value, RouterTask.CHANGE_VQA.value],
+        supported_modalities=[InputClass.BI_TEMPORAL.value],
+    ),
+    _tool(
         "preprocess",
         "Input-type-aware preprocessor",
         "UTILITY",
@@ -54,8 +72,8 @@ TOOL_CATALOG: list[dict[str, Any]] = [
         model_name="SARChat-InternVL2.5-2B",
         model_version="sarchat-internvl2.5-2b-v1",
         description="Specialized SAR vision-language model for radar image understanding, VQA, and interpretation.",
-        supported_tasks=[RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value],
-        supported_modalities=[InputClass.SINGLE_SAR.value],
+        supported_tasks=[RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value, RouterTask.CHANGE_VQA.value, RouterTask.OPTICAL_SAR_ANALYSIS.value],
+        supported_modalities=[InputClass.SINGLE_SAR.value, InputClass.BI_TEMPORAL.value, InputClass.OPTICAL_SAR.value],
     ),
     _tool(
         "geochat_vqa",

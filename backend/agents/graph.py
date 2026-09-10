@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 from collections.abc import Mapping
+from concurrent.futures import ThreadPoolExecutor
 
 from langgraph.graph import StateGraph, END
 
@@ -33,6 +34,8 @@ from backend.agents.router import QwenRouter, QwenRouterError
 from backend.agents.output_validation import validate_output
 from backend.agents.tools.preprocessing import run_preprocessing
 from backend.schemas import RouteRequest
+from backend.agents.planner import build_plan
+from backend.agents.final_reasoner import synthesize_final_answer
 
 
 # ---------------------------------------------------------------------------
@@ -242,6 +245,9 @@ def tool_selector(state: GraphState) -> dict[str, Any]:
         selector = ToolSelector(db_session=db)
         sequence = selector.validate_selection(task_enum, input_class_enum)
         updates["selected_tools"] = sequence
+        updates["plan_summary"] = build_plan(
+            input_class_enum, task_enum, list(state.get("assets", []))  # type: ignore[arg-type]
+        )
         updates["warnings"] = warnings
     except ToolSelectorError as exc:
         updates["status"] = "refused"
@@ -364,6 +370,20 @@ def _image_refs(state: GraphState) -> list[str]:
     return fallback_refs
 
 
+def _image_refs_for_modality(state: GraphState, modality: str) -> list[str]:
+    """Return only references for one verified modality."""
+    pre = state.get("preprocessing_result")
+    if pre is not None:
+        refs = [tile.file_path for tile in pre.tile_references if tile.modality.upper() == modality]
+        if refs:
+            return refs
+    return [
+        str(asset["file_path"])
+        for asset in state.get("assets", [])  # type: ignore[union-attr]
+        if isinstance(asset, dict) and str(asset.get("modality", "")).upper() == modality
+    ]
+
+
 # ---------------------------------------------------------------------------
 # Specialist tool nodes
 # ---------------------------------------------------------------------------
@@ -385,6 +405,92 @@ def geochat_vqa(state: GraphState) -> dict[str, Any]:
         "input_refs": _image_refs(state),
     }
     return _execute_tool(state, "geochat_vqa", params)
+
+
+def geoground_analyze(state: GraphState) -> dict[str, Any]:
+    """Run the S2-only GeoGround tool; SAR data is never passed to it."""
+    refs = _image_refs_for_modality(state, "OPTICAL") or _image_refs(state)
+    return _execute_tool(state, "geoground_analyze", {
+        "question": state.get("user_query", ""),
+        "task": state.get("detected_task", "SINGLE_VQA"),
+        "modality": "OPTICAL",
+        "image_refs": refs,
+        "input_refs": refs,
+    })
+
+
+def bit_analyze(state: GraphState) -> dict[str, Any]:
+    """Run BIT on the validated temporal pair and retain structured evidence."""
+    pre = state.get("preprocessing_result")
+    tile_pairs: list[dict[str, Any]] = []
+    if pre is not None and pre.tile_pairs:
+        tile_pairs = [
+            {"before_image": pair.file_path_1, "after_image": pair.file_path_2, "tile_index": pair.pair_index}
+            for pair in pre.tile_pairs
+        ]
+    else:
+        refs = _image_refs(state)
+        if len(refs) >= 2:
+            tile_pairs = [{"before_image": refs[0], "after_image": refs[1], "tile_index": 0}]
+    updates = _execute_tool(state, "bit_analyze", {
+        "tile_pairs": tile_pairs,
+        "input_refs": [path for pair in tile_pairs for path in (pair["before_image"], pair["after_image"])],
+    })
+    results: list[ToolResult] = updates.get("specialist_results", [])
+    if results:
+        updates["change_result"] = results[-1]
+    return updates
+
+
+def temporal_semantic_specialist(state: GraphState) -> dict[str, Any]:
+    """Interpret BIT's changed-region crops with the matching modality specialist."""
+    updates = _visit(state, "temporal_semantic_specialist")
+    change = state.get("change_result")
+    payload = change.result if change and isinstance(change.result, dict) else {}
+    crops = list(payload.get("region_crops", []))
+    if not crops:
+        return updates
+    pre = state.get("preprocessing_result")
+    modality = pre.tile_references[0].modality.upper() if pre and pre.tile_references else "OPTICAL"
+    tool_id = "sarchat_vqa" if modality == "SAR" else "geoground_analyze"
+    params: dict[str, Any] = {
+        "question": state.get("user_query", ""), "image_refs": crops, "input_refs": crops,
+    }
+    if tool_id == "geoground_analyze":
+        params.update({"task": RouterTask.CHANGE_VQA.value, "modality": "OPTICAL"})
+    result_updates = _execute_tool(state, tool_id, params)
+    updates.update(result_updates)
+    return updates
+
+
+def cross_modal_specialists(state: GraphState) -> dict[str, Any]:
+    """Run independent GeoGround/S2 and SARChat/S1 branches concurrently."""
+    updates = _visit(state, "cross_modal_specialists")
+    optical_refs = _image_refs_for_modality(state, "OPTICAL")
+    sar_refs = _image_refs_for_modality(state, "SAR")
+    calls = [
+        ("geoground_analyze", {"question": state.get("user_query", ""), "task": state.get("detected_task", "OPTICAL_SAR_ANALYSIS"), "modality": "OPTICAL", "image_refs": optical_refs, "input_refs": optical_refs}),
+        ("sarchat_vqa", {"question": state.get("user_query", ""), "image_refs": sar_refs, "input_refs": sar_refs}),
+    ]
+
+    def execute(call: tuple[str, dict[str, Any]]) -> ToolResult:
+        tool_id, params = call
+        db = _get_db(state)
+        try:
+            return run_tool(tool_id, params, db=db)
+        except Exception as exc:
+            return ToolResult(tool_id=tool_id, status="error", input_refs=params["input_refs"], output_refs=[], result=None, confidence=None, latency_ms=None, warnings=[str(exc)], explanation=f"Tool execution failed: {exc}", spatial_refs=[])
+        finally:
+            try:
+                db.close()
+            except Exception:
+                pass
+
+    with ThreadPoolExecutor(max_workers=2, thread_name_prefix="satquery-specialist") as pool:
+        results = list(pool.map(execute, calls))
+    updates["specialist_results"] = list(state.get("specialist_results", [])) + results  # type: ignore[arg-type]
+    _record_event(state, "PARALLEL_SPECIALISTS_COMPLETED", "cross_modal_specialists", message=", ".join(f"{r.tool_id}:{r.status}" for r in results))
+    return updates
 
 
 def grounding(state: GraphState) -> dict[str, Any]:
@@ -563,6 +669,24 @@ def evidence_fusion(state: GraphState) -> dict[str, Any]:
     return updates
 
 
+def final_qwen_reasoning(state: GraphState) -> dict[str, Any]:
+    """Use the configured Qwen model to explain validated specialist evidence."""
+    updates = _visit(state, "final_qwen_reasoning")
+    evidence = list(state.get("evidence_items", []))  # type: ignore[arg-type]
+    if not evidence:
+        updates["status"] = "failed"
+        updates["warnings"] = list(state.get("warnings", [])) + ["No validated specialist evidence was available."]  # type: ignore[arg-type]
+        return updates
+    try:
+        updates["final_answer"] = synthesize_final_answer(state.get("user_query", ""), evidence)
+        _record_event(state, "FINAL_REASONING_COMPLETED", "final_qwen_reasoning")
+    except Exception as exc:
+        updates["status"] = "failed"
+        updates["warnings"] = list(state.get("warnings", [])) + [str(exc)]  # type: ignore[arg-type]
+        _record_event(state, "FAILED", "final_qwen_reasoning", message=str(exc))
+    return updates
+
+
 def audit_logger(state: GraphState) -> dict[str, Any]:
     _record_event(state, "LOG", "audit_logger")
     updates = _visit(state, "audit_logger")
@@ -580,11 +704,11 @@ def report_generator(state: GraphState) -> dict[str, Any]:
     confidence_obj = state.get("confidence")
 
     # Determine final answer — never fabricate from failed/refused executions
-    final_answer: str | None = None
+    final_answer: str | None = state.get("final_answer")
     input_class_val = state.get("input_class")
     user_query = state.get("user_query", "")
 
-    if not is_refused and not is_failed:
+    if final_answer is None and not is_refused and not is_failed:
         # Check if SAR-specific rich reporting applies
         sarchat_res = next((r for r in results if r.tool_id == "sarchat_vqa" and r.status == "success"), None)
         if sarchat_res and isinstance(sarchat_res.result, dict):
@@ -691,23 +815,15 @@ def _after_tool_selector(state: GraphState) -> str:
 
 
 def after_preprocess(state: GraphState) -> str:
-    task = state.get("detected_task", "")
     input_class = state.get("input_class", "")
-    selected_tools = state.get("selected_tools", [])
-
-    # Route SAR single-image understanding through sarchat_vqa
-    if "sarchat_vqa" in selected_tools or input_class == InputClass.SINGLE_SAR.value:
-        if task in (RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value):
-            return "sarchat_vqa"
-
-    if task in (RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value):
-        return "geochat_vqa"
-    if task == RouterTask.CHANGE_DETECTION.value:
-        return "align"
-    if task == RouterTask.CHANGE_VQA.value:
-        return "align"
-    if task == RouterTask.OPTICAL_SAR_ANALYSIS.value:
-        return "coregister"
+    if input_class == InputClass.SINGLE_SAR.value:
+        return "sarchat_vqa"
+    if input_class == InputClass.SINGLE_OPTICAL.value:
+        return "geoground_analyze"
+    if input_class == InputClass.BI_TEMPORAL.value:
+        return "bit_analyze"
+    if input_class == InputClass.OPTICAL_SAR.value:
+        return "cross_modal_specialists"
     return "refusal"
 
 
@@ -722,6 +838,12 @@ def after_sarchat_vqa(state: GraphState) -> str:
     task = state.get("detected_task", "")
     if task == RouterTask.GROUNDING.value:
         return "grounding"
+    return "evidence_fusion"
+
+
+def after_bit_analyze(state: GraphState) -> str:
+    if state.get("detected_task") == RouterTask.CHANGE_VQA.value:
+        return "temporal_semantic_specialist"
     return "evidence_fusion"
 
 
@@ -748,6 +870,10 @@ for name, fn in {
     "tool_selector":    tool_selector,
     "preprocess":       preprocess,
     "sarchat_vqa":      sarchat_vqa,
+    "geoground_analyze": geoground_analyze,
+    "bit_analyze":      bit_analyze,
+    "temporal_semantic_specialist": temporal_semantic_specialist,
+    "cross_modal_specialists": cross_modal_specialists,
     "geochat_vqa":      geochat_vqa,
     "grounding":        grounding,
     "align":            align,
@@ -758,6 +884,7 @@ for name, fn in {
     "fusion_s1s2":      fusion_s1s2,
     "agreement":        agreement,
     "evidence_fusion":  evidence_fusion,
+    "final_qwen_reasoning": final_qwen_reasoning,
     "audit_logger":     audit_logger,
     "report_generator": report_generator,
     "refusal":          refusal,
@@ -789,9 +916,9 @@ workflow.add_conditional_edges(
     "preprocess", after_preprocess,
     {
         "sarchat_vqa":  "sarchat_vqa",
-        "geochat_vqa":  "geochat_vqa",
-        "align":        "align",
-        "coregister":   "coregister",
+        "geoground_analyze": "geoground_analyze",
+        "bit_analyze": "bit_analyze",
+        "cross_modal_specialists": "cross_modal_specialists",
         "refusal":      "refusal",
     },
 )
@@ -801,6 +928,13 @@ workflow.add_conditional_edges(
     "sarchat_vqa", after_sarchat_vqa,
     {"grounding": "grounding", "evidence_fusion": "evidence_fusion"},
 )
+workflow.add_edge("geoground_analyze", "evidence_fusion")
+workflow.add_edge("cross_modal_specialists", "evidence_fusion")
+workflow.add_conditional_edges(
+    "bit_analyze", after_bit_analyze,
+    {"temporal_semantic_specialist": "temporal_semantic_specialist", "evidence_fusion": "evidence_fusion"},
+)
+workflow.add_edge("temporal_semantic_specialist", "evidence_fusion")
 
 # GeoChat VQA path
 workflow.add_conditional_edges(
@@ -830,7 +964,8 @@ workflow.add_edge("agreement",   "geochat_describe")
 workflow.add_edge("geochat_describe", "evidence_fusion")
 
 # Final tail – common to all successful paths
-workflow.add_edge("evidence_fusion",  "audit_logger")
+workflow.add_edge("evidence_fusion",  "final_qwen_reasoning")
+workflow.add_edge("final_qwen_reasoning", "audit_logger")
 workflow.add_edge("audit_logger",     "report_generator")
 workflow.add_edge("report_generator", END)
 

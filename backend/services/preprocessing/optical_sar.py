@@ -30,7 +30,8 @@ class OpticalSARPreprocessor(BasePreprocessor):
     
     Handles CRS differences, pixel resolution disparity, cross-sensor spatial alignment,
     independent sensor-specific calibration (optical RGB composite + SAR speckle/dB normalization),
-    and produces synchronized multi-modal tile pairs for dual-encoder fusion.
+    and produces synchronized multi-modal tile pairs for independent specialist
+    analysis. It does not fuse S1 and S2 imagery.
     """
 
     def __init__(

@@ -34,6 +34,8 @@ class GraphState(TypedDict, total=False):
     route: RouteResponse
     selected_tools: list[str]
     execution_plan: list[ToolSelection]
+    plan_summary: dict[str, Any]
+    retry_count: int
     injected_task: str | None  # test-only bypass of the live Qwen router
     db_factory: Any               # test/request-injected SQLAlchemy session factory
 

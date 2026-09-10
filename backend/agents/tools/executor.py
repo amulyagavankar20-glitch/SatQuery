@@ -34,13 +34,17 @@ from backend.agents.tools.mock_tools import (
     MockMobileSAM,
 )
 from backend.agents.tools.sarchat import SARChatTool
+from backend.agents.tools.geoground import GeoGroundTool
+from backend.agents.tools.bit import BITTool
 
 # ---------------------------------------------------------------------------
 # Canonical mapping from tool_id → concrete implementation class.
 # Every tool ID used by graph.py / ToolSelector MUST appear here.
 # ---------------------------------------------------------------------------
 _TOOL_IMPLEMENTATIONS: dict[str, type[BaseTool]] = {
+    "geoground_analyze": GeoGroundTool,
     "sarchat_vqa":      SARChatTool,
+    "bit_analyze":      BITTool,
     "geochat_vqa":      MockGeochatVQA,
     "geochat_describe": MockGeochatDescribe,
     "grounding":        MockGrounding,

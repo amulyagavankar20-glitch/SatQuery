@@ -40,7 +40,8 @@ You are the SatQuery AI query intent classifier. Your only job is to map the use
 You must NOT answer the user's question directly.
 You must NOT execute code, SQL, or arbitrary tools.
 You must NOT generate filesystem paths.
-You receive TEXT ONLY. You will never receive raw image pixels.
+You receive a verified input manifest and may receive image previews in the
+application integration. Treat manifest modality facts as authoritative.
 
 Distinguish INPUT CONFIGURATION from USER INTENT.
 For example: just because two optical images are provided, it does not mean the task is CHANGE_DETECTION. The user must explicitly ask for change or comparison.
@@ -51,6 +52,8 @@ Constraints:
 - If the query asks for change or differences between timestamps, task MUST be CHANGE_DETECTION or CHANGE_VQA, and requires_change_analysis must be true.
 - If the query asks to ground, locate, or segment specific objects, task MUST be GROUNDING and requires_grounding must be true.
 - If the query asks to fuse or analyze optical and SAR data together, task MUST be OPTICAL_SAR_ANALYSIS and requires_optical_sar_analysis must be true.
+- If Input Class is OPTICAL_SAR, task MUST be OPTICAL_SAR_ANALYSIS: the plan runs GeoGround on optical/S2 and SARChat on SAR/S1 independently, then Qwen synthesizes their evidence. Never request image fusion.
+- If Input Class is BI_TEMPORAL and the query asks for a comparison, change, increase, decrease, or temporal difference, task MUST be CHANGE_DETECTION or CHANGE_VQA so BIT receives the validated pair.
 - If the query asks to identify or answer questions about a single image, task MUST be SINGLE_VQA.
 - If the query asks to describe an image in general, task MUST be CAPTIONING.
 
@@ -135,7 +138,7 @@ Input Class / Normalized Metadata: {json.dumps(request.manifest, default=str)}
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.post(self.ollama_url, json=payload)
                 response.raise_for_status()
-                return self._parse_response(response.json())
+                return self._apply_manifest_constraints(self._parse_response(response.json()), request)
         except httpx.HTTPError as e:
             from src.logger import logging
             logging.warning(f"[Router] Ollama unreachable ({e}), using deterministic fallback intent classifier.")
@@ -164,7 +167,7 @@ Input Class / Normalized Metadata: {json.dumps(request.manifest, default=str)}
             with httpx.Client(timeout=self.timeout) as client:
                 response = client.post(self.ollama_url, json=payload)
                 response.raise_for_status()
-                return self._parse_response(response.json())
+                return self._apply_manifest_constraints(self._parse_response(response.json()), request)
         except httpx.HTTPError as e:
             from src.logger import logging
             logging.warning(f"[Router] Ollama unreachable ({e}), using deterministic fallback intent classifier.")
@@ -177,6 +180,16 @@ Input Class / Normalized Metadata: {json.dumps(request.manifest, default=str)}
     def _fallback_route(self, request: RouteRequest) -> RouteResponse:
         """Heuristic fallback used when Ollama server is offline/unreachable in dev environment."""
         q = (request.query or "").lower()
+        input_class = str((request.manifest or {}).get("input_class", "")).upper()
+
+        # The verified manifest wins over keyword heuristics.  Cross-modal
+        # inputs are independently analysed by GeoGround and SARChat; they are
+        # never fused into a synthetic specialist input.
+        if input_class == "OPTICAL_SAR":
+            return RouteResponse(
+                task=RouterTask.OPTICAL_SAR_ANALYSIS,
+                requires_optical_sar_analysis=True,
+            )
 
         if any(w in q for w in ["change", "changed", "difference", "compare", "between", "increased", "decreased"]):
             task = RouterTask.CHANGE_VQA if ("?" in q or any(w in q for w in ["what", "how", "has", "did"])) else RouterTask.CHANGE_DETECTION
@@ -211,6 +224,25 @@ Input Class / Normalized Metadata: {json.dumps(request.manifest, default=str)}
             task=RouterTask.SINGLE_VQA,
             tools=[RouterTool.GEOSPATIAL_VALIDATOR, RouterTool.GEOCHAT_VQA],
         )
+
+    def _apply_manifest_constraints(self, route: RouteResponse, request: RouteRequest) -> RouteResponse:
+        """Keep Qwen intent planning inside verified modality safety boundaries."""
+        input_class = str((request.manifest or {}).get("input_class", "")).upper()
+        if input_class == "OPTICAL_SAR":
+            return route.model_copy(update={
+                "task": RouterTask.OPTICAL_SAR_ANALYSIS,
+                "requires_optical_sar_analysis": True,
+                "requires_change_analysis": False,
+            })
+        if input_class == "BI_TEMPORAL" and route.task in {
+            RouterTask.SINGLE_VQA, RouterTask.CAPTIONING, RouterTask.GROUNDING,
+        }:
+            return route.model_copy(update={
+                "task": RouterTask.CHANGE_VQA,
+                "requires_change_analysis": True,
+                "requires_optical_sar_analysis": False,
+            })
+        return route
 
     def _build_payload(self, prompt: str) -> dict[str, Any]:
         return {

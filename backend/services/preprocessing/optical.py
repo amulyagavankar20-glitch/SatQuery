@@ -34,6 +34,24 @@ class OpticalPreprocessor(BasePreprocessor):
         self.p_min = p_min
         self.p_max = p_max
 
+    @staticmethod
+    def _rgb_band_indexes(src: rasterio.io.DatasetReader) -> list[int]:
+        """Prefer the agreed Sentinel-2 natural RGB order: B04, B03, B02.
+
+        Product metadata varies, so ordinary RGB labels are also accepted.  A
+        positional fallback keeps Cartosat/panchromatic-compatible inputs
+        working when no band descriptors exist.
+        """
+        descriptions = [str(value or "").lower().replace("_", "") for value in src.descriptions]
+        aliases = (("b04", "b4", "red"), ("b03", "b3", "green"), ("b02", "b2", "blue"))
+        indexes: list[int] = []
+        for names in aliases:
+            match = next((index + 1 for index, description in enumerate(descriptions) if description in names), None)
+            if match is None:
+                return [1, 2, 3]
+            indexes.append(match)
+        return indexes
+
     def preprocess(
         self,
         asset_dict: dict[str, Any],
@@ -69,8 +87,8 @@ class OpticalPreprocessor(BasePreprocessor):
 
                 # Read raster bands
                 if count >= 3:
-                    # Multi-band / RGB optical
-                    data = src.read([1, 2, 3])
+                    # S2 uses B04/B03/B02, never SAR or a synthetic fusion.
+                    data = src.read(self._rgb_band_indexes(src))
                 else:
                     # Single band / Panchromatic optical -> duplicate to 3-channel for VLM
                     single_band = src.read(1)
