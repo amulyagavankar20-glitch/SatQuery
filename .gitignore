@@ -52,8 +52,14 @@ ENV/
 ehthumbs.db
 Thumbs.db
 
-# SatQuery Local Data, Rasters & Generated Artifacts
+# Datasets, Satellite Rasters & Model Weights (NEVER commit heavy binary files)
+sentinel_dataset*/
 data/
+weights/
+*.safetensors
+*.bin
+*.pt
+*.pth
 *.tif
 *.tiff
 *.geotiff
@@ -65,13 +71,14 @@ data/
 *.geojson
 !backend/
 !migrations/
+!docs/
 
-# Testing & Coverage
+# Testing, Scratch & Logs
+tests/
+scratch/
 .pytest_cache/
 .coverage
 htmlcov/
-
-# Logs
 *.log
 
 # Frontend
@@ -82,5 +89,6 @@ package-lock.json
 !web/
 !web/public/
 !web/public/**
-!web/src/lib/
-!web/src/lib/**
+!web/src/
+!web/src/**
+

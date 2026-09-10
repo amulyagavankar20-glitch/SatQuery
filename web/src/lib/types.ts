@@ -6,8 +6,15 @@ export type BBox = [number, number, number, number];
 
 export type GeoJSONPolygon = {
   type: "Feature";
-  properties: { id: string; kind: "change" | "uncertain" };
-  geometry: { type: "Polygon"; coordinates: number[][][] };
+  properties: {
+    id?: string;
+    kind?: "change" | "uncertain" | "grounding" | "sar_detection" | "detection" | string;
+    label?: string;
+    feature_type?: string;
+    confidence?: number;
+    [key: string]: unknown;
+  };
+  geometry: { type: "Polygon" | "MultiPolygon"; coordinates: number[][][] | number[][][][] };
 };
 
 export type OverlayCollection = {
@@ -24,8 +31,10 @@ export type SceneSlot = {
   crs: string;
   date: string | null;
   bands: number | null;
+  gsd?: string | null;
   bounds: BBox;
   previewUrl: string;
+  objectPos?: string;
   file?: File;
 };
 
@@ -52,6 +61,9 @@ export type AssistantTurn = {
   bounds: BBox;
   opticalUrl: string | null;
   sarUrl: string | null;
+  vvUrl?: string | null;
+  vhUrl?: string | null;
+  overlayUrl?: string | null;
   compareUrl: string | null;
   overlays?: OverlayCollection;
   trace?: TraceStep[];

@@ -6,6 +6,10 @@ export type DemoScene = {
   blurb: string;
   place: string;
   thumb: string;
+  /** CSS object-position so square cards keep the subject in frame. */
+  thumbPos: string;
+  gsd: string;
+  queries: string[];
   pairFitness: number | null;
   slots: Omit<SceneSlot, "id" | "file">[];
 };
@@ -21,6 +25,9 @@ export const DEMOS: DemoScene[] = [
     blurb: "Reservoir, fields, a small settlement.",
     place: "Inland Gujarat",
     thumb: "/demos/water.jpg",
+    thumbPos: "28% 48%",
+    gsd: "0.65 m",
+    queries: ["Highlight the water body", "Describe land-cover and major objects"],
     pairFitness: null,
     slots: [
       {
@@ -31,17 +38,22 @@ export const DEMOS: DemoScene[] = [
         crs: "EPSG:32643",
         date: "2023-11-14",
         bands: 4,
+        gsd: "0.65 m",
         bounds: WATER_BOUNDS,
         previewUrl: "/demos/water.jpg",
+        objectPos: "28% 48%",
       },
     ],
   },
   {
     id: "coastal",
-    title: "Coastal built-up",
+    title: "Coastal",
     blurb: "Port pair, two dates.",
     place: "Gulf of Kachchh",
     thumb: "/demos/coastal-t2.jpg",
+    thumbPos: "50% 40%",
+    gsd: "0.65 m",
+    queries: ["What changed between these two dates, and where?", "Has built-up increased, decreased, or stayed the same?"],
     pairFitness: 0.91,
     slots: [
       {
@@ -52,8 +64,10 @@ export const DEMOS: DemoScene[] = [
         crs: "EPSG:32642",
         date: "2022-03-08",
         bands: 4,
+        gsd: "0.65 m",
         bounds: COASTAL_BOUNDS,
         previewUrl: "/demos/coastal-t1.jpg",
+        objectPos: "50% 40%",
       },
       {
         slot: "T2",
@@ -63,17 +77,22 @@ export const DEMOS: DemoScene[] = [
         crs: "EPSG:32642",
         date: "2024-02-21",
         bands: 4,
+        gsd: "0.65 m",
         bounds: COASTAL_BOUNDS,
         previewUrl: "/demos/coastal-t2.jpg",
+        objectPos: "50% 40%",
       },
     ],
   },
   {
     id: "cloudy",
-    title: "Cloudy optical+SAR",
+    title: "Cloudy",
     blurb: "Cloud in optical, SAR underneath.",
     place: "Saurashtra coast",
     thumb: "/demos/cloudy.jpg",
+    thumbPos: "58% 62%",
+    gsd: "0.65 m / 3 m",
+    queries: ["Use optical and SAR together for built-up and water"],
     pairFitness: 0.91,
     slots: [
       {
@@ -84,8 +103,10 @@ export const DEMOS: DemoScene[] = [
         crs: "EPSG:32642",
         date: "2024-07-03",
         bands: 4,
+        gsd: "0.65 m",
         bounds: CLOUDY_BOUNDS,
         previewUrl: "/demos/cloudy.jpg",
+        objectPos: "58% 62%",
       },
       {
         slot: "T2",
@@ -95,12 +116,18 @@ export const DEMOS: DemoScene[] = [
         crs: "EPSG:32642",
         date: "2024-07-03",
         bands: 1,
+        gsd: "3 m",
         bounds: CLOUDY_BOUNDS,
         previewUrl: "/demos/sar.jpg",
+        objectPos: "50% 50%",
       },
     ],
   },
 ];
+
+export function isDemoId(value: unknown): value is DemoId {
+  return value === "water" || value === "coastal" || value === "cloudy";
+}
 
 export function demoById(id: DemoId): DemoScene {
   const found = DEMOS.find((d) => d.id === id);

@@ -19,7 +19,7 @@ export function Composer() {
   };
 
   return (
-    <div className="shrink-0 border-t border-hairline bg-background px-4 py-3 md:px-6">
+    <div className="sq-glow-border shrink-0 border-t border-hairline bg-background/80 px-4 py-3 backdrop-blur-md md:px-6" style={{ background: "linear-gradient(180deg, rgb(22 26 31 / 0.85), rgb(18 20 23 / 0.95))" }}>
       <div className="mx-auto w-full max-w-4xl">
         <div className="sq-chips flex gap-2 overflow-x-auto pb-1">
           {OFFICIAL_CHIPS.map((chip, i) => {
@@ -32,10 +32,8 @@ export function Composer() {
                 onClick={() => insertChip(chip)}
                 title={`${i + 1}`}
                 className={cn(
-                  "shrink-0 rounded-lg border px-2.5 py-1 text-[12px] leading-snug disabled:opacity-40",
-                  selected
-                    ? "border-primary text-primary"
-                    : "border-hairline text-mute hover:border-primary/40 hover:text-ink",
+                  "sq-chip shrink-0 leading-snug transition-all duration-150 active:scale-95 disabled:opacity-40 hover:border-white/20",
+                  selected && "sq-chip-on",
                 )}
               >
                 {chip}
@@ -49,7 +47,7 @@ export function Composer() {
             type="button"
             variant="ghost"
             size="icon"
-            className="text-mute mb-0.5 shrink-0"
+            className="text-mute mb-0.5 shrink-0 transition-transform active:scale-95 hover:text-ink"
             onClick={openFilePicker}
             aria-label="Attach GeoTIFF"
           >
@@ -70,9 +68,22 @@ export function Composer() {
             disabled={!hasScene}
             className="min-h-[44px] flex-1"
           />
-          <Button type="button" onClick={() => send()} disabled={!canSend} className="mb-0.5 min-w-11" aria-label="Send">
-            <ArrowUp className="size-4" />
-            <span className="hidden sm:inline">Send</span>
+          <Button
+            type="button"
+            onClick={() => send()}
+            disabled={!canSend}
+            className={cn(
+              "mb-0.5 min-w-11 gap-1.5 transition-all duration-150 active:scale-95",
+              canSend && "sq-send-ready",
+            )}
+            aria-label="Send"
+          >
+            {sending ? (
+              <span className="sq-orbit size-3.5" />
+            ) : (
+              <ArrowUp className="size-4" />
+            )}
+            <span className="hidden sm:inline">{sending ? "Running…" : "Send"}</span>
           </Button>
         </div>
       </div>

@@ -13,6 +13,9 @@ from backend.services.job_view import (
     footprint_kml,
     get_job_view,
     resolve_composite_path,
+    resolve_vv_path,
+    resolve_vh_path,
+    resolve_overlay_path,
     resolve_tile_path,
     safe_job_file,
 )
@@ -143,6 +146,39 @@ async def get_composite(job_id: str):
     return FileResponse(safe, media_type=media, filename=safe.name)
 
 
+@router.get("/jobs/{job_id}/artifacts/vv")
+async def get_vv_artifact(job_id: str):
+    if get_job_view(job_id) is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    path = resolve_vv_path(job_id)
+    safe = safe_job_file(job_id, path) if path else None
+    if safe is None:
+        raise HTTPException(status_code=404, detail="VV visualization not ready")
+    return FileResponse(safe, media_type="image/png", filename=safe.name)
+
+
+@router.get("/jobs/{job_id}/artifacts/vh")
+async def get_vh_artifact(job_id: str):
+    if get_job_view(job_id) is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    path = resolve_vh_path(job_id)
+    safe = safe_job_file(job_id, path) if path else None
+    if safe is None:
+        raise HTTPException(status_code=404, detail="VH visualization not ready")
+    return FileResponse(safe, media_type="image/png", filename=safe.name)
+
+
+@router.get("/jobs/{job_id}/artifacts/overlay")
+async def get_overlay_artifact(job_id: str):
+    if get_job_view(job_id) is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    path = resolve_overlay_path(job_id)
+    safe = safe_job_file(job_id, path) if path else None
+    if safe is None:
+        raise HTTPException(status_code=404, detail="Overlay visualization not ready")
+    return FileResponse(safe, media_type="image/png", filename=safe.name)
+
+
 @router.get("/jobs/{job_id}/artifacts/tiles/{index}")
 async def get_tile(job_id: str, index: int):
     if get_job_view(job_id) is None:
@@ -172,6 +208,16 @@ async def export_kml(job_id: str):
 
 @router.get("/jobs/{job_id}/report.pdf")
 async def export_pdf(job_id: str):
-    if get_job_view(job_id) is None:
+    view = get_job_view(job_id)
+    if view is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    raise HTTPException(status_code=501, detail="PDF report is not implemented yet")
+    try:
+        from backend.services.pdf_report import generate_job_pdf
+        pdf_bytes = generate_job_pdf(view)
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"inline; filename=satquery_report_{job_id}.pdf"},
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to render PDF: {exc}") from exc

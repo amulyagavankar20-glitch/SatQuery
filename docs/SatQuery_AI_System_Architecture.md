@@ -28,15 +28,19 @@
 | Role | Model | Why |
 |---|---|---|
 | Router (text only) | **Qwen2.5-3B-Instruct**, JSON-schema constrained — or a classifier | Query + manifest → `{task, tools[], params}`. No pixels. |
-| Talking VLM | **GeoChat-7B 4-bit + LoRA on BigEarthNet.txt** | VQA, caption, weak grounding, describe a change crop. |
-| Grounding fallback | **MobileSAM** prompted by GeoChat’s phrase | Not a second 7B. |
-| Change mask | **BIT** | Silent pixel map. Language from GeoChat on the crop. |
-| Optical + SAR | **Small dual encoder + linear head** on BigEarthNet S1/S2 | Not SkySense. |
+| General Vision VLM | **GeoChat-7B 4-bit / InternVL3-1B** | Optical VQA, optical captioning, optical scene interpretation. |
+| Specialized SAR VLM | **SARChat-InternVL2.5-2B** | Synthetic Aperture Radar (SAR) VQA, radar backscatter interpretation, object detection (bridges, harbors, vessels), Sentinel-1 / RISAT scene understanding. |
+| Grounding / Segmentation | **GeoGround / MobileSAM** | Spatial phrase grounding and segmentation masks. |
+| Change mask | **BIT** | Silent pixel map. Language on the crop. |
+| Optical + SAR Fusion | **Small dual encoder + linear head** on BigEarthNet S1/S2 | Dual-modality feature alignment and agreement. |
 | Graph | **LangGraph StateGraph** with a frozen node list | Conditional edges only. No free tool invention. |
 
-Do not load Qwen2.5-7B *and* Qwen3-30B-A3B *and* GeoChat-7B on one student GPU.
+### 1.1 SARChat Specialist Integration
+* **Role**: Dedicated multimodal specialist for SAR imagery (`SINGLE_SAR`).
+* **Model**: `JimmyMa99/SARChat-InternVL2.5-2B` loaded locally via `SARCHAT_MODEL_PATH`.
+* **Execution**: Singleton `SARChatService` loaded once in memory, reused for subsequent queries.
+* **Routing**: When input is `SINGLE_SAR` and task is `SINGLE_VQA`, `CAPTIONING`, or `GROUNDING`, LangGraph invokes the `sarchat_vqa` specialist tool node. GeoGround remains responsible for spatial segmentation.
 
-Appendix only: GeoGround (replacement VLM if we drop GeoChat), SkySense (citation, not a service).
 
 ---
 

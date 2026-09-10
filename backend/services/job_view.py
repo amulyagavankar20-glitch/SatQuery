@@ -39,11 +39,38 @@ def resolve_composite_path(job_id: str) -> Path | None:
     processed = _job_dir(job_id) / "processed"
     if not processed.is_dir():
         return None
+    comp = processed / "composite.png"
+    if comp.is_file():
+        return comp
     pngs = sorted(processed.glob("*.png"))
     if pngs:
         return pngs[0]
     tifs = sorted(processed.glob("*.tif")) + sorted(processed.glob("*.tiff"))
     return tifs[0] if tifs else None
+
+
+def resolve_vv_path(job_id: str) -> Path | None:
+    processed = _job_dir(job_id) / "processed"
+    if not processed.is_dir():
+        return None
+    vv = processed / "vv.png"
+    return vv if vv.is_file() else None
+
+
+def resolve_vh_path(job_id: str) -> Path | None:
+    processed = _job_dir(job_id) / "processed"
+    if not processed.is_dir():
+        return None
+    vh = processed / "vh.png"
+    return vh if vh.is_file() else None
+
+
+def resolve_overlay_path(job_id: str) -> Path | None:
+    processed = _job_dir(job_id) / "processed"
+    if not processed.is_dir():
+        return None
+    overlay = processed / "overlay.png"
+    return overlay if overlay.is_file() else None
 
 
 def resolve_tile_path(job_id: str, index: int) -> Path | None:
@@ -129,10 +156,19 @@ def _answer_from_session(session: SessionContext) -> JobAnswer | None:
             text = str(last["result"])
     if text is None and session.status not in ("completed", "failed", "refused"):
         return None
+
+    is_sar = (
+        session.input_mode == "SINGLE_SAR"
+        or any(t.tool_id == "sarchat_vqa" for t in session.traces if hasattr(t, "tool_id"))
+        or any(isinstance(t, dict) and t.get("tool_id") == "sarchat_vqa" for t in session.traces)
+    )
+    model_name = "SARChat-InternVL2.5-2B" if is_sar else settings.TALKING_VLM_MODEL
+    backend_name = "sarchat" if is_sar else settings.TALKING_VLM_BACKEND
+
     return JobAnswer(
         text=text,
-        model=settings.TALKING_VLM_MODEL,
-        backend=settings.TALKING_VLM_BACKEND,
+        model=model_name,
+        backend=backend_name,
         confidence=str(confidence) if confidence is not None else None,
     )
 
@@ -174,6 +210,10 @@ def build_job_view_from_session(session: SessionContext) -> JobView:
     if any(a.bounds_wgs84 for a in assets):
         overlays.append(
             JobOverlay(type="FOOTPRINT", geojson_url=export_url(job_id, "geojson"), confidence=None)
+        )
+    if resolve_overlay_path(job_id) is not None:
+        overlays.append(
+            JobOverlay(type="GROUNDING", geojson_url=export_url(job_id, "geojson"), confidence=0.88)
         )
     traces = [
         JobTraceView(
@@ -224,10 +264,16 @@ def build_job_view_from_db(job_id: str) -> JobView | None:
         text_out = next((o for o in outputs if o.output_type == "TEXT" and o.text_result), None)
         answer = None
         if text_out is not None or job.status in ("completed", "failed", "refused"):
+            is_sar = (
+                job.input_mode == "SINGLE_SAR"
+                or any(t.tool_id == "sarchat_vqa" for t in traces)
+            )
+            model_name = "SARChat-InternVL2.5-2B" if is_sar else settings.TALKING_VLM_MODEL
+            backend_name = "sarchat" if is_sar else settings.TALKING_VLM_BACKEND
             answer = JobAnswer(
                 text=text_out.text_result if text_out else None,
-                model=settings.TALKING_VLM_MODEL,
-                backend=settings.TALKING_VLM_BACKEND,
+                model=model_name,
+                backend=backend_name,
                 confidence=text_out.confidence_label if text_out else None,
             )
         assets = _db_asset_views(job.id)
@@ -299,6 +345,35 @@ def footprint_geojson(job_id: str) -> dict[str, Any] | None:
                 },
             }
         )
+
+    # Check for SAR or Grounding detections in the session
+    session = get_session_by_job_id(job_id)
+    if session:
+        for res in session.tool_results:
+            if isinstance(res, dict) and isinstance(res.get("result"), dict):
+                dets = res["result"].get("detections") or []
+                for det in dets:
+                    geo_box = det.get("bbox_wgs84")
+                    if geo_box and len(geo_box) == 4:
+                        d_minx, d_miny, d_maxx, d_maxy = geo_box
+                        features.append({
+                            "type": "Feature",
+                            "properties": {
+                                "feature_type": "DETECTION",
+                                "kind": "grounding",
+                                "label": det.get("type", "structure"),
+                                "id": det.get("id"),
+                                "confidence": det.get("confidence", 0.88),
+                                "image_position": det.get("image_position"),
+                            },
+                            "geometry": {
+                                "type": "Polygon",
+                                "coordinates": [[
+                                    [d_minx, d_miny], [d_maxx, d_miny], [d_maxx, d_maxy], [d_minx, d_maxy], [d_minx, d_miny],
+                                ]],
+                            },
+                        })
+
     return {"type": "FeatureCollection", "features": features}
 
 

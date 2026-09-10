@@ -5,7 +5,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { useConsole } from "@/state/console";
 
 export function Thread() {
-  const { turns, hasScene, layers, setLayer, hasSar, slots } = useConsole();
+  const { turns, hasScene, hasSar, slots } = useConsole();
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -35,10 +35,11 @@ export function Thread() {
                     src={s.previewUrl}
                     alt={s.filename}
                     className="h-20 w-28 rounded-lg border border-hairline object-cover"
+                    style={s.objectPos ? { objectPosition: s.objectPos } : undefined}
                   />
                 ))}
             </div>
-            <p className="mt-6 text-[16px] text-ink">Ask this scene.</p>
+            <p className="sq-title mt-6 text-[16px]">Ask this scene.</p>
             <p className="mt-2 text-[13px] text-mute">1–5 inserts an official question. Ctrl+Enter sends.</p>
           </div>
         ) : (
@@ -47,7 +48,7 @@ export function Thread() {
             if (turn.role === "user") {
               return (
                 <div key={turn.id} className="sq-enter flex justify-end">
-                  <div className="max-w-[36rem] rounded-xl bg-raised px-4 py-3 text-[15px] leading-relaxed text-ink">
+                  <div className="max-w-[36rem] rounded-xl border border-white/8 px-4 py-3 text-[15px] leading-relaxed text-ink backdrop-blur-sm" style={{ background: "linear-gradient(135deg, rgb(34 40 46 / 0.7), rgb(26 30 34 / 0.55))", boxShadow: "0 4px 16px -4px rgb(0 0 0 / 0.35), inset 0 1px 0 0 rgb(255 255 255 / 0.04)" }}>
                     {turn.query}
                   </div>
                 </div>
@@ -58,8 +59,6 @@ export function Thread() {
                 <AssistantTurn
                   turn={turn}
                   query={previous?.role === "user" ? previous.query : ""}
-                  layers={layers}
-                  onLayer={setLayer}
                   hasSar={hasSar}
                 />
               </div>

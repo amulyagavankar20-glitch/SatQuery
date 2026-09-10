@@ -41,12 +41,48 @@ export function mockOverlays(bounds: BBox): OverlayCollection {
   };
 }
 
-export const MOCK_TRACE: TraceStep[] = [
-  { tool: "gate", params: { valid: true, input_class: "BI_TEMPORAL" } },
-  { tool: "router", params: { task: "CHANGE_VQA", need_overlay: true } },
-  { tool: "bit_cd", params: { pair_fitness: 0.91 } },
-  { tool: "geochat_describe", params: { overlay: true } },
-];
+function mockTrace(query: string, slots: SceneSlot[]): TraceStep[] {
+  const inputClass = slots.length < 2 ? "SINGLE_OPTICAL" : slots.some((s) => s.modality === "SAR") ? "OPTICAL_SAR" : "BI_TEMPORAL";
+  const q = query.toLowerCase();
+  const gate: TraceStep = { tool: "gate", params: { valid: true, input_class: inputClass } };
+
+  if (q.includes("water body") || q.includes("highlight the water")) {
+    return [
+      gate,
+      { tool: "router", params: { task: "GROUNDING", specialist: "water_delineation" } },
+      { tool: "geochat_vqa", params: { phrase: "water" } },
+      { tool: "grounding", params: { method: "vectorize" } },
+    ];
+  }
+  if ((q.includes("optical") && q.includes("sar")) || (slots.some((s) => s.modality === "SAR") && q.includes("sar"))) {
+    return [
+      gate,
+      { tool: "router", params: { task: "ANALYSIS", specialist: "optical_sar" } },
+      { tool: "preprocess", params: { coregister: true } },
+      { tool: "evidence_fusion", params: { agree: true } },
+    ];
+  }
+  if (q.includes("changed") || q.includes("increased") || q.includes("decreased") || slots.length > 1) {
+    return [
+      gate,
+      { tool: "router", params: { task: "CHANGE_VQA", specialist: "change_detection" } },
+      { tool: "align", params: { pair_fitness: 0.91 } },
+      { tool: "bit_cd", params: { pair_fitness: 0.91 } },
+      { tool: "vectorize", params: {} },
+      { tool: "geochat_describe", params: { overlay: true } },
+    ];
+  }
+  return [
+    gate,
+    { tool: "router", params: { task: "CAPTIONING", specialist: "describe" } },
+    { tool: "geochat_describe", params: {} },
+  ];
+}
+
+export const MOCK_TRACE: TraceStep[] = mockTrace("What changed between these two dates, and where?", [
+  { id: "t1", slot: "T1", filename: "t1.tif", modality: "OPTICAL", sensor: "Cartosat-2S", crs: "EPSG:4326", date: null, bands: 4, bounds: [0, 0, 1, 1], previewUrl: "" },
+  { id: "t2", slot: "T2", filename: "t2.tif", modality: "OPTICAL", sensor: "Cartosat-2S", crs: "EPSG:4326", date: null, bands: 4, bounds: [0, 0, 1, 1], previewUrl: "" },
+]);
 
 function answerFor(query: string, slots: SceneSlot[]): string {
   const q = query.toLowerCase();
@@ -94,7 +130,7 @@ export function mockAssistantTurn(query: string, slots: SceneSlot[]): Omit<Assis
       slots.find((s) => s.slot === "T2" && s.modality === "OPTICAL" && s.previewUrl !== optical?.previewUrl)
         ?.previewUrl ?? null,
     overlays: mockOverlays(bounds),
-    trace: MOCK_TRACE.map((step, i) =>
+    trace: mockTrace(query, slots).map((step, i) =>
       i === 0 ? { ...step, params: { ...step.params, input_class: inputClass } } : step,
     ),
   };

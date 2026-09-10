@@ -75,12 +75,18 @@ def create_job_record(
         db.commit()
         db.refresh(job)
         return job
-    except Exception:
-        db.rollback()
-        logging.exception("Failed to insert jobs row")
-        raise
+    except Exception as exc:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        logging.warning("Database unavailable, skipping create_job_record: %s", exc)
+        return None
     finally:
-        db.close()
+        try:
+            db.close()
+        except Exception:
+            pass
 
 
 def persist_assets(job_id: str | uuid.UUID, assets: list[dict[str, Any]]) -> None:
@@ -119,12 +125,17 @@ def persist_assets(job_id: str | uuid.UUID, assets: list[dict[str, Any]]) -> Non
                 )
             )
         db.commit()
-    except Exception:
-        db.rollback()
-        logging.exception("Failed to persist assets for job %s", job_id)
-        raise
+    except Exception as exc:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        logging.warning("Database unavailable, skipping persist_assets for job %s: %s", job_id, exc)
     finally:
-        db.close()
+        try:
+            db.close()
+        except Exception:
+            pass
 
 
 def persist_run(session: SessionContext, result: GraphState) -> None:

@@ -61,8 +61,20 @@ class Settings(BaseSettings):
     OLLAMA_ROUTER_MODEL: str = "qwen2.5:3b-instruct"
     OLLAMA_TIMEOUT_SECONDS: float = 180.0
 
+    # Model Slotting & Weights Architecture (3 Slots: Router, Talking VLM, Specialists)
+    WEIGHTS_DIR: str = "weights"
+    ROUTER_BACKEND: str = "auto"  # auto | ollama | local | mock
+    ROUTER_WEIGHTS_PATH: str | None = None
     TALKING_VLM_MODEL: str = "OpenGVLab/InternVL3-1B"
-    TALKING_VLM_BACKEND: str = "mock"
+    TALKING_VLM_BACKEND: str = "auto"  # auto | local | mock
+    TALKING_VLM_WEIGHTS_PATH: str | None = None
+    BIT_WEIGHTS_PATH: str | None = None
+    SAM_WEIGHTS_PATH: str | None = None
+    FUSION_WEIGHTS_PATH: str | None = None
+
+    # SARChat-InternVL2.5-2B (Specialized SAR Model)
+    SARCHAT_MODEL_PATH: str = ""
+    SARCHAT_DEVICE: str | None = None
 
     CORS_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
 
@@ -94,6 +106,12 @@ class Settings(BaseSettings):
     def full_job_storage_dir(self) -> Path:
         """Return the absolute path to the job storage directory."""
         path = Path(self.JOB_STORAGE_PATH)
+        return path if path.is_absolute() else self.BASE_DIR / path
+
+    @property
+    def full_weights_dir(self) -> Path:
+        """Return the absolute path to the weights directory."""
+        path = Path(self.WEIGHTS_DIR)
         return path if path.is_absolute() else self.BASE_DIR / path
 
 

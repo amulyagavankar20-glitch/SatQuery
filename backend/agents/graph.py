@@ -1,3 +1,4 @@
+
 """SatQuery AI — LangGraph Stage 4 Orchestration Graph.
 
 ARCHITECTURE RULES ENFORCED HERE:
@@ -16,7 +17,7 @@ ARCHITECTURE RULES ENFORCED HERE:
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 from collections.abc import Mapping
 
 from langgraph.graph import StateGraph, END
@@ -49,9 +50,11 @@ def _get_db(state: GraphState):
     factory = state.get("db_factory")  # type: ignore[attr-defined]
     if factory is not None:
         return factory()
-    # Production path: import the app's session maker
-    from backend.database import SessionLocal
-    return SessionLocal()
+    try:
+        from backend.database import SessionLocal
+        return SessionLocal()
+    except Exception:
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -347,13 +350,33 @@ def _execute_tool(state: GraphState, tool_id: str, params: Mapping[str, Any]) ->
 
 
 def _image_refs(state: GraphState) -> list[str]:
-    """Return preprocessed tile reference paths from state."""
-    return list(state.get("_preprocess_image_refs", []))  # type: ignore[attr-defined]
+    """Return preprocessed tile reference paths from state, falling back to raw assets."""
+    refs = list(state.get("_preprocess_image_refs", []))  # type: ignore[attr-defined]
+    if refs:
+        return refs
+    assets = state.get("assets", [])
+    fallback_refs: list[str] = []
+    for a in assets:
+        if isinstance(a, dict) and "file_path" in a:
+            fallback_refs.append(str(a["file_path"]))
+        elif isinstance(a, str):
+            fallback_refs.append(a)
+    return fallback_refs
 
 
 # ---------------------------------------------------------------------------
 # Specialist tool nodes
 # ---------------------------------------------------------------------------
+
+def sarchat_vqa(state: GraphState) -> dict[str, Any]:
+    """Specialist SARChat-InternVL2.5-2B tool node for SAR imagery understanding."""
+    params = {
+        "question": state.get("user_query", ""),
+        "image_refs": _image_refs(state),
+        "input_refs": _image_refs(state),
+    }
+    return _execute_tool(state, "sarchat_vqa", params)
+
 
 def geochat_vqa(state: GraphState) -> dict[str, Any]:
     params = {
@@ -558,15 +581,40 @@ def report_generator(state: GraphState) -> dict[str, Any]:
 
     # Determine final answer — never fabricate from failed/refused executions
     final_answer: str | None = None
+    input_class_val = state.get("input_class")
+    user_query = state.get("user_query", "")
+
     if not is_refused and not is_failed:
-        # Use last successful specialist result with a textual output
-        for r in reversed(results):
-            if r.status == "success" and isinstance(r.result, str):
-                final_answer = r.result
-                break
-            if r.status == "success" and isinstance(r.result, dict):
-                final_answer = str(r.result)
-                break
+        # Check if SAR-specific rich reporting applies
+        sarchat_res = next((r for r in results if r.tool_id == "sarchat_vqa" and r.status == "success"), None)
+        if sarchat_res and isinstance(sarchat_res.result, dict):
+            from backend.services.sar_analyzer import format_rich_sar_answer
+            res_dict = sarchat_res.result
+            raw_ans = str(res_dict.get("answer", ""))
+            scene_stats = res_dict.get("scene_statistics")
+            detections = res_dict.get("detections")
+            final_answer = format_rich_sar_answer(
+                query=user_query,
+                raw_answer=raw_ans,
+                scene_statistics=scene_stats,
+                detections=detections,
+            )
+        elif input_class_val == "SINGLE_SAR" and any(w in user_query.lower() for w in ["change", "changed", "increase", "increased", "decrease", "decreased", "growth", "over time"]):
+            final_answer = (
+                "### SAR Temporal Change Assessment\n\n"
+                "⚠️ **Temporal change cannot be calculated from a single SAR acquisition.**\n\n"
+                "To measure urbanization or land-cover change over time, a second SAR acquisition "
+                "from another date over the same geographic bounding box is required."
+            )
+        else:
+            # Use last successful specialist result with a textual output
+            for r in reversed(results):
+                if r.status == "success" and isinstance(r.result, str):
+                    final_answer = r.result
+                    break
+                if r.status == "success" and isinstance(r.result, dict):
+                    final_answer = str(r.result.get("answer") or r.result)
+                    break
 
     report: dict[str, Any] = {
         "job_id": state.get("job_id"),
@@ -644,11 +692,15 @@ def _after_tool_selector(state: GraphState) -> str:
 
 def after_preprocess(state: GraphState) -> str:
     task = state.get("detected_task", "")
-    if task == RouterTask.SINGLE_VQA.value:
-        return "geochat_vqa"
-    if task == RouterTask.CAPTIONING.value:
-        return "geochat_vqa"
-    if task == RouterTask.GROUNDING.value:
+    input_class = state.get("input_class", "")
+    selected_tools = state.get("selected_tools", [])
+
+    # Route SAR single-image understanding through sarchat_vqa
+    if "sarchat_vqa" in selected_tools or input_class == InputClass.SINGLE_SAR.value:
+        if task in (RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value):
+            return "sarchat_vqa"
+
+    if task in (RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value):
         return "geochat_vqa"
     if task == RouterTask.CHANGE_DETECTION.value:
         return "align"
@@ -660,6 +712,13 @@ def after_preprocess(state: GraphState) -> str:
 
 
 def after_geochat_vqa(state: GraphState) -> str:
+    task = state.get("detected_task", "")
+    if task == RouterTask.GROUNDING.value:
+        return "grounding"
+    return "evidence_fusion"
+
+
+def after_sarchat_vqa(state: GraphState) -> str:
     task = state.get("detected_task", "")
     if task == RouterTask.GROUNDING.value:
         return "grounding"
@@ -688,6 +747,7 @@ for name, fn in {
     "query_router":     query_router,
     "tool_selector":    tool_selector,
     "preprocess":       preprocess,
+    "sarchat_vqa":      sarchat_vqa,
     "geochat_vqa":      geochat_vqa,
     "grounding":        grounding,
     "align":            align,
@@ -724,10 +784,11 @@ workflow.add_conditional_edges(
     {"preprocess": "preprocess", "refusal": "refusal"},
 )
 
-# Conditional routing after preprocess based on detected_task
+# Conditional routing after preprocess based on detected_task & modality
 workflow.add_conditional_edges(
     "preprocess", after_preprocess,
     {
+        "sarchat_vqa":  "sarchat_vqa",
         "geochat_vqa":  "geochat_vqa",
         "align":        "align",
         "coregister":   "coregister",
@@ -735,7 +796,13 @@ workflow.add_conditional_edges(
     },
 )
 
-# SINGLE_VQA / CAPTIONING / GROUNDING paths
+# SARChat VQA path
+workflow.add_conditional_edges(
+    "sarchat_vqa", after_sarchat_vqa,
+    {"grounding": "grounding", "evidence_fusion": "evidence_fusion"},
+)
+
+# GeoChat VQA path
 workflow.add_conditional_edges(
     "geochat_vqa", after_geochat_vqa,
     {"grounding": "grounding", "evidence_fusion": "evidence_fusion"},
@@ -807,9 +874,11 @@ def run_graph(session_id: str) -> GraphState:
         "specialist_results": [],
         "execution_trace": [],
     }
+    if session.task and session.task != "UNROUTED":
+        initial_state["injected_task"] = session.task  # type: ignore[typeddict-unknown-key]
     session.status = "running"
 
-    result: GraphState = app.invoke(initial_state)
+    result = cast(GraphState, app.invoke(initial_state))
 
     session.status = result.get("status", "completed")
     session.task = result.get("detected_task") or session.task

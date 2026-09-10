@@ -4,8 +4,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Outlet, RouterProvider, createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
 
 import { GlobalOverlays } from "@/components/GlobalOverlays";
-import { ConsolePage } from "@/pages/ConsolePage";
+import { isDemoId } from "@/lib/demos";
+import type { DemoId } from "@/lib/types";
 import { AboutPage } from "@/pages/AboutPage";
+import { ConsolePage } from "@/pages/ConsolePage";
+import { EntryPage } from "@/pages/EntryPage";
 import { ExplorePage } from "@/pages/ExplorePage";
 import { ConsoleProvider } from "@/state/console";
 import "./index.css";
@@ -24,9 +27,16 @@ function RootLayout() {
 }
 
 const rootRoute = createRootRoute({ component: RootLayout });
-const consoleRoute = createRoute({
+const entryRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
+  component: EntryPage,
+});
+const consoleRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/console",
+  validateSearch: (search: Record<string, unknown>): { scene?: DemoId } =>
+    isDemoId(search.scene) ? { scene: search.scene } : {},
   component: ConsolePage,
 });
 const aboutRoute = createRoute({
@@ -40,7 +50,7 @@ const exploreRoute = createRoute({
   component: ExplorePage,
 });
 
-const routeTree = rootRoute.addChildren([consoleRoute, aboutRoute, exploreRoute]);
+const routeTree = rootRoute.addChildren([entryRoute, consoleRoute, aboutRoute, exploreRoute]);
 const router = createRouter({ routeTree });
 
 declare module "@tanstack/react-router" {

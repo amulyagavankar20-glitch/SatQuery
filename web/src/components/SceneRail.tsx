@@ -1,18 +1,9 @@
-import { Aperture, CircleDashed, GitCompare, Radio, Upload, X } from "lucide-react";
+import { Upload, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
-import { Checkbox } from "@/components/ui/checkbox";
-import { LAYER_LABELS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { useConsole } from "@/state/console";
-import type { LayerId, SceneSlot } from "@/lib/types";
-
-const LAYER_ICONS: Record<LayerId, ReactNode> = {
-  optical: <Aperture className="size-3.5" />,
-  sar: <Radio className="size-3.5" />,
-  change: <GitCompare className="size-3.5" />,
-  uncertain: <CircleDashed className="size-3.5" />,
-};
+import type { SceneSlot } from "@/lib/types";
 
 function SlotCard({
   label,
@@ -29,9 +20,9 @@ function SlotCard({
 }) {
   if (!slot) {
     return (
-      <div className="flex items-center gap-3 rounded-xl border border-dashed border-hairline px-3 py-3">
+      <div className="flex items-center gap-3 rounded-xl border border-dashed border-hairline px-3 py-3 transition-all duration-200 hover:border-primary/40 hover:bg-white/[0.02] active:scale-[0.99]">
         <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-background text-mute">
-          <Upload className="size-4" />
+          <Upload className="size-4 transition-transform duration-200 group-hover:-translate-y-0.5" />
         </div>
         <div className="min-w-0">
           <div className="text-[12px] font-medium text-mute">{label}</div>
@@ -42,11 +33,20 @@ function SlotCard({
   }
 
   return (
-    <div className="rounded-xl border border-hairline bg-raised/40 p-3">
+    <div className="sq-glass-card rounded-xl p-3 transition-all duration-200 hover:border-white/15">
       <div className="flex items-start gap-2.5">
         {slot.previewUrl ? (
-          <button type="button" onClick={() => onPreview(slot.previewUrl)} className="shrink-0">
-            <img src={slot.previewUrl} alt="" className="size-10 rounded-lg object-cover" />
+          <button
+            type="button"
+            onClick={() => onPreview(slot.previewUrl)}
+            className="group shrink-0 overflow-hidden rounded-lg transition-transform duration-200 hover:scale-105 active:scale-95 ring-1 ring-white/10"
+          >
+            <img
+              src={slot.previewUrl}
+              alt=""
+              className="size-10 rounded-lg object-cover transition-transform duration-300 group-hover:scale-110"
+              style={slot.objectPos ? { objectPosition: slot.objectPos } : undefined}
+            />
           </button>
         ) : (
           <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-background font-mono text-[10px] text-mute">
@@ -62,7 +62,7 @@ function SlotCard({
         <button
           type="button"
           onClick={onRemove}
-          className="text-mute hover:text-ink rounded-lg p-1"
+          className="text-mute hover:text-ink hover:bg-white/5 rounded-lg p-1 transition-all active:scale-90"
           aria-label={`Remove ${label}`}
         >
           <X className="size-3.5" />
@@ -72,21 +72,30 @@ function SlotCard({
         <Chip>{slot.crs}</Chip>
         {slot.date ? <Chip>{slot.date}</Chip> : null}
         {slot.bands != null ? <Chip>{slot.bands} bands</Chip> : null}
-        <Chip>{slot.modality === "SAR" ? "SAR" : "Optical"}</Chip>
+        <Chip tone={slot.modality === "SAR" ? "sar" : "optical"}>{slot.modality === "SAR" ? "SAR" : "Optical"}</Chip>
         {slot.sensor ? <Chip>{slot.sensor}</Chip> : null}
       </div>
     </div>
   );
 }
 
-function Chip({ children }: { children: ReactNode }) {
+function Chip({ children, tone }: { children: ReactNode; tone?: "sar" | "optical" }) {
   return (
-    <span className="font-mono rounded-md bg-background px-1.5 py-0.5 text-[11px] text-mute">{children}</span>
+    <span
+      className={cn(
+        "font-mono rounded-md px-1.5 py-0.5 text-[10px] tracking-wide uppercase transition-colors duration-150",
+        tone === "sar" && "border border-primary/45 text-primary bg-primary/5",
+        tone === "optical" && "border border-hairline text-mute hover:border-white/20",
+        !tone && "bg-background text-mute",
+      )}
+    >
+      {children}
+    </span>
   );
 }
 
-export function SceneRail({ className, idPrefix = "rail" }: { className?: string; idPrefix?: string }) {
-  const { slots, pairFitness, layers, setLayer, hasSar, hasOptical, removeSlot, openFilePicker } = useConsole();
+export function SceneRail({ className }: { className?: string; idPrefix?: string }) {
+  const { slots, pairFitness, removeSlot, openFilePicker } = useConsole();
   const [preview, setPreview] = useState<string | null>(null);
   const t1 = slots.find((s) => s.slot === "T1");
   const t2 = slots.find((s) => s.slot === "T2");
@@ -120,47 +129,17 @@ export function SceneRail({ className, idPrefix = "rail" }: { className?: string
           </div>
           <div className="mt-2 h-1 overflow-hidden rounded-full bg-hairline">
             <div
-              className="h-full rounded-full bg-primary transition-[width] duration-500"
+              className="sq-bar-fill h-full rounded-full bg-primary"
               style={{ width: `${Math.round(pairFitness * 100)}%` }}
             />
           </div>
         </div>
       ) : null}
 
-      <div className="mt-8">
-        <div className="text-[12px] tracking-wide text-mute uppercase">Layers</div>
-        <ul className="mt-3 flex flex-col gap-2">
-          {LAYER_LABELS.map((layer) => {
-            const disabled =
-              (layer.id === "sar" && !hasSar) || (layer.id === "optical" && !hasOptical && slots.length === 0);
-            return (
-              <li key={layer.id}>
-                <label
-                  htmlFor={`${idPrefix}-${layer.id}`}
-                  className={cn(
-                    "flex cursor-pointer items-center gap-2.5 rounded-lg px-1 py-1 hover:bg-raised/60",
-                    disabled && "cursor-not-allowed",
-                  )}
-                >
-                  <Checkbox
-                    checked={layers[layer.id]}
-                    disabled={disabled}
-                    onCheckedChange={(v) => setLayer(layer.id, v === true)}
-                    id={`${idPrefix}-${layer.id}`}
-                  />
-                  <span className={cn("text-mute", disabled && "opacity-40")}>{LAYER_ICONS[layer.id]}</span>
-                  <span className={cn("text-[13px]", disabled ? "text-mute/60" : "text-ink")}>{layer.label}</span>
-                </label>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-
       <button
         type="button"
         onClick={openFilePicker}
-        className="text-mute hover:text-ink mt-8 inline-flex items-center gap-2 text-left text-[13px]"
+        className="text-mute hover:text-primary mt-8 inline-flex items-center gap-2 text-left text-[13px]"
       >
         <Upload className="size-3.5" />
         Attach a GeoTIFF
@@ -169,7 +148,7 @@ export function SceneRail({ className, idPrefix = "rail" }: { className?: string
       {preview ? (
         <button
           type="button"
-          className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-8"
+          className="sq-lightbox fixed inset-0 z-50 grid place-items-center bg-black/50 p-8"
           onClick={() => setPreview(null)}
         >
           <img src={preview} alt="Scene preview" className="max-h-[80vh] max-w-[90vw] rounded-xl border border-hairline" />

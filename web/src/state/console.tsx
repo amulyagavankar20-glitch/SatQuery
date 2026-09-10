@@ -46,7 +46,7 @@ type ConsoleContextValue = {
   setDraft: (value: string) => void;
   insertChip: (query: string) => void;
   loadDemo: (id: DemoId) => void;
-  attachFiles: (files: File[]) => void;
+  attachFiles: (files: File[], bounds?: BBox) => void;
   removeSlot: (slot: "T1" | "T2") => void;
   setLayer: (id: LayerId, on: boolean) => void;
   toggleLayer: (id: LayerId) => void;
@@ -70,6 +70,13 @@ type ConsoleContextValue = {
   onDrop: (files: File[]) => void;
   composerRef: RefObject<HTMLTextAreaElement | null>;
   fileInputRef: RefObject<HTMLInputElement | null>;
+  evidencePulse: boolean;
+  setEvidencePulse: (on: boolean) => void;
+  answerFocus: boolean;
+  setAnswerFocus: (on: boolean) => void;
+  activeSlot: "T1" | "T2";
+  setActiveSlot: (slot: "T1" | "T2") => void;
+  toggleSlotModality: (slot?: "T1" | "T2") => void;
 };
 
 const ConsoleContext = createContext<ConsoleContextValue | null>(null);
@@ -88,23 +95,24 @@ function isTiff(file: File) {
 
 function guessModality(file: File, index: number): SceneSlot["modality"] {
   const n = file.name.toLowerCase();
-  if (n.includes("sar") || n.includes("risat") || n.includes("s1")) return "SAR";
+  if (n.includes("sar") || n.includes("risat") || n.includes("s1") || n.includes("sentinel-1") || n.includes("vv") || n.includes("vh")) return "SAR";
   if (index === 1 && n.includes("t2")) return "OPTICAL";
-  return index === 1 ? "OPTICAL" : "OPTICAL";
+  return "OPTICAL";
 }
 
-function slotFromFile(file: File, slot: "T1" | "T2", index: number): SceneSlot {
+function slotFromFile(file: File, slot: "T1" | "T2", index: number, bounds?: BBox): SceneSlot {
   const previewUrl = isTiff(file) ? "" : URL.createObjectURL(file);
+  const mod = guessModality(file, index);
   return {
     id: crypto.randomUUID(),
     slot,
     filename: file.name,
-    modality: guessModality(file, index),
-    sensor: guessModality(file, index) === "SAR" ? "RISAT" : "Cartosat-2S",
+    modality: mod,
+    sensor: mod === "SAR" ? "Sentinel-1" : "Cartosat-2S",
     crs: "EPSG:4326",
     date: new Date(file.lastModified).toISOString().slice(0, 10),
-    bands: guessModality(file, index) === "SAR" ? 1 : 4,
-    bounds: DEFAULT_BOUNDS,
+    bands: mod === "SAR" ? 2 : 4,
+    bounds: bounds ?? DEFAULT_BOUNDS,
     previewUrl,
     file,
   };
@@ -133,6 +141,9 @@ function mapLiveJob(job: JobView, slots: SceneSlot[], overlays?: OverlayCollecti
     bounds,
     opticalUrl: optical?.preview_url ? apiUrl(optical.preview_url) : (slots.find((s) => s.modality === "OPTICAL")?.previewUrl ?? null),
     sarUrl: sar?.preview_url ? apiUrl(sar.preview_url) : (slots.find((s) => s.modality === "SAR")?.previewUrl ?? null),
+    vvUrl: sar ? apiUrl(`/jobs/${job.job_id}/artifacts/vv`) : null,
+    vhUrl: sar ? apiUrl(`/jobs/${job.job_id}/artifacts/vh`) : null,
+    overlayUrl: sar ? apiUrl(`/jobs/${job.job_id}/artifacts/overlay`) : null,
     compareUrl: slots.find((s) => s.slot === "T2" && s.modality === "OPTICAL")?.previewUrl ?? null,
     overlays: overlays ?? mockAssistantTurn(job.query, slots).overlays,
     trace:
@@ -163,6 +174,9 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
   const [inspectOpen, setInspectOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [sending, setSending] = useState(false);
+  const [evidencePulse, setEvidencePulse] = useState(false);
+  const [answerFocus, setAnswerFocus] = useState(false);
+  const [activeSlot, setActiveSlot] = useState<"T1" | "T2">("T1");
   const [toasts, setToasts] = useState<Toast[]>([]);
   const dragCount = useRef(0);
   const toastId = useRef(0);
@@ -199,6 +213,7 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
       applySlots(demo.slots.map((s) => ({ ...s, id: crypto.randomUUID() })));
       setPairFitness(demo.pairFitness);
       setTurns([]);
+      setActiveSlot("T1");
       setSceneSheetOpen(false);
       toast(`Loaded ${demo.title}`);
     },
@@ -206,19 +221,20 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
   );
 
   const attachFiles = useCallback(
-    (incoming: File[]) => {
+    (incoming: File[], bounds?: BBox) => {
       const files = incoming.filter(isRaster).slice(0, 2);
       if (!files.length) {
-        toast("Drop a GeoTIFF", "bad");
+        toast("Drop a GeoTIFF or PNG", "bad");
         return;
       }
       setSlots((prev) => {
         let next = [...prev];
         if (files.length === 2 || prev.length === 0) {
-          next = files.map((file, i) => slotFromFile(file, i === 0 ? "T1" : "T2", i));
+          next = files.map((file, i) => slotFromFile(file, i === 0 ? "T1" : "T2", i, bounds));
+          setActiveSlot("T1");
         } else {
           const slot: "T1" | "T2" = prev.some((s) => s.slot === "T1") ? "T2" : "T1";
-          const created = slotFromFile(files[0], slot, slot === "T2" ? 1 : 0);
+          const created = slotFromFile(files[0], slot, slot === "T2" ? 1 : 0, bounds);
           next = [...prev.filter((s) => s.slot !== slot), created].sort((a, b) => a.slot.localeCompare(b.slot));
         }
         setPairFitness(next.length >= 2 ? 0.91 : null);
@@ -233,9 +249,26 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
     setSlots((prev) => {
       const next = prev.filter((s) => s.slot !== slot);
       setPairFitness(next.length >= 2 ? 0.91 : null);
+      if (slot === "T2") setActiveSlot("T1");
       return next;
     });
   }, []);
+
+  const toggleSlotModality = useCallback((targetSlot?: "T1" | "T2") => {
+    const slotToToggle = targetSlot ?? activeSlot;
+    setSlots((prev) =>
+      prev.map((s) => {
+        if (s.slot !== slotToToggle) return s;
+        const nextMod: "OPTICAL" | "SAR" = s.modality === "SAR" ? "OPTICAL" : "SAR";
+        return {
+          ...s,
+          modality: nextMod,
+          sensor: nextMod === "SAR" ? "Sentinel-1" : "Cartosat-2S",
+        };
+      }),
+    );
+    toast(`Switched ${slotToToggle} to SAR modality`);
+  }, [activeSlot, toast]);
 
   const setLayer = useCallback((id: LayerId, on: boolean) => {
     setLayers((prev) => ({ ...prev, [id]: on }));
@@ -364,6 +397,7 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
     setPairFitness(null);
     setTurns([]);
     setDraft("");
+    setActiveSlot("T1");
   }, []);
 
   const latestCompleted = [...turns].reverse().find((t) => t.role === "assistant" && t.status === "completed");
@@ -394,6 +428,7 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
       applySlots(job.slots);
       setPairFitness(job.pairFitness);
       setTurns(job.turns);
+      setActiveSlot("T1");
       setJobsOpen(false);
     },
     [applySlots, jobs],
@@ -446,6 +481,7 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
       loadDemo,
       attachFiles,
       removeSlot,
+      toggleSlotModality,
       setLayer,
       toggleLayer,
       send,
@@ -468,6 +504,12 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
       onDrop,
       composerRef,
       fileInputRef,
+      evidencePulse,
+      setEvidencePulse,
+      answerFocus,
+      setAnswerFocus,
+      activeSlot,
+      setActiveSlot,
     }),
     [
       apiUp,
@@ -478,6 +520,9 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
       copyJobId,
       dragging,
       draft,
+      evidencePulse,
+      answerFocus,
+      activeSlot,
       helpOpen,
       insertChip,
       inspectJson,
@@ -494,6 +539,7 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
       pairFitness,
       paletteOpen,
       removeSlot,
+      toggleSlotModality,
       resetScene,
       restoreJob,
       sceneSheetOpen,

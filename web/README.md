@@ -10,6 +10,6 @@ pnpm i && pnpm dev
 
 Open http://localhost:5173. Optional: set `VITE_API_BASE` (default `http://127.0.0.1:8000`).
 
-**Explore** (`/explore`) is a 2D map of packaged scenes. Click a scene and send it to the console, or drop a GeoTIFF / PNG onto the map.
+**Entry** (`/`) is a quiet door. **Console** (`/console`) is the product: thread on the left, persistent raster viewport on the right. **Explore** (`/explore`) is a 2D map of packaged scenes. Click a scene, draw a portion to send a PNG, or drop a GeoTIFF / PNG onto the map. Demo cards on the entry load `/console?scene=water|coastal|cloudy`.
 
 **Keys.** `Ctrl/⌘ K` command palette · `/` composer · `Ctrl/⌘ Enter` send · `Ctrl/⌘ O` attach · `1–5` official questions · `F` fit scene · `I` inspect · `?` shortcuts · `Esc` close.
