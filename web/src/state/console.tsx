@@ -251,56 +251,58 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
   );
 
   const attachFiles = useCallback(
-    (incoming: File[], bounds?: BBox) => {
+    (incoming: File[], bounds?: BBox, forceNewScene: boolean = false) => {
       const files = incoming.filter(isRaster).slice(0, 2);
       if (!files.length) {
         toast("Drop a GeoTIFF or PNG", "bad");
         return;
       }
       setSlots((prev) => {
-        let next = [...prev];
-        if (files.length === 2 || prev.length === 0) {
+        let next: SceneSlot[] = [];
+        if (forceNewScene || files.length === 2 || prev.length === 0) {
           next = files.map((file, i) => slotFromFile(file, i === 0 ? "T1" : "T2", i, bounds));
           setActiveSlot("T1");
         } else {
-          const slot: "T1" | "T2" = prev.some((s) => s.slot === "T1") ? "T2" : "T1";
+          const slot: "T1" | "T2" = activeSlot === "T2" || prev.some((s) => s.slot === "T1") ? "T2" : "T1";
           const created = slotFromFile(files[0], slot, slot === "T2" ? 1 : 0, bounds);
           next = [...prev.filter((s) => s.slot !== slot), created].sort((a, b) => a.slot.localeCompare(b.slot));
+          setActiveSlot(slot);
         }
         setPairFitness(next.length >= 2 ? 0.91 : null);
+
+        const allFiles = next.map((s) => s.file).filter((f): f is File => Boolean(f));
+        if (apiUp && allFiles.length) {
+          void ingestRasters(allFiles, "Cartosat-2S", "Preview uploaded imagery").then((ingest) => {
+            if (ingest.valid && ingest.assets.length) {
+              setSlots((current) =>
+                current.map((s, idx) => {
+                  const a = ingest.assets[idx];
+                  if (!a) return s;
+                  const previewUrl = a.preview_url
+                    ? apiUrl(a.preview_url)
+                    : ingest.job_id
+                      ? apiUrl(`/jobs/${ingest.job_id}/artifacts/assets/${idx}`)
+                      : s.previewUrl;
+                  return {
+                    ...s,
+                    bounds: (a.bounds_wgs84 as BBox | undefined) ?? s.bounds,
+                    crs: a.crs ?? s.crs,
+                    modality: (a.modality as SceneSlot["modality"]) ?? s.modality,
+                    sensor: a.sensor ?? s.sensor,
+                    previewUrl,
+                  };
+                }),
+              );
+            }
+          }).catch(() => {
+            /* background preview fetch error ignored */
+          });
+        }
         return next;
       });
       toast("Scene attached");
-
-      if (apiUp && files.length) {
-        void ingestRasters(files, "Cartosat-2S", "Preview uploaded imagery").then((ingest) => {
-          if (ingest.valid && ingest.assets.length) {
-            setSlots((current) =>
-              current.map((s, idx) => {
-                const a = ingest.assets[idx];
-                if (!a) return s;
-                const previewUrl = a.preview_url
-                  ? apiUrl(a.preview_url)
-                  : ingest.job_id
-                    ? apiUrl(`/jobs/${ingest.job_id}/artifacts/composite`)
-                    : s.previewUrl;
-                return {
-                  ...s,
-                  bounds: (a.bounds_wgs84 as BBox | undefined) ?? s.bounds,
-                  crs: a.crs ?? s.crs,
-                  modality: (a.modality as SceneSlot["modality"]) ?? s.modality,
-                  sensor: a.sensor ?? s.sensor,
-                  previewUrl,
-                };
-              }),
-            );
-          }
-        }).catch(() => {
-          /* background preview fetch error ignored */
-        });
-      }
     },
-    [apiUp, toast],
+    [activeSlot, apiUp, toast],
   );
 
   const removeSlot = useCallback((slot: "T1" | "T2") => {

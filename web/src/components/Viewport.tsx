@@ -55,7 +55,7 @@ export function Viewport() {
     return () => document.removeEventListener("mousedown", onDoc);
   }, [panel]);
 
-  if (!hasScene || !base) {
+  if (!hasScene || !t1) {
     return (
       <div className="flex h-full items-center justify-center p-6">
         <button
@@ -69,14 +69,38 @@ export function Viewport() {
     );
   }
 
+  // If T2 tab selected but no T2 image is loaded yet
+  if (activeSlot === "T2" && !t2) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center p-6 text-center">
+        <div className="sq-glass flex max-w-md flex-col items-center gap-3 rounded-2xl border border-white/10 p-8 shadow-2xl backdrop-blur-xl bg-surface/60">
+          <div className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary border border-primary/20">
+            <span className="font-mono font-bold text-base">T2</span>
+          </div>
+          <h3 className="font-mono text-base font-semibold text-ink">T2 Not Loaded</h3>
+          <p className="text-[13px] text-mute leading-relaxed">
+            Upload or attach a second GeoTIFF image to establish a temporal pair and enable bi-temporal change detection analysis.
+          </p>
+          <button
+            type="button"
+            onClick={openFilePicker}
+            className="mt-2 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 font-mono text-[12px] font-semibold text-black transition-all hover:bg-primary/90 shadow-md active:scale-95"
+          >
+            Upload T2 Image
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const opticalUrl =
     base.modality === "OPTICAL"
-      ? (latest?.opticalUrl ?? base.previewUrl)
+      ? (base.previewUrl || (latest?.opticalUrl ?? null))
       : null;
 
   let sarUrl =
     base.modality === "SAR"
-      ? (latest?.sarUrl ?? base.previewUrl)
+      ? (base.previewUrl || (latest?.sarUrl ?? null))
       : (latest?.sarUrl ?? slots.find((s) => s.modality === "SAR")?.previewUrl ?? null);
 
   if (hasSar && latest) {

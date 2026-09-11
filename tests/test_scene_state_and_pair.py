@@ -165,3 +165,75 @@ def test_input_classifier_permissive_on_disjoint_ingest():
     assert classification.refusal_reason is None
     assert classification.spatial_relationship is not None
     assert classification.spatial_relationship.has_sufficient_overlap is False
+
+
+def test_temporal_query_with_only_t1_refuses_and_requests_t2():
+    """Verify that asking a temporal change query when only T1 is loaded does NOT invoke BIT and tells the user T2 is needed."""
+    initial_state: GraphState = {
+        "job_id": "test-t1-only-temporal",
+        "session_id": "sess-t1-only",
+        "user_query": "What changed between the two images?",
+        "input_class": "SINGLE_OPTICAL",
+        "assets": [
+            {"filename": "cartosat2s_port_2022.tif", "modality": "OPTICAL", "file_path": "data/cartosat2s_port_2022.tif"},
+        ],
+        "asset_metadata": {"input_class": "SINGLE_OPTICAL"},
+        "warnings": [],
+        "status": "running",
+        "specialist_results": [],
+        "execution_trace": [],
+    }
+
+    result = app.invoke(initial_state)
+    visited = [e["node"] for e in result.get("execution_trace", [])]
+
+    # Must refuse gracefully and guide the user
+    assert result["status"] == "refused"
+    assert "bit_cd_specialist" not in visited
+    assert "I have T1 loaded, but T2 is not paired yet" in (result.get("refusal_reason") or "")
+    assert "Upload or select the second image to perform temporal change analysis" in (result.get("refusal_reason") or "")
+
+
+def test_multi_asset_preview_resolution(tmp_path, monkeypatch):
+    """Verify resolve_asset_preview_path correctly generates and resolves preview for slot index 0 and 1."""
+    import rasterio
+    from rasterio.transform import from_bounds
+    from backend.services.job_view import resolve_asset_preview_path
+    from backend.config import settings
+
+    monkeypatch.setattr(settings, "JOB_STORAGE_PATH", str(tmp_path))
+
+    job_id = "job-test-multi-preview"
+    raw_dir = tmp_path / job_id / "raw"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+
+    # Write 2 test GeoTIFFs (T1 and T2)
+    for name, val in [("T1_2022.tif", 50), ("T2_2023.tif", 200)]:
+        tif_path = raw_dir / name
+        arr = np.full((3, 32, 32), val, dtype=np.uint8)
+        transform = from_bounds(72.0, 19.0, 72.1, 19.1, 32, 32)
+        with rasterio.open(
+            tif_path,
+            "w",
+            driver="GTiff",
+            height=32,
+            width=32,
+            count=3,
+            dtype="uint8",
+            crs="EPSG:4326",
+            transform=transform,
+        ) as dst:
+            dst.write(arr)
+
+    # Test resolution
+    asset_0_preview = resolve_asset_preview_path(job_id, asset_index=0)
+    asset_1_preview = resolve_asset_preview_path(job_id, asset_index=1)
+    assert asset_0_preview is not None
+    assert asset_0_preview.is_file()
+    assert "T1_2022" in asset_0_preview.name
+
+    assert asset_1_preview is not None
+    assert asset_1_preview.is_file()
+    assert "T2_2023" in asset_1_preview.name
+
+

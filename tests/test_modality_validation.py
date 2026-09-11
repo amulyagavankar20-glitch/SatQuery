@@ -9,45 +9,56 @@ from backend.schemas import InputClass, RouterTask
 
 
 def test_modality_mismatch_detection_helper():
-    # SAR query + optical asset -> mismatch
-    msg = _check_modality_intent_mismatch(
+    # SAR wording with generic intent on optical -> recoverable to optical
+    action, msg = _check_modality_intent_mismatch(
         query="What objects are visible in this SAR image?",
         input_class="SINGLE_OPTICAL",
         assets=[{"filename": "S2_T2.tif", "modality": "OPTICAL"}],
     )
-    assert msg is not None
-    assert "Selected asset is optical imagery, but this query requires SAR imagery" in msg
+    assert action == "RECOVER_TO_OPTICAL"
+    assert "Your uploaded image is optical, not SAR. I'll analyze it as an optical image." in msg
 
-    # Optical query + SAR asset -> mismatch
-    msg_sar = _check_modality_intent_mismatch(
+    # Hard SAR physics query on optical -> unrecoverable refusal
+    action_refuse, msg_refuse = _check_modality_intent_mismatch(
+        query="Analyze the dual-pol VV and VH backscatter and polarimetric properties",
+        input_class="SINGLE_OPTICAL",
+        assets=[{"filename": "S2_T2.tif", "modality": "OPTICAL"}],
+    )
+    assert action_refuse == "REFUSE"
+    assert "requires SAR/radar" in msg_refuse
+
+    # Hard Optical spectral query on SAR -> unrecoverable refusal
+    action_sar, msg_sar = _check_modality_intent_mismatch(
         query="Show the optical RGB bands and NDVI vegetation index",
         input_class="SINGLE_SAR",
         assets=[{"filename": "S1_IW.tif", "modality": "SAR"}],
     )
-    assert msg_sar is not None
-    assert "Selected asset is SAR/radar imagery, but this query requires optical imagery" in msg_sar
+    assert action_sar == "REFUSE"
+    assert "require" in msg_sar.lower() and "optical" in msg_sar.lower()
 
     # SAR query + SAR asset -> OK (no mismatch)
-    msg_ok = _check_modality_intent_mismatch(
+    action_ok, msg_ok = _check_modality_intent_mismatch(
         query="What objects are visible in this SAR image?",
         input_class="SINGLE_SAR",
         assets=[{"filename": "S1_IW.tif", "modality": "SAR"}],
     )
+    assert action_ok is None
     assert msg_ok is None
 
     # Optical query + Optical asset -> OK (no mismatch)
-    msg_opt_ok = _check_modality_intent_mismatch(
+    action_opt_ok, msg_opt_ok = _check_modality_intent_mismatch(
         query="What is the land cover distribution?",
         input_class="SINGLE_OPTICAL",
         assets=[{"filename": "S2_T2.tif", "modality": "OPTICAL"}],
     )
+    assert action_opt_ok is None
     assert msg_opt_ok is None
 
 
-def test_graph_refuses_sar_query_on_optical_asset():
-    """Verify SAR query + OPTICAL asset is refused, and neither sar_map nor lulc_map runs."""
+def test_graph_recovers_sar_wording_on_optical_asset():
+    """Verify SAR wording with generic visual intent on OPTICAL asset is recovered and analyzed as optical."""
     initial_state: GraphState = {
-        "job_id": "test-sar-opt-mismatch",
+        "job_id": "test-sar-opt-recovery",
         "session_id": "test-session-1",
         "user_query": "What objects are visible in this SAR image?",
         "input_class": "SINGLE_OPTICAL",
@@ -62,16 +73,34 @@ def test_graph_refuses_sar_query_on_optical_asset():
 
     result = app.invoke(initial_state)
 
-    assert result["status"] == "refused"
-    assert "Selected asset is optical imagery, but this query requires SAR imagery" in (result.get("refusal_reason") or "")
-    assert "Selected asset is optical imagery, but this query requires SAR imagery" in (result.get("final_answer") or "")
-
-    # Ensure NO specialist tools were executed
+    assert result["status"] == "completed"
+    assert "Your uploaded image is optical, not SAR. I'll analyze it as an optical image." in (result.get("final_answer") or "")
+    # Ensure optical specialist was executed, NOT sar_map
     visited = [e["node"] for e in result.get("execution_trace", [])]
+    assert "lulc_map" in visited
     assert "sar_map" not in visited
-    assert "lulc_map" not in visited
-    assert "bit_cd" not in visited
-    assert "preprocess" not in visited
+
+
+def test_graph_refuses_hard_sar_physics_on_optical_asset():
+    """Verify true SAR physics request on OPTICAL asset is refused."""
+    initial_state: GraphState = {
+        "job_id": "test-sar-physics-refusal",
+        "session_id": "test-session-1b",
+        "user_query": "Analyze dual-pol VV backscatter and polarimetric properties",
+        "input_class": "SINGLE_OPTICAL",
+        "assets": [{"filename": "S2_T2.tif", "modality": "OPTICAL", "file_path": "data/S2_T2.tif"}],
+        "asset_metadata": {"input_class": "SINGLE_OPTICAL"},
+        "pair_fitness": None,
+        "warnings": [],
+        "status": "running",
+        "specialist_results": [],
+        "execution_trace": [],
+    }
+
+    result = app.invoke(initial_state)
+
+    assert result["status"] == "refused"
+    assert "requires SAR/radar" in (result.get("refusal_reason") or "")
 
 
 def test_graph_refuses_optical_query_on_sar_asset():
@@ -93,7 +122,7 @@ def test_graph_refuses_optical_query_on_sar_asset():
     result = app.invoke(initial_state)
 
     assert result["status"] == "refused"
-    assert "Selected asset is SAR/radar imagery, but this query requires optical imagery" in (result.get("refusal_reason") or "")
+    assert "require" in (result.get("refusal_reason") or "").lower()
 
     visited = [e["node"] for e in result.get("execution_trace", [])]
     assert "sar_map" not in visited

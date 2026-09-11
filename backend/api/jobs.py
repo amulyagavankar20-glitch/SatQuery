@@ -12,6 +12,7 @@ from backend.services.job_view import (
     footprint_geojson,
     footprint_kml,
     get_job_view,
+    resolve_asset_preview_path,
     resolve_composite_path,
     resolve_vv_path,
     resolve_vh_path,
@@ -141,13 +142,25 @@ async def get_job(job_id: str) -> JobView:
 
 
 @router.get("/jobs/{job_id}/artifacts/composite")
-async def get_composite(job_id: str):
+async def get_composite(job_id: str, slot: str | None = None, index: int = 0):
     if get_job_view(job_id) is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    path = resolve_composite_path(job_id)
+    idx = 1 if slot == "T2" else index
+    path = resolve_asset_preview_path(job_id, idx) if (slot or index > 0) else resolve_composite_path(job_id)
     safe = safe_job_file(job_id, path) if path else None
     if safe is None:
         raise HTTPException(status_code=404, detail="Composite not ready")
+    return FileResponse(safe, media_type="image/png", filename=safe.name)
+
+
+@router.get("/jobs/{job_id}/artifacts/assets/{asset_index}")
+async def get_asset_preview(job_id: str, asset_index: int = 0):
+    if get_job_view(job_id) is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    path = resolve_asset_preview_path(job_id, asset_index)
+    safe = safe_job_file(job_id, path) if path else None
+    if safe is None:
+        raise HTTPException(status_code=404, detail=f"Asset {asset_index} preview not ready")
     return FileResponse(safe, media_type="image/png", filename=safe.name)
 
 

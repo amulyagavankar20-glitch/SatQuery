@@ -125,6 +125,49 @@ def safe_job_file(job_id: str, path: Path) -> Path | None:
     return resolved if resolved.is_file() else None
 
 
+def resolve_asset_preview_path(job_id: str, asset_index: int = 0) -> Path | None:
+    raw_dir = _job_dir(job_id) / "raw"
+    processed = _job_dir(job_id) / "processed"
+    processed.mkdir(parents=True, exist_ok=True)
+
+    tifs: list[Path] = []
+    if raw_dir.is_dir():
+        tifs = sorted(raw_dir.glob("*.tif*"))
+
+    if tifs and 0 <= asset_index < len(tifs):
+        target_tif = tifs[asset_index]
+        preview_png = processed / f"composite_preview_{target_tif.stem}.png"
+        if preview_png.is_file():
+            return preview_png
+        try:
+            import numpy as np
+            import rasterio
+            from PIL import Image
+
+            with rasterio.open(target_tif) as src:
+                count = src.count
+                if count >= 3:
+                    data = src.read([1, 2, 3])
+                else:
+                    b = src.read(1)
+                    data = np.stack([b, b, b], axis=0)
+
+            data = data.astype(np.float32)
+            p2, p98 = np.percentile(data, 2), np.percentile(data, 98)
+            if p98 > p2:
+                data = np.clip((data - p2) / (p98 - p2) * 255.0, 0, 255).astype(np.uint8)
+            else:
+                data = np.clip(data, 0, 255).astype(np.uint8)
+
+            rgb = np.transpose(data, (1, 2, 0))
+            Image.fromarray(rgb).save(preview_png)
+            return preview_png
+        except Exception:
+            pass
+
+    return resolve_composite_path(job_id)
+
+
 def _bounds_from_asset_row(asset: Asset) -> list[float] | None:
     if asset.bbox is None:
         return None
@@ -139,17 +182,16 @@ def _bounds_from_asset_row(asset: Asset) -> list[float] | None:
 
 def _session_asset_views(session: SessionContext, job_id: str) -> list[JobAssetView]:
     views: list[JobAssetView] = []
-    for raw in session.metadata.get("assets") or []:
-        if not isinstance(raw, dict):
-            continue
+    assets = [r for r in (session.metadata.get("assets") or []) if isinstance(r, dict)]
+    for idx, raw in enumerate(assets):
         bounds = raw.get("bounds_wgs84") or raw.get("bounds")
         views.append(
             JobAssetView(
-                filename=str(raw.get("filename") or "scene.tif"),
+                filename=str(raw.get("filename") or f"scene_{idx+1}.tif"),
                 modality=str(raw.get("modality") or "OPTICAL"),
                 sensor=raw.get("sensor"),
                 bounds_wgs84=[float(x) for x in bounds] if bounds and len(bounds) == 4 else None,
-                preview_url=artifact_url(job_id, "composite"),
+                preview_url=f"/jobs/{job_id}/artifacts/assets/{idx}",
             )
         )
     return views
@@ -165,9 +207,9 @@ def _db_asset_views(job_id: uuid.UUID) -> list[JobAssetView]:
                 modality=row.modality,
                 sensor=row.sensor,
                 bounds_wgs84=_bounds_from_asset_row(row),
-                preview_url=artifact_url(str(job_id), "composite"),
+                preview_url=f"/jobs/{job_id}/artifacts/assets/{idx}",
             )
-            for row in rows
+            for idx, row in enumerate(rows)
         ]
     finally:
         db.close()

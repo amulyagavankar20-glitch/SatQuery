@@ -16,6 +16,7 @@ ARCHITECTURE RULES ENFORCED HERE:
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any, cast
 from collections.abc import Mapping
@@ -103,14 +104,23 @@ def _check_modality_intent_mismatch(
     query: str,
     input_class: str,
     assets: list[Any] | None = None,
-) -> str | None:
-    """Detect clear modality contradictions between query demands and input assets."""
+) -> tuple[str | None, str | None]:
+    """
+    Detect modality mismatch between query demands and input assets.
+    Returns: (action, message) where action is:
+    - None: fully compatible
+    - "RECOVER_TO_OPTICAL": user requested SAR on an optical asset, but the task is a generic visual intent that can be safely recovered
+    - "RECOVER_TO_SAR": user requested optical on a SAR asset, but the task is a generic visual intent that can be safely recovered
+    - "REFUSE": unrecoverable hard mismatch (e.g. asking for SAR radar backscatter/polarimetry on optical, or NDVI/RGB on SAR)
+    """
     ql = query.lower()
-    sar_terms = ("sar", "radar", "sentinel-1", "s1", "backscatter", "dual-pol", "polarimetric", "amplitude", "speckle", "vv", "vh")
-    optical_terms = ("optical", "rgb", "true color", "true-color", "multispectral", "ndvi", "sentinel-2", "s2", "cartosat", "land cover", "lulc", "vegetation")
+    sar_physics_terms = ("backscatter", "dual-pol", "polarimetric", "polarization", "cross-pol", "co-pol", "speckle", "vv", "vh", "interferometry", "surface roughness", "radar amplitude", "dielectric")
+    optical_spectral_terms = ("ndvi", "rgb", "true color", "true-color", "multispectral", "spectral band", "red edge", "swir")
     fusion_terms = ("optical and sar", "sar and optical", "fuse", "fusion")
 
     is_fusion_query = any(term in ql for term in fusion_terms)
+    if is_fusion_query:
+        return None, None
 
     # Determine asset modalities
     asset_modalities = set()
@@ -130,13 +140,13 @@ def _check_modality_intent_mismatch(
                 fn = str(a.get("filename") or a.get("file_path") or "").lower()
                 if m:
                     asset_modalities.add(m)
-                if "s2_" in fn or "sentinel-2" in fn:
+                if "s2_" in fn or "sentinel-2" in fn or "cartosat" in fn:
                     asset_modalities.add("OPTICAL")
                 elif "s1_" in fn or "sentinel-1" in fn:
                     asset_modalities.add("SAR")
             elif isinstance(a, str):
                 fn = a.lower()
-                if "s2_" in fn or "sentinel-2" in fn:
+                if "s2_" in fn or "sentinel-2" in fn or "cartosat" in fn:
                     asset_modalities.add("OPTICAL")
                 elif "s1_" in fn or "sentinel-1" in fn:
                     asset_modalities.add("SAR")
@@ -144,17 +154,21 @@ def _check_modality_intent_mismatch(
     is_optical_asset = "OPTICAL" in asset_modalities and "SAR" not in asset_modalities
     is_sar_asset = "SAR" in asset_modalities and "OPTICAL" not in asset_modalities
 
-    # Check if query specifically requests SAR on an optical-only asset
-    if not is_fusion_query and any(term in ql for term in sar_terms):
-        if is_optical_asset or normalized_input_class in ("SINGLE_OPTICAL", "BI_TEMPORAL", "BI_TEMPORAL_OPTICAL", "OPTICAL"):
-            return "Selected asset is optical imagery, but this query requires SAR imagery."
+    # Case 1: Query contains SAR wording on an Optical-only asset
+    sar_mention = any(term in ql for term in ("sar", "radar", "sentinel-1", "s1"))
+    if is_optical_asset and (sar_mention or any(term in ql for term in sar_physics_terms)):
+        if any(term in ql for term in sar_physics_terms):
+            return "REFUSE", "This operation requires SAR/radar data (e.g. backscatter/polarimetry), but the current asset is optical imagery."
+        return "RECOVER_TO_OPTICAL", "Your uploaded image is optical, not SAR. I'll analyze it as an optical image."
 
-    # Check if query specifically requests optical on a SAR-only asset
-    if not is_fusion_query and any(term in ql for term in optical_terms):
-        if is_sar_asset or normalized_input_class in ("SINGLE_SAR", "BI_TEMPORAL_SAR", "SAR"):
-            return "Selected asset is SAR/radar imagery, but this query requires optical imagery."
+    # Case 2: Query contains Optical wording on a SAR-only asset
+    optical_mention = any(term in ql for term in ("optical", "rgb", "true color", "true-color", "multispectral", "sentinel-2", "s2", "cartosat"))
+    if is_sar_asset and (optical_mention or any(term in ql for term in optical_spectral_terms)):
+        if any(term in ql for term in optical_spectral_terms):
+            return "REFUSE", "NDVI and visible RGB spectral bands require multispectral optical imagery, but the current asset is SAR radar imagery."
+        return "RECOVER_TO_SAR", "Your uploaded image is SAR/radar, not optical. I'll analyze it as a SAR image."
 
-    return None
+    return None, None
 
 
 def input_validator(state: GraphState) -> dict[str, Any]:
@@ -171,32 +185,43 @@ def input_validator(state: GraphState) -> dict[str, Any]:
         _record_event(state, "REFUSED", "input_validator", message="Empty query")
         return updates
 
-    # Build explicit structured QueryPlan
-    from backend.agents.query_plan import build_query_plan
+    input_class_val = state.get("input_class") or ""
+    if not input_class_val and state.get("asset_metadata"):
+        input_class_val = str(state["asset_metadata"].get("input_class", ""))
+
+    assets = state.get("assets", [])
     active_slot = state.get("active_slot") or (state.get("asset_metadata") or {}).get("active_slot")
     mode_hint = state.get("mode") or (state.get("asset_metadata") or {}).get("mode")
+
+    action, mismatch_msg = _check_modality_intent_mismatch(query, input_class_val, assets)
+    if action == "REFUSE":
+        warnings.append(mismatch_msg or "Modality mismatch")
+        updates["warnings"] = warnings
+        updates["status"] = "refused"
+        updates["refusal_reason"] = mismatch_msg
+        _record_event(state, "REFUSED", "input_validator", message=mismatch_msg)
+        return updates
+
+    effective_query = query
+    if action in ("RECOVER_TO_OPTICAL", "RECOVER_TO_SAR"):
+        warnings.append(mismatch_msg or "Modality recovered")
+        updates["modality_recovery_note"] = mismatch_msg
+        _record_event(state, "MODALITY_RECOVERED", "input_validator", message=mismatch_msg)
+        if action == "RECOVER_TO_OPTICAL":
+            effective_query = re.sub(r"\b(sar|radar|sentinel-1|s1)\b", "optical", query, flags=re.IGNORECASE)
+        elif action == "RECOVER_TO_SAR":
+            effective_query = re.sub(r"\b(optical|true color|rgb|sentinel-2|s2|cartosat)\b", "SAR", query, flags=re.IGNORECASE)
+
+    # Build explicit structured QueryPlan
+    from backend.agents.query_plan import build_query_plan
     query_plan = build_query_plan(
-        query=query,
+        query=effective_query,
         active_slot=active_slot,
         mode_hint=mode_hint,
         manifest=state.get("asset_metadata"),
     )
     updates["query_plan"] = query_plan.model_dump()
     updates["mode"] = query_plan.mode
-
-    input_class_val = state.get("input_class") or ""
-    if not input_class_val and state.get("asset_metadata"):
-        input_class_val = str(state["asset_metadata"].get("input_class", ""))
-
-    assets = state.get("assets", [])
-    mismatch = _check_modality_intent_mismatch(query, input_class_val, assets)
-    if mismatch:
-        warnings.append(mismatch)
-        updates["warnings"] = warnings
-        updates["status"] = "refused"
-        updates["refusal_reason"] = mismatch
-        _record_event(state, "REFUSED", "input_validator", message=mismatch)
-        return updates
 
     _record_event(state, "INPUT_VALIDATED", "input_validator")
     updates["status"] = "running"
@@ -207,7 +232,6 @@ def input_validator(state: GraphState) -> dict[str, Any]:
 def metadata_parser(state: GraphState) -> dict[str, Any]:
     _record_event(state, "METADATA_PARSED", "metadata_parser")
     updates = _visit(state, "metadata_parser")
-    # Normalise input_class from asset_metadata if not already set
     if not state.get("input_class") and state.get("asset_metadata"):
         updates["input_class"] = state["asset_metadata"].get("input_class", "")  # type: ignore[index]
     if "query_plan" not in state:
@@ -273,19 +297,29 @@ def pair_fitness_gate(state: GraphState) -> dict[str, Any]:
     assets = state.get("assets", [])
     warnings: list[str] = list(state.get("warnings", []))  # type: ignore[arg-type]
 
-    # Enforce modality intent compatibility
-    mismatch = _check_modality_intent_mismatch(query, input_class_val, assets)
-    if mismatch:
-        warnings.append(mismatch)
+    # Enforce temporal pair availability
+    if _is_pair_query(query) and len(assets) < 2:
+        reason = "I have T1 loaded, but T2 is not paired yet. Upload or select the second image to perform temporal change analysis."
+        warnings.append(reason)
         updates["warnings"] = warnings
         updates["status"] = "refused"
-        updates["refusal_reason"] = mismatch
-        _record_event(state, "REFUSED", "pair_fitness_gate", message=mismatch)
+        updates["refusal_reason"] = reason
+        _record_event(state, "REFUSED", "pair_fitness_gate", message=reason)
         return updates
 
-    # Check pair fitness metadata if present
+    # Enforce modality intent compatibility
+    action, mismatch_msg = _check_modality_intent_mismatch(query, input_class_val, assets)
+    if action == "REFUSE":
+        warnings.append(mismatch_msg or "Modality mismatch")
+        updates["warnings"] = warnings
+        updates["status"] = "refused"
+        updates["refusal_reason"] = mismatch_msg
+        _record_event(state, "REFUSED", "pair_fitness_gate", message=mismatch_msg)
+        return updates
+
+    # Check pair fitness metadata if multi-image pair
     pair_fitness = state.get("pair_fitness")
-    if pair_fitness and isinstance(pair_fitness, dict):
+    if pair_fitness and isinstance(pair_fitness, dict) and len(assets) >= 2:
         has_overlap = pair_fitness.get("has_sufficient_overlap")
         if has_overlap is False or pair_fitness.get("compatible") is False:
             reason = pair_fitness.get("reason") or "Insufficient spatial overlap between image pair."
@@ -814,6 +848,9 @@ def report_generator(state: GraphState) -> dict[str, Any]:
             image_refs=image_refs,
             input_class=input_class_val,
         )
+        recovery_note = state.get("modality_recovery_note")
+        if recovery_note and final_answer and not final_answer.startswith("⚠️"):
+            final_answer = f"⚠️ *{recovery_note}*\n\n{final_answer}"
     elif is_refused:
         final_answer = state.get("refusal_reason") or "Request refused due to modality or input mismatch."
         reasoning_provenance = "modality_validation_gate"
@@ -833,6 +870,7 @@ def report_generator(state: GraphState) -> dict[str, Any]:
         "detected_task": state.get("detected_task"),
         "query_plan": state.get("query_plan"),
         "target_class": (state.get("query_plan") or {}).get("target_class"),
+        "modality_recovery_note": state.get("modality_recovery_note"),
         "selected_tools": state.get("selected_tools", []),
         "execution_summary": _visited_nodes(state),
         "final_answer": final_answer,

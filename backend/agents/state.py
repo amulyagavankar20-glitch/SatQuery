@@ -58,7 +58,9 @@ class GraphState(TypedDict, total=False):
     # ── Status & Errors ───────────────────────────────────────────────────────
     warnings: list[str]
     refusal_reason: str | None
+    failure_reason: str | None
+    modality_recovery_note: str | None
     final_answer: str | None
     report_paths: list[str]
-    status: str
+    status: str                # running | completed | failed | refused
     report: dict[str, Any] | None
