@@ -476,15 +476,20 @@ def align(state: GraphState) -> dict[str, Any]:
 
 
 def bit_cd(state: GraphState) -> dict[str, Any]:
-    image_refs = _image_refs(state)
+    image_refs = _raw_raster_refs(state) or _image_refs(state)
     pre = image_refs[0] if len(image_refs) > 0 else "pre_placeholder"
     post = image_refs[1] if len(image_refs) > 1 else "post_placeholder"
 
-    # Use aligned refs from alignment_result if available from previous steps
+    def _existing(path: object, fallback: str) -> str:
+        if isinstance(path, (list, tuple)):
+            path = path[0] if path else fallback
+        text = str(path)
+        return text if Path(text).is_file() else fallback
+
     align_result = state.get("alignment_result")
     if align_result and isinstance(align_result.result, dict):
-        pre = str(align_result.result.get("aligned_pre", pre))
-        post = str(align_result.result.get("aligned_post", post))
+        pre = _existing(align_result.result.get("aligned_pre"), str(pre))
+        post = _existing(align_result.result.get("aligned_post"), str(post))
 
     params = {"pre_image": pre, "post_image": post, "input_refs": image_refs}
     result_updates = _execute_tool(state, "bit_cd", params)
@@ -765,7 +770,7 @@ def after_preprocess(state: GraphState) -> str:
     if task in (RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value):
         return "lulc_map"
     if task in (RouterTask.CHANGE_DETECTION.value, RouterTask.CHANGE_VQA.value):
-        return "bit_cd"
+        return "align"
     if task == RouterTask.OPTICAL_SAR_ANALYSIS.value:
         return "coregister"
     return "refusal"
@@ -793,7 +798,7 @@ def after_bit_cd(state: GraphState) -> str:
     task = state.get("detected_task", "")
     if task == RouterTask.CHANGE_VQA.value:
         return "geochat_describe"
-    return "evidence_fusion"
+    return "vectorize"
 
 
 def after_vectorize(state: GraphState) -> str:
@@ -894,6 +899,7 @@ workflow.add_conditional_edges(
     {
         "evidence_fusion":  "evidence_fusion",
         "geochat_describe": "geochat_describe",
+        "vectorize":        "vectorize",
         "refusal":          "refusal",
     },
 )
