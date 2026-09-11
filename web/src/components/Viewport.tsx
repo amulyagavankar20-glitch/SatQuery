@@ -219,8 +219,23 @@ export function Viewport() {
                   {group.ids.map((id) => {
                     const layer = LAYER_LABELS.find((l) => l.id === id);
                     if (!layer) return null;
-                    const disabled = id === "sar" && !hasSar;
-                    const on = layers[id] && !disabled;
+                    const hasOptical = slots.some((s) => s.modality === "OPTICAL");
+                    const hasSarSlot = slots.some((s) => s.modality === "SAR");
+                    const isSarActive = base.modality === "SAR";
+
+                    let disabled = false;
+                    let on = false;
+
+                    if (id === "optical") {
+                      disabled = !hasOptical;
+                      on = layers.optical && !disabled && (!isSarActive || hasOptical);
+                    } else if (id === "sar") {
+                      disabled = !hasSarSlot && !hasSar;
+                      on = layers.sar && !disabled && (isSarActive || hasSarSlot);
+                    } else {
+                      on = layers[id];
+                    }
+
                     return (
                       <li key={id}>
                         <button

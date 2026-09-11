@@ -33,6 +33,10 @@ class InputAnalyzer:
         "vh",
         "hh",
         "hv",
+        "c-band",
+        "l-band",
+        "x-band",
+        "backscatter",
     }
 
     KNOWN_OPTICAL_KEYWORDS = {
@@ -47,9 +51,11 @@ class InputAnalyzer:
         "optical",
         "rgb",
         "nir",
+        "swir",
         "red",
         "green",
         "blue",
+        "panchromatic",
     }
 
     @classmethod
@@ -60,9 +66,9 @@ class InputAnalyzer:
     ) -> str:
         """
         Deterministically infer whether an asset is OPTICAL or SAR based on metadata,
-        sensor name, band descriptions, and file tags.
+        sensor name, band descriptions, raster dtypes, and file tags.
         """
-        if explicit_modality and explicit_modality.upper() in (Modality.OPTICAL.value, Modality.SAR.value):
+        if explicit_modality and explicit_modality.upper() in (Modality.OPTICAL.value, Modality.SAR.value, Modality.UNKNOWN.value):
             return explicit_modality.upper()
 
         text_corpus = " ".join([
@@ -78,22 +84,33 @@ class InputAnalyzer:
         # Check for Optical signatures
         is_optical = any(kw in text_corpus for kw in cls.KNOWN_OPTICAL_KEYWORDS)
 
+        count = metadata.get("count", 1)
+        dtypes = metadata.get("dtypes") or []
+        is_float = any("float" in str(d).lower() for d in dtypes)
+
         if is_sar and not is_optical:
             return Modality.SAR.value
         if is_optical and not is_sar:
             return Modality.OPTICAL.value
 
-        # Fallback heuristic based on band count
-        count = metadata.get("count", 1)
+        # Multispectral / RGB is predominantly optical
         if count >= 3:
-            return Modality.OPTICAL.value  # RGB / Multi-spectral is predominantly optical
-        elif count in (1, 2):
-            # 1 or 2 bands: check polarization tags or default to OPTICAL (panchromatic) unless tagged
-            if any(pol in text_corpus for pol in ("vv", "vh", "hh", "hv")):
+            return Modality.OPTICAL.value
+
+        # 1 or 2 bands
+        if count == 2:
+            # Dual-band float32 is almost universally dual-pol SAR
+            if is_float or any(pol in text_corpus for pol in ("vv", "vh", "hh", "hv")):
                 return Modality.SAR.value
             return Modality.OPTICAL.value
 
-        return Modality.OPTICAL.value
+        if count == 1:
+            if is_float or any(pol in text_corpus for pol in ("vv", "vh", "hh", "hv", "sar", "radar")):
+                return Modality.SAR.value
+            if is_optical or not is_float:
+                return Modality.OPTICAL.value
+
+        return Modality.UNKNOWN.value
 
     def analyze_asset(
         self,

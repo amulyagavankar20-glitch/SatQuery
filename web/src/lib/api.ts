@@ -40,10 +40,10 @@ export async function fetchModels() {
   return modelsSchema.parse(await response.json());
 }
 
-export async function ingestRasters(files: File[], sensor: string, query = ""): Promise<IngestResponse> {
+export async function ingestRasters(files: File[], sensor?: string, query = ""): Promise<IngestResponse> {
   const form = new FormData();
   for (const file of files) form.append("files", file);
-  if (sensor) form.append("sensor", sensor);
+  if (sensor && sensor.trim()) form.append("sensor", sensor.trim());
   if (query) form.append("query", query);
   const response = await fetch(apiUrl("/ingest"), { method: "POST", body: form });
   if (!response.ok) throw new Error(await parseError(response));

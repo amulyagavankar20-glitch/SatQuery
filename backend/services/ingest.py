@@ -56,20 +56,41 @@ def ingest_rasters(
             preview_png = processed_dir / f"composite_preview_{path.stem}.png"
             with rasterio.open(path) as src:
                 count = src.count
+                dtypes = src.dtypes
+                is_float = any("float" in str(d).lower() for d in dtypes)
                 if count >= 9:
-                    data = src.read([3, 2, 1])
+                    data = src.read([3, 2, 1]).astype(np.float32)
+                    p2, p98 = np.percentile(data, 2), np.percentile(data, 98)
+                    norm = np.clip((data - p2) / (p98 - p2 + 1e-6) * 255.0, 0, 255).astype(np.uint8)
+                    rgb = np.transpose(norm, (1, 2, 0))
                 elif count >= 3:
-                    data = src.read([1, 2, 3])
+                    data = src.read([1, 2, 3]).astype(np.float32)
+                    p2, p98 = np.percentile(data, 2), np.percentile(data, 98)
+                    norm = np.clip((data - p2) / (p98 - p2 + 1e-6) * 255.0, 0, 255).astype(np.uint8)
+                    rgb = np.transpose(norm, (1, 2, 0))
+                elif count == 2:
+                    # Dual-polarization SAR (VV, VH)
+                    vv = src.read(1).astype(np.float32)
+                    vh = src.read(2).astype(np.float32)
+                    vv_db = 10.0 * np.log10(np.clip(vv, 1e-5, None))
+                    vh_db = 10.0 * np.log10(np.clip(vh, 1e-5, None))
+                    vv_min, vv_max = np.percentile(vv_db, 2), np.percentile(vv_db, 98)
+                    vh_min, vh_max = np.percentile(vh_db, 2), np.percentile(vh_db, 98)
+                    r = np.clip((vv_db - vv_min) / (vv_max - vv_min + 1e-6), 0, 1)
+                    g = np.clip((vh_db - vh_min) / (vh_max - vh_min + 1e-6), 0, 1)
+                    b = np.clip(r / (g + 0.1), 0, 1)
+                    rgb = (np.stack([r, g, b], axis=-1) * 255).astype(np.uint8)
                 else:
-                    b = src.read(1)
-                    data = np.stack([b, b, b], axis=0)
-            data = data.astype(np.float32)
-            p2, p98 = np.percentile(data, 2), np.percentile(data, 98)
-            if p98 > p2:
-                data = np.clip((data - p2) / (p98 - p2) * 255.0, 0, 255).astype(np.uint8)
-            else:
-                data = np.clip(data, 0, 255).astype(np.uint8)
-            rgb = np.transpose(data, (1, 2, 0))
+                    b = src.read(1).astype(np.float32)
+                    if is_float:
+                        b_db = 10.0 * np.log10(np.clip(b, 1e-5, None))
+                        b_min, b_max = np.percentile(b_db, 2), np.percentile(b_db, 98)
+                        norm_b = np.clip((b_db - b_min) / (b_max - b_min + 1e-6) * 255.0, 0, 255).astype(np.uint8)
+                    else:
+                        p2, p98 = np.percentile(b, 2), np.percentile(b, 98)
+                        norm_b = np.clip((b - p2) / (p98 - p2 + 1e-6) * 255.0, 0, 255).astype(np.uint8)
+                    rgb = np.stack([norm_b, norm_b, norm_b], axis=-1)
+
             Image.fromarray(rgb).save(preview_png)
             default_composite = processed_dir / "composite.png"
             if not default_composite.is_file():
@@ -80,20 +101,22 @@ def ingest_rasters(
     classifier = InputClassifier()
     asset_inputs: list[dict[str, Any]] = []
     for path in saved_paths:
-        asset_inputs.append({
+        item: dict[str, Any] = {
             "file_path": str(path.resolve()),
             "filename": path.name,
-            "sensor": sensor,
-        })
+        }
+        if sensor and sensor.strip():
+            item["sensor"] = sensor.strip()
+        asset_inputs.append(item)
     analysis = classifier.analyzer.analyze_inputs(asset_inputs)
     classification = classifier.classify(asset_inputs, analysis_metadata=analysis)
     analyzed = list(analysis.get("assets") or [])
 
-    if sensor:
+    if sensor and sensor.strip():
         for asset in analyzed:
-            asset.setdefault("sensor", sensor)
+            asset.setdefault("sensor", sensor.strip())
             tags = dict(asset.get("tags") or {})
-            tags.setdefault("SENSOR", sensor)
+            tags.setdefault("SENSOR", sensor.strip())
             asset["tags"] = tags
 
     for asset in analyzed:

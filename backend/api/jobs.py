@@ -141,7 +141,7 @@ async def get_job(job_id: str) -> JobView:
     return view
 
 
-@router.get("/jobs/{job_id}/artifacts/composite")
+@router.api_route("/jobs/{job_id}/artifacts/composite", methods=["GET", "HEAD"])
 async def get_composite(job_id: str, slot: str | None = None, index: int = 0):
     if get_job_view(job_id) is None:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -153,7 +153,7 @@ async def get_composite(job_id: str, slot: str | None = None, index: int = 0):
     return FileResponse(safe, media_type="image/png", filename=safe.name)
 
 
-@router.get("/jobs/{job_id}/artifacts/assets/{asset_index}")
+@router.api_route("/jobs/{job_id}/artifacts/assets/{asset_index}", methods=["GET", "HEAD"])
 async def get_asset_preview(job_id: str, asset_index: int = 0):
     if get_job_view(job_id) is None:
         raise HTTPException(status_code=404, detail="Job not found")

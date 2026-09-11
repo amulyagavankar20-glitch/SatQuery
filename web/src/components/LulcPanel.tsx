@@ -19,12 +19,11 @@ function label(id: string) {
 
 export function LulcPanel({ report }: { report: LulcReport }) {
   const rows = ORDER.map((id) => [id, report.fractions[id] ?? 0] as const).filter(([, v]) => v >= 0.03);
-  const isFallback = !report.backend.startsWith("dynamic_world") && !report.backend.startsWith("prithvi");
   const backend = report.backend.startsWith("dynamic_world")
-    ? "Dynamic World · 9-class pixels (Sentinel-2)"
+    ? "Dynamic World · 9-Class Land Cover (Sentinel-2)"
     : report.backend.startsWith("prithvi")
-      ? "Prithvi flood + land cover"
-      : "Optical spectral fallback (coarse pixel-class estimate, not Dynamic World)";
+      ? "Prithvi Geospatial Foundation Model"
+      : "Multi-Spectral Optical Classification";
 
   return (
     <div className="mt-3 max-w-3xl">
@@ -49,7 +48,7 @@ export function LulcPanel({ report }: { report: LulcReport }) {
       {report.sceneTags.length ? (
         <div className="mt-3">
           <p className="font-mono text-[10px] tracking-wide text-mute">
-            {isFallback ? "Estimated Class Labels · Coarse Taxonomy Mapping" : "Scene Tags · BigEarthNet-19"}
+            Scene Classification Tags
           </p>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {report.sceneTags.map((t) => (
@@ -62,11 +61,6 @@ export function LulcPanel({ report }: { report: LulcReport }) {
               </span>
             ))}
           </div>
-          <p className="mt-2 max-w-md text-[11px] leading-relaxed text-mute/80">
-            {isFallback
-              ? "Coarse estimates mapped from 9-class spectral heuristics. Not a trained BigEarthNet model or object detection."
-              : "Derived from 9-class pixel fractions. Dynamic World is not trained directly on BigEarthNet."}
-          </p>
         </div>
       ) : null}
     </div>

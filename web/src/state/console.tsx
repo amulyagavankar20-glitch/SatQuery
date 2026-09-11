@@ -272,7 +272,7 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
 
         const allFiles = next.map((s) => s.file).filter((f): f is File => Boolean(f));
         if (apiUp && allFiles.length) {
-          void ingestRasters(allFiles, "Cartosat-2S", "Preview uploaded imagery").then((ingest) => {
+          void ingestRasters(allFiles, undefined, "Preview uploaded imagery").then((ingest) => {
             if (ingest.valid && ingest.assets.length) {
               setSlots((current) =>
                 current.map((s, idx) => {
@@ -316,10 +316,12 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
 
   const toggleSlotModality = useCallback((targetSlot?: "T1" | "T2") => {
     const slotToToggle = targetSlot ?? activeSlot;
+    let newMod: string = "OPTICAL";
     setSlots((prev) =>
       prev.map((s) => {
         if (s.slot !== slotToToggle) return s;
         const nextMod: "OPTICAL" | "SAR" = s.modality === "SAR" ? "OPTICAL" : "SAR";
+        newMod = nextMod;
         return {
           ...s,
           modality: nextMod,
@@ -327,7 +329,7 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
         };
       }),
     );
-    toast(`Switched ${slotToToggle} to SAR modality`);
+    toast(`Switched ${slotToToggle} to ${newMod} modality`);
   }, [activeSlot, toast]);
 
   const setLayer = useCallback((id: LayerId, on: boolean) => {
@@ -378,7 +380,7 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
 
       if (apiUp && files.length) {
         try {
-          const ingest = await ingestRasters(files, activeSlotObj?.sensor ?? "Cartosat-2S", query);
+          const ingest = await ingestRasters(files, undefined, query);
           if (ingest.valid) {
             applySlots(
               snapshot.map((s, i) => {
