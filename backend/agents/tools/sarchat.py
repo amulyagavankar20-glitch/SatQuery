@@ -77,12 +77,41 @@ class SARChatTool(BaseTool):
             except Exception as e:
                 logging.warning(f"[SAR] Failed rendering visualizations: {e}")
 
+        scene_tags = []
+        if scene_stats:
+            try:
+                from backend.agents.tools.bigearthnet import scene_tags as ben_tags
+
+                water = float(scene_stats.get("water_percent") or 0) / 100.0
+                built = float(scene_stats.get("urban_percent") or 0) / 100.0
+                veg = float(scene_stats.get("vegetation_percent") or 0) / 100.0
+                other = float(scene_stats.get("other_percent") or 0) / 100.0
+                scene_tags = ben_tags(
+                    {
+                        "water": water,
+                        "built": built,
+                        "trees": veg * 0.4,
+                        "grass": veg * 0.35,
+                        "crops": veg * 0.25,
+                        "bare": other,
+                    }
+                )
+                if scene_tags and "BigEarthNet-19" not in raw_answer:
+                    raw_answer = (
+                        f"{raw_answer}\n\n**Scene tags** (BigEarthNet-19 names from SAR "
+                        "backscatter fractions — not a BEN-S1 trained net)\n"
+                        + " · ".join(t["name"] for t in scene_tags)
+                    )
+            except Exception as e:
+                logging.warning(f"[SAR] Failed mapping BEN-19 tags: {e}")
+
         return {
             "answer": raw_answer,
             "model": model_result.get("model", "SARChat-InternVL2.5-2B"),
             "modality": "SAR",
             "latency_ms": model_result.get("latency_ms"),
             "scene_statistics": scene_stats,
+            "scene_tags": scene_tags,
             "detections": detections,
             "visualizations": visualizations,
             "status": model_result.get("status", "success"),

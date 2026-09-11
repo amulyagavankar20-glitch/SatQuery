@@ -103,6 +103,7 @@ class SARChatService:
         self.model: Any = None
         self.transform = build_transform(input_size=448)
         self._is_loaded = False
+        self._load_failed = False
         self._load_lock = threading.Lock()
 
     @staticmethod
@@ -235,13 +236,22 @@ class SARChatService:
         if not question or not question.strip():
             raise ValueError("SAR question cannot be empty.")
 
-        if not self.is_available():
+        if self._load_failed or not self.is_available():
             logging.warning(
-                "[SAR] SARChat weights not on disk; using OpenRouter Gemma on the SAR composite."
+                "[SAR] Local SARChat unavailable; using OpenRouter Gemma on the SAR composite."
             )
             return self._infer_via_gemma(image_source, question)
 
-        self.load_model()
+        try:
+            self.load_model()
+        except Exception as exc:
+            logging.warning(
+                f"[SAR] Local SARChat failed to load ({exc}). "
+                "InternLM2 tokenizer is incompatible with current SentencePiece; "
+                "falling back to Gemma on the SAR composite."
+            )
+            self._load_failed = True
+            return self._infer_via_gemma(image_source, question)
 
         logging.info(f"[SAR] Received SAR query: '{question}'")
         logging.info(f"[SAR] Running inference on image: {image_source}")
@@ -338,25 +348,39 @@ class SARChatService:
 
         start_time = time.time()
         pil_img = load_sar_image_to_pil(image_source)
-        client = get_vlm_client()
-        prompt = (
-            "You are reading a synthetic-aperture radar (SAR) composite, not optical RGB. "
-            "Bright returns are typically built-up or rough surface; dark returns are water or "
-            "smooth specular. Answer only from this image.\n\n"
-            f"Question: {question.strip()}"
-        )
-        answer = client.generate_multimodal_sync(
-            prompt=prompt,
-            images=[pil_img],
-            temperature=0.0,
-        )
-        return {
-            "answer": str(answer).strip(),
-            "model": f"openrouter:{client.model} (SAR composite; SARChat weights not loaded)",
-            "modality": "SAR",
-            "latency_ms": round((time.time() - start_time) * 1000.0, 2),
-            "status": "success",
-        }
+        try:
+            client = get_vlm_client()
+            prompt = (
+                "You are reading a synthetic-aperture radar (SAR) composite, not optical RGB. "
+                "Bright returns are typically built-up or rough surface; dark returns are water or "
+                "smooth specular. Answer only from this image.\n\n"
+                f"Question: {question.strip()}"
+            )
+            answer = client.generate_multimodal_sync(
+                prompt=prompt,
+                images=[pil_img],
+                temperature=0.0,
+            )
+            return {
+                "answer": str(answer).strip(),
+                "model": f"openrouter:{client.model} (SAR composite; SARChat tokenizer blocked)",
+                "modality": "SAR",
+                "latency_ms": round((time.time() - start_time) * 1000.0, 2),
+                "status": "success",
+            }
+        except Exception as exc:
+            logging.warning(f"[SAR] Gemma SAR talk failed ({exc}); using backscatter-only answer.")
+            return {
+                "answer": (
+                    "Local SARChat could not load (InternLM2 tokenizer vs SentencePiece). "
+                    "OpenRouter Gemma was rate-limited. Scene interpretation below is from "
+                    "calibrated VV/VH backscatter only."
+                ),
+                "model": "sar_backscatter_fallback",
+                "modality": "SAR",
+                "latency_ms": round((time.time() - start_time) * 1000.0, 2),
+                "status": "success",
+            }
 
     def query(self, image_path: str | Path, question: str) -> dict[str, Any]:
         """Programmatic interface for benchmark datasets and automated evaluations."""

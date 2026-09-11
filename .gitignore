@@ -34,6 +34,7 @@ ENV/
 .env
 .env.local
 .env.*.local
+model_scope.md
 *.pem
 *.key
 *.crt
