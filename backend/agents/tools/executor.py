@@ -33,27 +33,28 @@ from backend.agents.tools.mock_tools import (
     MockAgreement,
     MockMobileSAM,
 )
-from backend.agents.tools.sar_map import SarMapTool
-from backend.agents.tools.bit_cd import BITChangeDetectionTool
-from backend.agents.tools.lulc import LulcMapTool
+from backend.agents.tools.sarchat import SARChatTool
+from backend.agents.tools.geoground import GeoGroundTool
+from backend.agents.tools.bit import BITTool
 
 # ---------------------------------------------------------------------------
 # Canonical mapping from tool_id → concrete implementation class.
 # Every tool ID used by graph.py / ToolSelector MUST appear here.
 # ---------------------------------------------------------------------------
 _TOOL_IMPLEMENTATIONS: dict[str, type[BaseTool]] = {
-    "sar_map":          SarMapTool,
+    "geoground_analyze": GeoGroundTool,
+    "sarchat_vqa":      SARChatTool,
+    "bit_analyze":      BITTool,
     "geochat_vqa":      MockGeochatVQA,
     "geochat_describe": MockGeochatDescribe,
     "grounding":        MockGrounding,
-    "bit_cd":           BITChangeDetectionTool,
+    "bit_cd":           MockBitCD,
     "align":            MockAlign,
     "vectorize":        MockVectorize,
     "coregister":       MockCoregister,
     "fusion_s1s2":      MockFusion,
     "agreement":        MockAgreement,
     "mobile_sam":       MockMobileSAM,
-    "lulc_map":         LulcMapTool,
 }
 
 

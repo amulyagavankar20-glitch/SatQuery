@@ -94,6 +94,8 @@ def create_job_directory(job_id: str | uuid.UUID, base_dir: Path | None = None) 
         "processed": job_dir / "processed",
         "tiles": job_dir / "tiles",
         "masks": job_dir / "masks",
+        "regions": job_dir / "regions",
+        "overlays": job_dir / "overlays",
         "vectors": job_dir / "vectors",
         "reports": job_dir / "reports",
     }

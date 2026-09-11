@@ -218,6 +218,7 @@ class BasePreprocessor:
             bounds_wgs84=[round(x, 6) for x in bounds_wgs84] if bounds_wgs84 else None,
             bbox_wkt=bbox_wkt,
             crs=crs,
+            transform=[float(value) for value in tile_transform],
             pair_tag=pair_tag,
             pair_tile_id=pair_tile_id,
             acquisition_date=acquired_at,

@@ -9,13 +9,19 @@ class ToolSelectorError(Exception):
 
 # Machine-readable specialist capability definitions (§11)
 CAPABILITY_MATRIX: dict[str, dict[str, Any]] = {
-    "sar_map": {
-        "tasks": {RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value},
-        "modalities": {InputClass.SINGLE_SAR.value},
+    "geoground_analyze": {
+        "tasks": {RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value,
+                  RouterTask.CHANGE_VQA.value, RouterTask.OPTICAL_SAR_ANALYSIS.value},
+        "modalities": {InputClass.SINGLE_OPTICAL.value, InputClass.BI_TEMPORAL.value, InputClass.OPTICAL_SAR.value},
     },
-    "lulc_map": {
-        "tasks": {RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value},
-        "modalities": {InputClass.SINGLE_OPTICAL.value, InputClass.BI_TEMPORAL.value},
+    "bit_analyze": {
+        "tasks": {RouterTask.CHANGE_DETECTION.value, RouterTask.CHANGE_VQA.value},
+        "modalities": {InputClass.BI_TEMPORAL.value},
+    },
+    "sarchat_vqa": {
+        "tasks": {RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value,
+                  RouterTask.CHANGE_VQA.value, RouterTask.OPTICAL_SAR_ANALYSIS.value},
+        "modalities": {InputClass.SINGLE_SAR.value, InputClass.BI_TEMPORAL.value, InputClass.OPTICAL_SAR.value},
     },
     "geochat_vqa": {
         "tasks": {RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value},
@@ -79,12 +85,12 @@ TASK_INPUT_COMPATIBILITY: dict[RouterTask, set[InputClass]] = {
 
 # Locked deterministic routing sequences (§5, §9)
 TASK_TO_TOOLS: dict[RouterTask, list[str]] = {
-    RouterTask.SINGLE_VQA: ["preprocess", "lulc_map"],
-    RouterTask.CAPTIONING: ["preprocess", "lulc_map"],
-    RouterTask.GROUNDING: ["preprocess", "lulc_map"],
-    RouterTask.CHANGE_DETECTION: ["preprocess", "bit_cd"],
-    RouterTask.CHANGE_VQA: ["preprocess", "bit_cd"],
-    RouterTask.OPTICAL_SAR_ANALYSIS: ["preprocess", "coregister", "fusion_s1s2", "agreement"],
+    RouterTask.SINGLE_VQA: ["preprocess", "geoground_analyze"],
+    RouterTask.CAPTIONING: ["preprocess", "geoground_analyze"],
+    RouterTask.GROUNDING: ["preprocess", "geoground_analyze"],
+    RouterTask.CHANGE_DETECTION: ["preprocess", "bit_analyze"],
+    RouterTask.CHANGE_VQA: ["preprocess", "bit_analyze"],
+    RouterTask.OPTICAL_SAR_ANALYSIS: ["preprocess", "geoground_analyze", "sarchat_vqa"],
 }
 
 
@@ -107,13 +113,17 @@ class ToolSelector:
         if not isinstance(task, RouterTask) or task not in self.TASK_TO_TOOLS:
             raise ToolSelectorError(f"Unsupported task for deterministic routing: {task}")
         
+        # When input is SINGLE_SAR, route single-image VQA/captioning/grounding through sarchat_vqa
         if input_class == InputClass.SINGLE_SAR:
             if task == RouterTask.SINGLE_VQA:
-                return ["preprocess", "sar_map"]
+                return ["preprocess", "sarchat_vqa"]
             elif task == RouterTask.CAPTIONING:
-                return ["preprocess", "sar_map"]
+                return ["preprocess", "sarchat_vqa"]
             elif task == RouterTask.GROUNDING:
-                return ["preprocess", "sar_map", "grounding"]
+                return ["preprocess", "sarchat_vqa", "grounding"]
+
+        if input_class == InputClass.OPTICAL_SAR:
+            return ["preprocess", "geoground_analyze", "sarchat_vqa"]
 
         return list(self.TASK_TO_TOOLS[task])
 

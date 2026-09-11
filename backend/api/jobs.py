@@ -90,6 +90,11 @@ async def run_job(job: JobCreate, background_tasks: BackgroundTasks):
         session = get_session_by_job_id(job.job_id)
         if session is None:
             raise HTTPException(status_code=404, detail="Ingested job not found. POST /ingest first.")
+        if session.status == "refused":
+            raise HTTPException(
+                status_code=409,
+                detail=session.errors or ["This ingested job was refused and cannot be run."],
+            )
         session.query = job.query
         if job.input_mode:
             session.input_mode = job.input_mode

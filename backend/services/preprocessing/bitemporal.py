@@ -157,9 +157,21 @@ class BitemporalPreprocessor(BasePreprocessor):
                 data1 = s1.read([1, 2, 3]) if count1 >= 3 else np.repeat(s1.read(1)[np.newaxis, :, :], 3, axis=0)
                 data2 = s2.read([1, 2, 3]) if count2 >= 3 else np.repeat(s2.read(1)[np.newaxis, :, :], 3, axis=0)
 
-            # Normalize T1 and T2 consistently
-            norm1 = self.normalize_percentile(data1, p_min=self.p_min, p_max=self.p_max)
-            norm2 = self.normalize_percentile(data2, p_min=self.p_min, p_max=self.p_max)
+            # Use one percentile scale per band across both dates.  Independent
+            # stretches can turn radiometric presentation differences into false
+            # temporal evidence for BIT.
+            norm1 = np.zeros_like(data1, dtype=np.uint8)
+            norm2 = np.zeros_like(data2, dtype=np.uint8)
+            for band in range(3):
+                combined = np.concatenate((data1[band].ravel(), data2[band].ravel()))
+                valid = combined[np.isfinite(combined)]
+                if valid.size == 0:
+                    continue
+                low, high = np.percentile(valid, [self.p_min, self.p_max])
+                if high <= low:
+                    high = low + 1.0
+                norm1[band] = np.clip((data1[band] - low) * 255.0 / (high - low), 0, 255).astype(np.uint8)
+                norm2[band] = np.clip((data2[band] - low) * 255.0 / (high - low), 0, 255).astype(np.uint8)
 
             # Save PNG previews
             preview_t1_png = proc_t1_dir / f"preview_t1_{path1.stem}.png"
@@ -180,6 +192,7 @@ class BitemporalPreprocessor(BasePreprocessor):
 
             source_id_1 = str(a1.get("asset_id") or path1.stem)
             source_id_2 = str(a2.get("asset_id") or path2.stem)
+            temporal_modality = str(a1.get("modality", Modality.OPTICAL.value)).upper()
 
             for idx, (col_off, row_off, w, h) in enumerate(windows):
                 t1_slice = norm1[:, row_off : row_off + h, col_off : col_off + w]
@@ -210,7 +223,7 @@ class BitemporalPreprocessor(BasePreprocessor):
                 ref1 = self.create_tile_reference(
                     tile_index=idx,
                     source_asset_id=source_id_1,
-                    modality=Modality.OPTICAL.value,
+                    modality=temporal_modality,
                     file_path=tile_path_1,
                     col_off=col_off,
                     row_off=row_off,
@@ -226,7 +239,7 @@ class BitemporalPreprocessor(BasePreprocessor):
                 ref2 = self.create_tile_reference(
                     tile_index=idx,
                     source_asset_id=source_id_2,
-                    modality=Modality.OPTICAL.value,
+                    modality=temporal_modality,
                     file_path=tile_path_2,
                     col_off=col_off,
                     row_off=row_off,

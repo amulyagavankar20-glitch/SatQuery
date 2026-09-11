@@ -24,6 +24,7 @@ def _tool(
     description: str,
     supported_tasks: list[str],
     supported_modalities: list[str],
+    enabled: bool = True,
 ) -> dict[str, Any]:
     return {
         "tool_id": tool_id,
@@ -34,11 +35,29 @@ def _tool(
         "description": description,
         "supported_tasks": supported_tasks,
         "supported_modalities": supported_modalities,
-        "enabled": True,
+        "enabled": enabled,
     }
 
 
 TOOL_CATALOG: list[dict[str, Any]] = [
+    _tool(
+        "geoground_analyze",
+        "GeoGround optical analysis",
+        "VLM",
+        model_name="GeoGround",
+        description="S2-only optical VQA, scene understanding, and grounding evidence.",
+        supported_tasks=[RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value, RouterTask.CHANGE_VQA.value, RouterTask.OPTICAL_SAR_ANALYSIS.value],
+        supported_modalities=[InputClass.SINGLE_OPTICAL.value, InputClass.BI_TEMPORAL.value, InputClass.OPTICAL_SAR.value],
+    ),
+    _tool(
+        "bit_analyze",
+        "BIT temporal change detector",
+        "CHANGE_DETECTOR",
+        model_name="BIT",
+        description="Local BIT change detection returning masks, statistics, and change regions.",
+        supported_tasks=[RouterTask.CHANGE_DETECTION.value, RouterTask.CHANGE_VQA.value],
+        supported_modalities=[InputClass.BI_TEMPORAL.value],
+    ),
     _tool(
         "preprocess",
         "Input-type-aware preprocessor",
@@ -48,24 +67,14 @@ TOOL_CATALOG: list[dict[str, Any]] = [
         supported_modalities=_ALL_CLASSES,
     ),
     _tool(
-        "sar_map",
-        "Sentinel-1 BigEarthNet mapper",
-        "CLASSIFICATION",
-        model_name="reBEN-ResNet50-S1",
-        model_version="resnet50-s1-v0.2.0",
-        description="ResNet50 trained on Sentinel-1 BigEarthNet v2 (19 CORINE classes) plus VV/VH backscatter fractions.",
-        supported_tasks=[RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value],
-        supported_modalities=[InputClass.SINGLE_SAR.value],
-    ),
-    _tool(
-        "lulc_map",
-        "Dynamic World land cover",
-        "SEGMENTATION",
-        model_name="DynamicWorld",
-        model_version="dw-s2-9class",
-        description="Nine-class pixel map (Dynamic World on S2, spectral fallback on RGB). Scene tags use BigEarthNet-19 names mapped from those fractions — DW is not trained on BEN.",
-        supported_tasks=[RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value],
-        supported_modalities=[InputClass.SINGLE_OPTICAL.value, InputClass.BI_TEMPORAL.value],
+        "sarchat_vqa",
+        "SARChat VQA",
+        "VLM",
+        model_name="SARChat-InternVL2.5-2B",
+        model_version="sarchat-internvl2.5-2b-v1",
+        description="Specialized SAR vision-language model for radar image understanding, VQA, and interpretation.",
+        supported_tasks=[RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value, RouterTask.CHANGE_VQA.value, RouterTask.OPTICAL_SAR_ANALYSIS.value],
+        supported_modalities=[InputClass.SINGLE_SAR.value, InputClass.BI_TEMPORAL.value, InputClass.OPTICAL_SAR.value],
     ),
     _tool(
         "geochat_vqa",
@@ -76,6 +85,7 @@ TOOL_CATALOG: list[dict[str, Any]] = [
         description="Talking VLM for single-image VQA and captioning.",
         supported_tasks=[RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value],
         supported_modalities=[InputClass.SINGLE_OPTICAL.value, InputClass.SINGLE_SAR.value],
+        enabled=False,
     ),
     _tool(
         "geochat_describe",
@@ -86,6 +96,7 @@ TOOL_CATALOG: list[dict[str, Any]] = [
         description="Describe a change crop or optical–SAR fusion result.",
         supported_tasks=[RouterTask.CHANGE_VQA.value, RouterTask.OPTICAL_SAR_ANALYSIS.value],
         supported_modalities=[InputClass.BI_TEMPORAL.value, InputClass.OPTICAL_SAR.value],
+        enabled=False,
     ),
     _tool(
         "grounding",
@@ -96,6 +107,7 @@ TOOL_CATALOG: list[dict[str, Any]] = [
         description="Ground a GeoChat phrase onto the image with MobileSAM.",
         supported_tasks=[RouterTask.GROUNDING.value],
         supported_modalities=[InputClass.SINGLE_OPTICAL.value, InputClass.SINGLE_SAR.value],
+        enabled=False,
     ),
     _tool(
         "mobile_sam",
@@ -106,6 +118,7 @@ TOOL_CATALOG: list[dict[str, Any]] = [
         description="Optional grounding fallback from a GeoChat phrase.",
         supported_tasks=[RouterTask.GROUNDING.value],
         supported_modalities=[InputClass.SINGLE_OPTICAL.value, InputClass.SINGLE_SAR.value],
+        enabled=False,
     ),
     _tool(
         "align",
@@ -114,6 +127,7 @@ TOOL_CATALOG: list[dict[str, Any]] = [
         description="Co-register a bitemporal pair onto a shared grid.",
         supported_tasks=[RouterTask.CHANGE_DETECTION.value, RouterTask.CHANGE_VQA.value],
         supported_modalities=[InputClass.BI_TEMPORAL.value],
+        enabled=False,
     ),
     _tool(
         "bit_cd",
@@ -124,6 +138,7 @@ TOOL_CATALOG: list[dict[str, Any]] = [
         description="Silent pixel-level change mask on 256 tiles.",
         supported_tasks=[RouterTask.CHANGE_DETECTION.value, RouterTask.CHANGE_VQA.value],
         supported_modalities=[InputClass.BI_TEMPORAL.value],
+        enabled=False,
     ),
     _tool(
         "vectorize",
@@ -132,6 +147,7 @@ TOOL_CATALOG: list[dict[str, Any]] = [
         description="Polygonize a change mask into CRS-aware GeoJSON.",
         supported_tasks=[RouterTask.CHANGE_DETECTION.value, RouterTask.CHANGE_VQA.value],
         supported_modalities=[InputClass.BI_TEMPORAL.value],
+        enabled=False,
     ),
     _tool(
         "coregister",
@@ -140,6 +156,7 @@ TOOL_CATALOG: list[dict[str, Any]] = [
         description="Resample SAR onto the optical grid over the intersection.",
         supported_tasks=[RouterTask.OPTICAL_SAR_ANALYSIS.value],
         supported_modalities=[InputClass.OPTICAL_SAR.value],
+        enabled=False,
     ),
     _tool(
         "fusion_s1s2",
@@ -150,6 +167,7 @@ TOOL_CATALOG: list[dict[str, Any]] = [
         description="Small dual-encoder fusion head for optical + SAR.",
         supported_tasks=[RouterTask.OPTICAL_SAR_ANALYSIS.value],
         supported_modalities=[InputClass.OPTICAL_SAR.value],
+        enabled=False,
     ),
     _tool(
         "agreement",
@@ -158,6 +176,7 @@ TOOL_CATALOG: list[dict[str, Any]] = [
         description="Agreement / uncertain overlay between optical and SAR evidence.",
         supported_tasks=[RouterTask.OPTICAL_SAR_ANALYSIS.value],
         supported_modalities=[InputClass.OPTICAL_SAR.value],
+        enabled=False,
     ),
     _tool(
         "geospatial_validator",
@@ -166,6 +185,7 @@ TOOL_CATALOG: list[dict[str, Any]] = [
         description="CRS, overlap, and pair-fitness checks before specialist tools.",
         supported_tasks=_ALL_TASKS,
         supported_modalities=_ALL_CLASSES,
+        enabled=False,
     ),
 ]
 

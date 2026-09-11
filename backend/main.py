@@ -1,4 +1,5 @@
 from typing import Any
+import logging
 
 import httpx
 from fastapi import FastAPI
@@ -27,16 +28,8 @@ async def startup():
             seed_tool_registry(db)
         finally:
             db.close()
-    except Exception:
-        pass
-
-    try:
-        import redis.asyncio as redis
-        from fastapi_limiter import FastAPILimiter
-        redis_client = redis.from_url(settings.REDIS_URL, encoding="utf-8", decode_responses=True)
-        await FastAPILimiter.init(redis_client)
-    except Exception:
-        pass
+    except Exception as exc:
+        logging.getLogger(__name__).warning("Tool registry was not seeded at startup: %s", exc)
 
 app.add_middleware(RequestTrackingMiddleware)
 

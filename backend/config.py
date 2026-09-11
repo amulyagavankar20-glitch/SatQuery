@@ -82,6 +82,18 @@ class Settings(BaseSettings):
     TALKING_VLM_MODEL: str | None = None
     TALKING_VLM_BACKEND: str
     TALKING_VLM_WEIGHTS_PATH: str | None = None
+    # Local specialist checkpoints.  Their loaders are isolated under
+    # backend.inference and are never fetched or run remotely by default.
+    GEOGROUND_MODEL_PATH: str | None = None
+    BIT_CHECKPOINT_PATH: str | None = None
+    BIT_ROOT: str | None = None
+    BIT_PROJECT_NAME: str = "BIT_LEVIR"
+    BIT_CHECKPOINT_NAME: str = "best_ckpt.pt"
+    BIT_IMAGE_SIZE: int = 256
+    # Values from the final mask-cleanup cell in models/BIT.ipynb.
+    BIT_CLOSE_KERNEL_SIZE: int = 7
+    BIT_OPEN_KERNEL_SIZE: int = 3
+    BIT_MIN_REGION_AREA: int = 200
     BIT_WEIGHTS_PATH: str | None = None
     SAM_WEIGHTS_PATH: str | None = None
     FUSION_WEIGHTS_PATH: str | None = None

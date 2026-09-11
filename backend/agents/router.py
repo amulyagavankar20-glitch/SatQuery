@@ -1,60 +1,47 @@
-"""
-SatQuery AI — Agent Query Intent Router
-
-Uses a Vision-Language Model (VLM) via OpenRouter (environment-driven via VLM_MODEL)
-to classify user query intent into a structured RouteResponse.
-Strictly distinguishes USER INTENT from INPUT CONFIGURATION.
-"""
-
-from __future__ import annotations
-
 import json
-import re
 from typing import Any
 
+import httpx
 from pydantic import ValidationError
 
 from backend.config import settings
 from backend.schemas import RouteRequest, RouteResponse, RouterTask, RouterTool
-from backend.services.vlm import (
-    VLMClient,
-    VLMError,
-    get_vlm_client,
-)
-from src.logger import logging
 
 
-class RouterError(Exception):
-    """Raised when structured routing fails and cannot be recovered."""
+class QwenRouterError(Exception):
     pass
 
 
-# Backward compatibility alias
-QwenRouterError = RouterError
-
-
-class VLMRouter:
+class QwenRouter:
     """
-    Text-only query intent classifier powered by VLM via OpenRouter.
+    Text-only router powered by Qwen2.5-3B-Instruct.
     Responsible for distinguishing USER INTENT from INPUT CONFIGURATION.
     """
 
     def __init__(
         self,
-        client: VLMClient | None = None,
+        ollama_url: str | None = None,
+        model: str | None = None,
         timeout: float | None = None,
     ):
-        self.client = client or get_vlm_client()
-        self.timeout = timeout if timeout is not None else settings.OPENROUTER_TIMEOUT_SECONDS
+        base = (ollama_url or settings.OLLAMA_BASE_URL).rstrip("/")
+        if base.endswith("/api/generate"):
+            self.ollama_url = base
+        else:
+            self.ollama_url = f"{base}/api/generate"
+        self.model = model or settings.OLLAMA_ROUTER_MODEL
+        self.timeout = timeout if timeout is not None else settings.OLLAMA_TIMEOUT_SECONDS
         self.response_schema = RouteResponse.model_json_schema()
         self.schema_json = json.dumps(self.response_schema, indent=2)
 
-    def build_system_prompt(self) -> str:
-        return f"""You are the SatQuery AI query intent classifier. Your only job is to map the user's intent to a specific structured intent schema.
+    def build_prompt(self, request: RouteRequest, available_tools: list[str], constraints: list[str]) -> str:
+        return f"""<|im_start|>system
+You are the SatQuery AI query intent classifier. Your only job is to map the user's intent to a specific structured intent schema.
 You must NOT answer the user's question directly.
 You must NOT execute code, SQL, or arbitrary tools.
 You must NOT generate filesystem paths.
-You receive TEXT ONLY. You will never receive raw image pixels.
+You receive a verified input manifest and may receive image previews in the
+application integration. Treat manifest modality facts as authoritative.
 
 Distinguish INPUT CONFIGURATION from USER INTENT.
 For example: just because two optical images are provided, it does not mean the task is CHANGE_DETECTION. The user must explicitly ask for change or comparison.
@@ -65,230 +52,215 @@ Constraints:
 - If the query asks for change or differences between timestamps, task MUST be CHANGE_DETECTION or CHANGE_VQA, and requires_change_analysis must be true.
 - If the query asks to ground, locate, or segment specific objects, task MUST be GROUNDING and requires_grounding must be true.
 - If the query asks to fuse or analyze optical and SAR data together, task MUST be OPTICAL_SAR_ANALYSIS and requires_optical_sar_analysis must be true.
+- If Input Class is OPTICAL_SAR, task MUST be OPTICAL_SAR_ANALYSIS: the plan runs GeoGround on optical/S2 and SARChat on SAR/S1 independently, then Qwen synthesizes their evidence. Never request image fusion.
+- If Input Class is BI_TEMPORAL and the query asks for a comparison, change, increase, decrease, or temporal difference, task MUST be CHANGE_DETECTION or CHANGE_VQA so BIT receives the validated pair.
 - If the query asks to identify or answer questions about a single image, task MUST be SINGLE_VQA.
 - If the query asks to describe an image in general, task MUST be CAPTIONING.
 
 You MUST output your response as valid JSON matching this exact JSON schema:
-{self.schema_json}"""
-
-    def build_user_prompt(self, request: RouteRequest) -> str:
-        return f"""User Query: {request.query}
-Input Class / Normalized Metadata: {json.dumps(request.manifest, default=str)}"""
+{self.schema_json}
+<|im_end|>
+<|im_start|>user
+User Query: {request.query}
+Input Class / Normalized Metadata: {json.dumps(request.manifest, default=str)}
+<|im_end|>
+<|im_start|>assistant
+"""
 
     def validate_intent(self, route_resp: RouteResponse) -> RouteResponse:
         """
-        Validate semantic consistency of the structured intent returned by VLM.
-        Raises RouterError if the intent contains contradictions or unsupported tasks.
+        Validate semantic consistency of the structured intent returned by Qwen.
+        Raises QwenRouterError if the intent contains contradictions or unsupported tasks.
         """
         task = route_resp.task
         if not isinstance(task, RouterTask) and task not in RouterTask.__members__.values():
-            raise RouterError(f"Unsupported task in router output: {task}")
+            raise QwenRouterError(f"Unsupported task in router output: {task}")
 
         # Semantic flag consistency validation
         if task in (RouterTask.CHANGE_VQA, RouterTask.CHANGE_DETECTION):
             if not route_resp.requires_change_analysis:
-                raise RouterError(
+                raise QwenRouterError(
                     f"Intent contradiction: task '{task.value}' requires requires_change_analysis=True"
                 )
             if route_resp.requires_optical_sar_analysis:
-                raise RouterError(
+                raise QwenRouterError(
                     f"Intent contradiction: task '{task.value}' cannot require requires_optical_sar_analysis=True"
                 )
 
         if task == RouterTask.GROUNDING:
             if not route_resp.requires_grounding:
-                raise RouterError(
+                raise QwenRouterError(
                     f"Intent contradiction: task '{task.value}' requires requires_grounding=True"
                 )
             if route_resp.requires_change_analysis:
-                raise RouterError(
+                raise QwenRouterError(
                     f"Intent contradiction: task '{task.value}' cannot require requires_change_analysis=True"
                 )
 
         if task == RouterTask.OPTICAL_SAR_ANALYSIS:
             if not route_resp.requires_optical_sar_analysis:
-                raise RouterError(
+                raise QwenRouterError(
                     f"Intent contradiction: task '{task.value}' requires requires_optical_sar_analysis=True"
                 )
             if route_resp.requires_change_analysis:
-                raise RouterError(
+                raise QwenRouterError(
                     f"Intent contradiction: task '{task.value}' cannot require requires_change_analysis=True"
                 )
 
         if task in (RouterTask.SINGLE_VQA, RouterTask.CAPTIONING):
             if route_resp.requires_change_analysis:
-                raise RouterError(
+                raise QwenRouterError(
                     f"Intent contradiction: task '{task.value}' cannot have requires_change_analysis=True"
                 )
             if route_resp.requires_optical_sar_analysis:
-                raise RouterError(
+                raise QwenRouterError(
                     f"Intent contradiction: task '{task.value}' cannot have requires_optical_sar_analysis=True"
                 )
 
         return route_resp
 
-    def _extract_json_block(self, text: str) -> str:
-        """Extracts JSON object from model output if wrapped in markdown code blocks."""
-        cleaned = text.strip()
-        # Look for ```json ... ``` blocks
-        match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", cleaned, re.DOTALL)
-        if match:
-            return match.group(1).strip()
-        # Look for raw { ... }
-        match_raw = re.search(r"(\{.*\})", cleaned, re.DOTALL)
-        if match_raw:
-            return match_raw.group(1).strip()
-        return cleaned
-
-    def _parse_raw_response(self, raw_text: str) -> RouteResponse:
-        json_str = self._extract_json_block(raw_text)
-        dict_data = json.loads(json_str)
-        if not isinstance(dict_data, dict):
-            raise RouterError("Router model did not return a JSON object")
-        if dict_data.get("tools") is None:
-            dict_data["tools"] = []
-        if isinstance(dict_data.get("tools"), list):
-            cleaned = []
-            for item in dict_data["tools"]:
-                if item is None:
-                    continue
-                cleaned.append(item.value if hasattr(item, "value") else item)
-            dict_data["tools"] = cleaned
-        parsed = RouteResponse.model_validate(dict_data)
-        return self.validate_intent(parsed)
-
-    def _route_via_qwen_ollama(self, request: RouteRequest) -> RouteResponse:
-        """Second-hop router: local Qwen2.5-3B via Ollama (from .env NEW section)."""
-        import httpx
-
-        model = settings.OLLAMA_ROUTER_MODEL
-        if not model:
-            raise RouterError("OLLAMA_ROUTER_MODEL is not configured")
-        base = (settings.OLLAMA_BASE_URL or "http://localhost:11434").rstrip("/")
-        payload = {
-            "model": model,
-            "prompt": f"{self.build_system_prompt()}\n\n{self.build_user_prompt(request)}",
-            "stream": False,
-            "format": "json",
-            "options": {"temperature": 0},
-        }
-        with httpx.Client(timeout=settings.OLLAMA_TIMEOUT_SECONDS) as client:
-            resp = client.post(f"{base}/api/generate", json=payload)
-            resp.raise_for_status()
-            raw = resp.json().get("response") or ""
-        parsed = self._parse_raw_response(raw)
-        parsed.reasoning = f"Qwen Ollama intent classifier ({model})"
-        return parsed
-
     async def route(self, request: RouteRequest) -> RouteResponse:
-        """Gemma (OpenRouter) then Qwen (Ollama) then deterministic rules."""
-        system_prompt = self.build_system_prompt()
-        user_prompt = self.build_user_prompt(request)
-        gemma_error: str | None = None
+        available_tools = [
+            "geoground_analyze", "sarchat_vqa", "bit_analyze"
+        ]
+        constraints = [
+            "Never hallucinate tool names. Only use tools from the provided list.",
+            "Never invent tasks. Only use tasks from the enum in the schema.",
+            "If the query asks for change, task MUST be CHANGE_DETECTION or CHANGE_VQA.",
+            "If the query asks to identify or describe a single image, task MUST be SINGLE_VQA or CAPTIONING."
+        ]
+
+        prompt = self.build_prompt(request, available_tools, constraints)
+        payload = self._build_payload(prompt)
 
         try:
-            raw_response = await self.client.generate_text_async(
-                prompt=user_prompt,
-                system_prompt=system_prompt,
-                response_format={"type": "json_object"},
-                temperature=0.0,
-            )
-            parsed = self._parse_raw_response(raw_response)
-            parsed.reasoning = f"Gemma OpenRouter intent classifier ({self.client.model})"
-            return parsed
-        except (VLMError, ValidationError, json.JSONDecodeError, Exception) as exc:
-            gemma_error = str(exc)
-            logging.warning(f"[Router] Gemma OpenRouter hop failed ({exc}). Trying Qwen Ollama.")
-
-        try:
-            return self._route_via_qwen_ollama(request)
-        except Exception as exc:
-            logging.warning(
-                f"[Router] Qwen Ollama hop failed ({exc}). Falling back to deterministic rules."
-            )
-            return self._fallback_route(
-                request,
-                error_reason=f"gemma: {gemma_error}; qwen: {exc}",
-            )
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(self.ollama_url, json=payload)
+                response.raise_for_status()
+                return self._apply_manifest_constraints(self._parse_response(response.json()), request)
+        except httpx.HTTPError as e:
+            from src.logger import logging
+            logging.warning(f"[Router] Ollama unreachable ({e}), using deterministic fallback intent classifier.")
+            return self._fallback_route(request)
+        except ValidationError as e:
+            raise QwenRouterError(f"Router produced invalid structured output: {e}")
+        except json.JSONDecodeError as e:
+            raise QwenRouterError(f"Router output was not valid JSON: {e}")
 
     def route_sync(self, request: RouteRequest) -> RouteResponse:
-        """Synchronous two-hop router used by LangGraph nodes."""
-        system_prompt = self.build_system_prompt()
-        user_prompt = self.build_user_prompt(request)
-        gemma_error: str | None = None
+        """Synchronous route used by LangGraph sync nodes (no nested event loop)."""
+        available_tools = [
+            "geospatial_validator", "geochat_vqa", "geochat_describe",
+            "bit_cd", "fusion_s1s2", "mobilesam", "vectorizer"
+        ]
+        constraints = [
+            "Never hallucinate tool names. Only use tools from the provided list.",
+            "Never invent tasks. Only use tasks from the enum in the schema.",
+            "If the query asks for change, task MUST be CHANGE_DETECTION or CHANGE_VQA.",
+            "If the query asks to identify or describe a single image, task MUST be SINGLE_VQA or CAPTIONING."
+        ]
+        prompt = self.build_prompt(request, available_tools, constraints)
+        payload = self._build_payload(prompt)
 
         try:
-            raw_response = self.client.generate_text_sync(
-                prompt=user_prompt,
-                system_prompt=system_prompt,
-                response_format={"type": "json_object"},
-                temperature=0.0,
-            )
-            parsed = self._parse_raw_response(raw_response)
-            parsed.reasoning = f"Gemma OpenRouter intent classifier ({self.client.model})"
-            return parsed
-        except (VLMError, ValidationError, json.JSONDecodeError, Exception) as exc:
-            gemma_error = str(exc)
-            logging.warning(f"[Router] Gemma OpenRouter hop failed ({exc}). Trying Qwen Ollama.")
+            with httpx.Client(timeout=self.timeout) as client:
+                response = client.post(self.ollama_url, json=payload)
+                response.raise_for_status()
+                return self._apply_manifest_constraints(self._parse_response(response.json()), request)
+        except httpx.HTTPError as e:
+            from src.logger import logging
+            logging.warning(f"[Router] Ollama unreachable ({e}), using deterministic fallback intent classifier.")
+            return self._fallback_route(request)
+        except ValidationError as e:
+            raise QwenRouterError(f"Router produced invalid structured output: {e}")
+        except json.JSONDecodeError as e:
+            raise QwenRouterError(f"Router output was not valid JSON: {e}")
 
-        try:
-            return self._route_via_qwen_ollama(request)
-        except Exception as exc:
-            logging.warning(
-                f"[Router] Qwen Ollama hop failed ({exc}). Falling back to deterministic rules."
-            )
-            return self._fallback_route(
-                request,
-                error_reason=f"gemma: {gemma_error}; qwen: {exc}",
-            )
-
-    def _fallback_route(self, request: RouteRequest, error_reason: str = "") -> RouteResponse:
-        """
-        Deterministic fallback intent classifier used when VLM API is offline or unconfigured.
-        Explicitly marked with fallback reasoning for auditability.
-        """
+    def _fallback_route(self, request: RouteRequest) -> RouteResponse:
+        """Heuristic fallback used when Ollama server is offline/unreachable in dev environment."""
         q = (request.query or "").lower()
-        reason = f"Deterministic fallback rule classifier (VLM unavailable: {error_reason})" if error_reason else "Deterministic rule classifier fallback"
+        input_class = str((request.manifest or {}).get("input_class", "")).upper()
+
+        # The verified manifest wins over keyword heuristics.  Cross-modal
+        # inputs are independently analysed by GeoGround and SARChat; they are
+        # never fused into a synthetic specialist input.
+        if input_class == "OPTICAL_SAR":
+            return RouteResponse(
+                task=RouterTask.OPTICAL_SAR_ANALYSIS,
+                requires_optical_sar_analysis=True,
+            )
 
         if any(w in q for w in ["change", "changed", "difference", "compare", "between", "increased", "decreased"]):
             task = RouterTask.CHANGE_VQA if ("?" in q or any(w in q for w in ["what", "how", "has", "did"])) else RouterTask.CHANGE_DETECTION
             return RouteResponse(
                 task=task,
                 requires_change_analysis=True,
-                tools=[RouterTool.GEOSPATIAL_VALIDATOR, RouterTool.BIT_CD],
-                reasoning=reason,
+                tools=[RouterTool.BIT_ANALYZE],
             )
 
         if any(w in q for w in ["ground", "locate", "segment", "highlight", "bounding", "box"]):
             return RouteResponse(
                 task=RouterTask.GROUNDING,
                 requires_grounding=True,
-                tools=[RouterTool.GEOSPATIAL_VALIDATOR, RouterTool.GEOCHAT_VQA],
-                reasoning=reason,
+                tools=[RouterTool.GEOGROUND_ANALYZE],
             )
 
         if any(w in q for w in ["fuse", "fusion", "optical and sar", "sar and optical"]):
             return RouteResponse(
                 task=RouterTask.OPTICAL_SAR_ANALYSIS,
                 requires_optical_sar_analysis=True,
-                tools=[RouterTool.GEOSPATIAL_VALIDATOR, RouterTool.FUSION_S1S2],
-                reasoning=reason,
+                tools=[RouterTool.GEOGROUND_ANALYZE, RouterTool.SARCHAT_VQA],
             )
 
         if any(w in q for w in ["describe", "caption", "overview"]):
             return RouteResponse(
                 task=RouterTask.CAPTIONING,
-                tools=[RouterTool.GEOSPATIAL_VALIDATOR, RouterTool.GEOCHAT_DESCRIBE],
-                reasoning=reason,
+                tools=[RouterTool.GEOGROUND_ANALYZE],
             )
 
         # Default single-image visual question answering
         return RouteResponse(
             task=RouterTask.SINGLE_VQA,
-            tools=[RouterTool.GEOSPATIAL_VALIDATOR, RouterTool.GEOCHAT_VQA],
-            reasoning=reason,
+            tools=[RouterTool.GEOGROUND_ANALYZE],
         )
 
+    def _apply_manifest_constraints(self, route: RouteResponse, request: RouteRequest) -> RouteResponse:
+        """Keep Qwen intent planning inside verified modality safety boundaries."""
+        input_class = str((request.manifest or {}).get("input_class", "")).upper()
+        if input_class == "OPTICAL_SAR":
+            return route.model_copy(update={
+                "task": RouterTask.OPTICAL_SAR_ANALYSIS,
+                "requires_optical_sar_analysis": True,
+                "requires_change_analysis": False,
+            })
+        if input_class == "BI_TEMPORAL" and route.task in {
+            RouterTask.SINGLE_VQA, RouterTask.CAPTIONING, RouterTask.GROUNDING,
+        }:
+            return route.model_copy(update={
+                "task": RouterTask.CHANGE_VQA,
+                "requires_change_analysis": True,
+                "requires_optical_sar_analysis": False,
+            })
+        return route
 
-# Backward compatibility alias
-QwenRouter = VLMRouter
+    def _build_payload(self, prompt: str) -> dict[str, Any]:
+        return {
+            "model": self.model,
+            "prompt": prompt,
+            # JSON-schema constrained decoding (architecture §1 / §6)
+            "format": self.response_schema,
+            "stream": False,
+            "raw": True,  # We handle the prompt formatting ourselves
+            "options": {
+                "temperature": 0.0,
+                "top_k": 1,  # Greedy decoding
+            },
+        }
+
+    def _parse_response(self, result: dict[str, Any]) -> RouteResponse:
+        response_body: str | dict[str, Any] = result.get("response", "{}")
+        if isinstance(response_body, dict):
+            parsed = RouteResponse.model_validate(response_body)
+        else:
+            parsed = RouteResponse.model_validate_json(response_body)
+        return self.validate_intent(parsed)

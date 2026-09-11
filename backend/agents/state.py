@@ -34,6 +34,8 @@ class GraphState(TypedDict, total=False):
     route: RouteResponse
     selected_tools: list[str]
     execution_plan: list[ToolSelection]
+    plan_summary: dict[str, Any]
+    retry_count: int
     injected_task: str | None  # test-only bypass of the live Qwen router
     db_factory: Any               # test/request-injected SQLAlchemy session factory
 
@@ -54,6 +56,7 @@ class GraphState(TypedDict, total=False):
     # ── Status & Errors ───────────────────────────────────────────────────────
     warnings: list[str]
     refusal_reason: str | None
+    failure_reason: str | None
     final_answer: str | None
     report_paths: list[str]
     status: str
