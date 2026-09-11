@@ -11,7 +11,7 @@ from sqlalchemy import select
 from backend.config import settings
 from backend.database import SessionLocal
 from backend.models import Asset, Job, Output, Trace
-from backend.schemas import JobAnswer, JobAssetView, JobOverlay, JobTraceView, JobView
+from backend.schemas import JobAnswer, JobAssetView, JobLulcTag, JobLulcView, JobOverlay, JobTraceView, JobView
 from backend.session import SessionContext, get_session_by_job_id
 from src.logger import logging
 
@@ -173,6 +173,38 @@ def _answer_from_session(session: SessionContext) -> JobAnswer | None:
     )
 
 
+def _lulc_from_session(session: SessionContext) -> JobLulcView | None:
+    for res in session.tool_results:
+        if not isinstance(res, dict) or res.get("tool_id") != "lulc_map":
+            continue
+        payload = res.get("result")
+        if not isinstance(payload, dict) or "fractions" not in payload:
+            continue
+        tags: list[JobLulcTag] = []
+        for raw in payload.get("scene_tags") or []:
+            if not isinstance(raw, dict) or not raw.get("name"):
+                continue
+            tags.append(
+                JobLulcTag(
+                    name=str(raw["name"]),
+                    score=float(raw.get("score") or 0),
+                    source=str(raw["source"]) if raw.get("source") else None,
+                )
+            )
+        fractions = {
+            str(k): float(v)
+            for k, v in (payload.get("fractions") or {}).items()
+            if isinstance(v, (int, float))
+        }
+        return JobLulcView(
+            backend=str(payload.get("backend") or "spectral_fallback"),
+            focus=str(payload.get("focus") or "land_cover"),
+            fractions=fractions,
+            scene_tags=tags,
+        )
+    return None
+
+
 def _warnings_from_session(session: SessionContext) -> list[str]:
     for artifact in session.artifacts:
         if isinstance(artifact, dict):
@@ -242,6 +274,7 @@ def build_job_view_from_session(session: SessionContext) -> JobView:
         errors=list(session.errors),
         refusal_reason=session.errors[0] if session.status == "refused" and session.errors else None,
         tile_count=_tile_count(job_id, session),
+        lulc=_lulc_from_session(session),
     )
 
 
@@ -352,6 +385,11 @@ def footprint_geojson(job_id: str) -> dict[str, Any] | None:
         for res in session.tool_results:
             if isinstance(res, dict) and isinstance(res.get("result"), dict):
                 dets = res["result"].get("detections") or []
+                ov = res["result"].get("overlays")
+                if isinstance(ov, dict):
+                    for feat in ov.get("features") or []:
+                        if isinstance(feat, dict) and feat.get("geometry"):
+                            features.append(feat)
                 for det in dets:
                     geo_box = det.get("bbox_wgs84")
                     if geo_box and len(geo_box) == 4:

@@ -1,3 +1,4 @@
+import { LulcPanel } from "@/components/LulcPanel";
 import { MarkdownView } from "@/components/MarkdownView";
 import { RoutingLine } from "@/components/RoutingLine";
 import { TraceAccordion } from "@/components/TraceAccordion";
@@ -56,6 +57,8 @@ export function AssistantTurn({
           <MarkdownView content={turn.answer} />
         </div>
       ) : null}
+
+      {turn.lulc ? <LulcPanel report={turn.lulc} /> : null}
 
       {turn.trace?.length ? (
         <TraceAccordion steps={turn.trace} confidence={turn.confidence} focus={answerFocus} />

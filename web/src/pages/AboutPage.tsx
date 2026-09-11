@@ -20,19 +20,21 @@ const INTAKE = [
   {
     n: "03",
     title: "Specialist",
-    body: "A frozen graph runs one path — GeoChat for talk and grounding, change and fusion as specialist tools. Nothing is invented at runtime.",
+    body: "A frozen graph runs one path — 9-class pixels, GeoChat for talk, change and fusion as specialist tools. Nothing is invented at runtime.",
   },
 ] as const;
 
 const RETURNS = [
   { title: "Prose", body: "An English answer about this scene, not a generic caption." },
-  { title: "Pixel mark", body: "Sage vectors on the raster — shoreline, change, or the grounded phrase." },
+  { title: "Pixel mark", body: "Sage vectors on the raster — water, vegetation, built-up, or change." },
   { title: "Trace", body: "The tool path, collapsed, so you can see what ran." },
 ] as const;
 
 const BENCH = [
   ["Router", "Qwen2.5-3B-Instruct · text only · JSON schema"],
   ["Talk", "GeoChat-7B · geochat_vqa / geochat_describe"],
+  ["Pixels", "Dynamic World 9-class on S2 · RGB demos use spectral fallback"],
+  ["Tags", "BigEarthNet-19 names from those pixels — DW is not trained on BEN"],
   ["Change", "align → bit_cd → vectorize"],
   ["Fusion", "Optical + SAR, co-registered over the intersection"],
 ] as const;

@@ -88,14 +88,14 @@ export function MapEvidence({
             type: "fill",
             source: "overlays",
             filter: ["==", ["get", "kind"], "change"],
-            paint: { "fill-color": "#5E8F8A", "fill-opacity": 0.22 },
+            paint: { "fill-color": "#5E8F8A", "fill-opacity": 0.34 },
           },
           {
             id: "change-line",
             type: "line",
             source: "overlays",
             filter: ["==", ["get", "kind"], "change"],
-            paint: { "line-color": "#5E8F8A", "line-width": 1.5 },
+            paint: { "line-color": "#5E8F8A", "line-width": 2.25, "line-opacity": 1 },
           },
           {
             id: "grounding-fill",
@@ -116,14 +116,54 @@ export function MapEvidence({
             type: "fill",
             source: "overlays",
             filter: ["==", ["get", "kind"], "uncertain"],
-            paint: { "fill-color": "#5E8F8A", "fill-opacity": 0.1 },
+            paint: { "fill-color": "#5E8F8A", "fill-opacity": 0.18 },
           },
           {
             id: "uncertain-line",
             type: "line",
             source: "overlays",
             filter: ["==", ["get", "kind"], "uncertain"],
-            paint: { "line-color": "#5E8F8A", "line-width": 1.5, "line-dasharray": [2, 2] },
+            paint: { "line-color": "#5E8F8A", "line-width": 2, "line-dasharray": [2, 2], "line-opacity": 1 },
+          },
+          {
+            id: "overlay-label-change",
+            type: "symbol",
+            source: "overlays",
+            filter: ["==", ["get", "kind"], "change"],
+            layout: {
+              "text-field": ["coalesce", ["get", "label"], ["get", "class"]],
+              "text-size": 11,
+              "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
+              "text-max-width": 10,
+              "text-padding": 8,
+              "text-allow-overlap": false,
+              "symbol-placement": "point",
+            },
+            paint: {
+              "text-color": "#F0F3F5",
+              "text-halo-color": "#121417",
+              "text-halo-width": 1.2,
+            },
+          },
+          {
+            id: "overlay-label-uncertain",
+            type: "symbol",
+            source: "overlays",
+            filter: ["==", ["get", "kind"], "uncertain"],
+            layout: {
+              "text-field": ["coalesce", ["get", "label"], ["get", "class"]],
+              "text-size": 11,
+              "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
+              "text-max-width": 10,
+              "text-padding": 8,
+              "text-allow-overlap": false,
+              "symbol-placement": "point",
+            },
+            paint: {
+              "text-color": "#F0F3F5",
+              "text-halo-color": "#121417",
+              "text-halo-width": 1.2,
+            },
           },
         ],
       },
@@ -231,6 +271,8 @@ export function MapEvidence({
       setVis(map, "grounding-line", true);
       setVis(map, "uncertain-fill", layers.uncertain);
       setVis(map, "uncertain-line", layers.uncertain);
+      setVis(map, "overlay-label-change", layers.change);
+      setVis(map, "overlay-label-uncertain", layers.uncertain);
     };
     if (map.isStyleLoaded()) apply();
     else map.once("load", apply);
@@ -259,14 +301,14 @@ export function MapEvidence({
   useEffect(() => {
     const map = mapRef.current;
     if (!map?.getLayer("change-line")) return;
-    map.setPaintProperty("change-line", "line-width", evidencePulse ? 2.6 : 1.5);
-    map.setPaintProperty("change-fill", "fill-opacity", evidencePulse ? 0.38 : 0.22);
+    map.setPaintProperty("change-line", "line-width", evidencePulse ? 3.0 : 2.25);
+    map.setPaintProperty("change-fill", "fill-opacity", evidencePulse ? 0.48 : 0.34);
     if (map.getLayer("grounding-line")) {
       map.setPaintProperty("grounding-line", "line-width", evidencePulse ? 3.0 : 2.0);
       map.setPaintProperty("grounding-fill", "fill-opacity", evidencePulse ? 0.35 : 0.18);
     }
-    map.setPaintProperty("uncertain-line", "line-width", evidencePulse ? 2.4 : 1.5);
-    map.setPaintProperty("uncertain-fill", "fill-opacity", evidencePulse ? 0.22 : 0.1);
+    map.setPaintProperty("uncertain-line", "line-width", evidencePulse ? 2.8 : 2);
+    map.setPaintProperty("uncertain-fill", "fill-opacity", evidencePulse ? 0.28 : 0.18);
   }, [evidencePulse]);
 
   const moveSplit = (clientX: number) => {

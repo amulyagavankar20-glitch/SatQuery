@@ -85,6 +85,12 @@ class Settings(BaseSettings):
     BIT_WEIGHTS_PATH: str | None = None
     SAM_WEIGHTS_PATH: str | None = None
     FUSION_WEIGHTS_PATH: str | None = None
+    # Optional flood head (Prithvi-EO Sen1Floods11). Leave unset to keep the
+    # default land-cover path at Dynamic World / spectral (~no extra RAM).
+    PRITHVI_FLOOD_WEIGHTS_PATH: str | None = None
+    # Optional reBEN ResNet50 (12-band S2). Leave unset: BEN-19 tags come from
+    # the Dynamic World / spectral fractions (taxonomy only, no extra download).
+    BIGEARTHNET_WEIGHTS_PATH: str | None = None
 
     # SARChat Specialist Model
     SARCHAT_MODEL_PATH: str | None = None

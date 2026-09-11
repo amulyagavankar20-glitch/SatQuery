@@ -35,6 +35,7 @@ from backend.agents.tools.mock_tools import (
 )
 from backend.agents.tools.sarchat import SARChatTool
 from backend.agents.tools.bit_cd import BITChangeDetectionTool
+from backend.agents.tools.lulc import LulcMapTool
 
 # ---------------------------------------------------------------------------
 # Canonical mapping from tool_id → concrete implementation class.
@@ -52,6 +53,7 @@ _TOOL_IMPLEMENTATIONS: dict[str, type[BaseTool]] = {
     "fusion_s1s2":      MockFusion,
     "agreement":        MockAgreement,
     "mobile_sam":       MockMobileSAM,
+    "lulc_map":         LulcMapTool,
 }
 
 

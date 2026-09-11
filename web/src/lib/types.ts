@@ -44,6 +44,13 @@ export type TraceStep = {
   elapsedMs?: number;
 };
 
+export type LulcReport = {
+  backend: string;
+  focus: string;
+  fractions: Record<string, number>;
+  sceneTags: { name: string; score: number }[];
+};
+
 export type UserTurn = {
   id: string;
   role: "user";
@@ -66,6 +73,7 @@ export type AssistantTurn = {
   overlayUrl?: string | null;
   compareUrl: string | null;
   overlays?: OverlayCollection;
+  lulc?: LulcReport;
   trace?: TraceStep[];
   error?: string;
 };

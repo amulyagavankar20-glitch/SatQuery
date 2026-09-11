@@ -58,6 +58,16 @@ TOOL_CATALOG: list[dict[str, Any]] = [
         supported_modalities=[InputClass.SINGLE_SAR.value],
     ),
     _tool(
+        "lulc_map",
+        "Dynamic World land cover",
+        "SEGMENTATION",
+        model_name="DynamicWorld",
+        model_version="dw-s2-9class",
+        description="Nine-class pixel map (Dynamic World on S2, spectral fallback on RGB). Scene tags use BigEarthNet-19 names mapped from those fractions — DW is not trained on BEN.",
+        supported_tasks=[RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value],
+        supported_modalities=[InputClass.SINGLE_OPTICAL.value, InputClass.BI_TEMPORAL.value],
+    ),
+    _tool(
         "geochat_vqa",
         "GeoChat VQA",
         "VLM",

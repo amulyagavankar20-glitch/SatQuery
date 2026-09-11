@@ -18,6 +18,7 @@ ARCHITECTURE RULES ENFORCED HERE:
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, cast
 from collections.abc import Mapping
 
@@ -371,17 +372,67 @@ def _image_refs(state: GraphState) -> list[str]:
 
 def sarchat_vqa(state: GraphState) -> dict[str, Any]:
     """Specialist SARChat-InternVL2.5-2B tool node for SAR imagery understanding."""
+    refs = _raw_raster_refs(state) or _image_refs(state)
     params = {
         "question": state.get("user_query", ""),
-        "image_refs": _image_refs(state),
-        "input_refs": _image_refs(state),
+        "image_refs": refs,
+        "input_refs": refs,
     }
     return _execute_tool(state, "sarchat_vqa", params)
 
 
-def geochat_vqa(state: GraphState) -> dict[str, Any]:
+def _asset_bounds(state: GraphState) -> list[float] | None:
+    meta = state.get("asset_metadata") or {}
+    b = meta.get("bounds") if isinstance(meta, dict) else None
+    if isinstance(b, (list, tuple)) and len(b) == 4:
+        return [float(x) for x in b]
+    for a in state.get("assets") or []:
+        if not isinstance(a, dict):
+            continue
+        bb = a.get("bounds_wgs84") or a.get("bounds")
+        if isinstance(bb, (list, tuple)) and len(bb) == 4:
+            return [float(x) for x in bb]
+    return None
+
+
+def _raw_raster_refs(state: GraphState) -> list[str]:
+    """Original GeoTIFFs. RGB tiles cannot honestly run Dynamic World."""
+    out: list[str] = []
+    for a in state.get("assets") or []:
+        if isinstance(a, dict):
+            p = a.get("file_path")
+        else:
+            p = a
+        if not p:
+            continue
+        path = Path(str(p))
+        if path.suffix.lower() in {".tif", ".tiff"} and path.is_file():
+            out.append(str(path))
+    return out
+
+
+def lulc_map(state: GraphState) -> dict[str, Any]:
+    refs = _raw_raster_refs(state) or _image_refs(state)
     params = {
         "question": state.get("user_query", ""),
+        "image_refs": refs,
+        "input_refs": refs,
+        "bounds": _asset_bounds(state),
+    }
+    return _execute_tool(state, "lulc_map", params)
+
+
+def geochat_vqa(state: GraphState) -> dict[str, Any]:
+    lulc_ctx = ""
+    for r in reversed(list(state.get("specialist_results") or [])):
+        if r.tool_id == "lulc_map" and r.status == "success" and isinstance(r.result, dict):
+            lulc_ctx = str(r.result.get("answer") or "")
+            break
+    question = state.get("user_query", "")
+    if lulc_ctx:
+        question = f"{question}\n\nLand-cover map: {lulc_ctx}"
+    params = {
+        "question": question,
         "image_refs": _image_refs(state),
         "input_refs": _image_refs(state),
     }
@@ -591,17 +642,19 @@ def report_generator(state: GraphState) -> dict[str, Any]:
         from backend.agents.final_reasoner import get_final_reasoner
         reasoner = get_final_reasoner()
 
-        # Extract scene statistics and detections from specialist results if present
         scene_stats = None
         detections = None
+        lulc_ans = None
         for r in results:
             if isinstance(r.result, dict):
                 if "scene_statistics" in r.result and not scene_stats:
                     scene_stats = r.result["scene_statistics"]
                 if "detections" in r.result and not detections:
                     detections = r.result["detections"]
+                if r.tool_id == "lulc_map" and r.status == "success":
+                    lulc_ans = r.result.get("answer")
 
-        image_refs = _image_refs(state)
+        image_refs = _raw_raster_refs(state) or _image_refs(state)
         final_answer, reasoning_provenance = reasoner.reason_sync(
             query=user_query,
             specialist_results=results,
@@ -610,6 +663,11 @@ def report_generator(state: GraphState) -> dict[str, Any]:
             image_refs=image_refs,
             input_class=input_class_val,
         )
+
+        if lulc_ans and (not final_answer or str(final_answer).startswith("MOCK_")):
+            final_answer = str(lulc_ans)
+        elif lulc_ans and str(lulc_ans) not in str(final_answer):
+            final_answer = f"{final_answer}\n\n{lulc_ans}"
 
         _record_event(
             state,
@@ -705,12 +763,16 @@ def after_preprocess(state: GraphState) -> str:
             return "sarchat_vqa"
 
     if task in (RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value):
-        return "geochat_vqa"
+        return "lulc_map"
     if task in (RouterTask.CHANGE_DETECTION.value, RouterTask.CHANGE_VQA.value):
         return "bit_cd"
     if task == RouterTask.OPTICAL_SAR_ANALYSIS.value:
         return "coregister"
     return "refusal"
+
+
+def after_lulc_map(state: GraphState) -> str:
+    return "geochat_vqa"
 
 
 def after_geochat_vqa(state: GraphState) -> str:
@@ -756,6 +818,7 @@ for name, fn in {
     "query_router":     query_router,
     "tool_selector":    tool_selector,
     "preprocess":       preprocess,
+    "lulc_map":         lulc_map,
     "sarchat_vqa":      sarchat_vqa,
     "geochat_vqa":      geochat_vqa,
     "grounding":        grounding,
@@ -798,6 +861,7 @@ workflow.add_conditional_edges(
     "preprocess", after_preprocess,
     {
         "sarchat_vqa":  "sarchat_vqa",
+        "lulc_map":     "lulc_map",
         "geochat_vqa":  "geochat_vqa",
         "bit_cd":       "bit_cd",
         "align":        "align",
@@ -810,6 +874,11 @@ workflow.add_conditional_edges(
 workflow.add_conditional_edges(
     "sarchat_vqa", after_sarchat_vqa,
     {"grounding": "grounding", "evidence_fusion": "evidence_fusion"},
+)
+
+workflow.add_conditional_edges(
+    "lulc_map", after_lulc_map,
+    {"geochat_vqa": "geochat_vqa"},
 )
 
 # GeoChat VQA path
