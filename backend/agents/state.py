@@ -27,6 +27,10 @@ class GraphState(TypedDict, total=False):
     pair_fitness: dict[str, Any]
 
     # ── Routing & Planning ────────────────────────────────────────────────────
+    query_plan: dict[str, Any] | None
+    scene_context: dict[str, Any] | None
+    active_slot: str | None
+    mode: str | None
     detected_task: str
     target: str
     requested_operation: str

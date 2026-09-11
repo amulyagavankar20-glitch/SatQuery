@@ -101,17 +101,17 @@ export function MapEvidence({
             id: "grounding-fill",
             type: "fill",
             source: "overlays",
-            filter: ["in", ["get", "kind"], ["literal", ["grounding", "sar_detection", "detection", "mask", "water_mask", "lulc"]]],
+            filter: ["in", ["get", "kind"], ["literal", ["grounding", "sar_detection", "detection", "mask", "water_mask", "built_mask", "tree_mask", "grass_mask", "crop_mask", "bare_mask", "flood_mask", "vegetation_mask", "lulc"]]],
             paint: {
               "fill-color": ["coalesce", ["get", "fill"], ["get", "color"], "#00f0ff"],
-              "fill-opacity": 0.28,
+              "fill-opacity": 0.32,
             },
           },
           {
             id: "grounding-line",
             type: "line",
             source: "overlays",
-            filter: ["in", ["get", "kind"], ["literal", ["grounding", "sar_detection", "detection", "mask", "water_mask", "lulc"]]],
+            filter: ["in", ["get", "kind"], ["literal", ["grounding", "sar_detection", "detection", "mask", "water_mask", "built_mask", "tree_mask", "grass_mask", "crop_mask", "bare_mask", "flood_mask", "vegetation_mask", "lulc"]]],
             paint: {
               "line-color": ["coalesce", ["get", "stroke"], ["get", "color"], "#00f0ff"],
               "line-width": 2.0,

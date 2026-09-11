@@ -99,37 +99,44 @@ sequenceDiagram
     actor User
     participant Web as Frontend (React + MapLibre GL)
     participant API as FastAPI Backend (jobs.py)
-    participant Ingest as Ingest Service
+    participant Ingest as Ingest Service (input_classifier)
     participant Graph as LangGraph Orchestrator
-    participant Model as Specialist Model Layer
-    participant Reasoner as Final Reasoner (VLM)
-    participant DB as PostgreSQL + PostGIS
+    participant Plan as QueryPlan & SceneContext Engine
+    participant Model as Specialist Layer (Dynamic World / reBEN / BIT-CD)
+    participant Reasoner as Final Reasoner (VLM / Grounded Synthesis)
+    participant DB as PostgreSQL + PostGIS (Mediated Data Layer)
 
-    User->>Web: Upload GeoTIFF(s) + Enter Analyst Query
+    User->>Web: Upload GeoTIFF(s) + Select Active Scene + Query
     Web->>API: POST /ingest (multipart/form-data)
     API->>Ingest: Ingest rasters, extract CRS & EPSG bounds (rasterio)
-    Ingest->>DB: Persist Initial Job + Asset footprints (PostGIS Geometry)
+    Ingest->>DB: Persist Initial Job + Asset footprints via SQLAlchemy
     Ingest-->>API: Return manifest (job_id, input_class, bounds_wgs84)
     API-->>Web: 200 OK (manifest JSON)
 
-    Web->>API: POST /run (job_id, query)
+    Web->>API: POST /run (job_id, query, active_slot, mode)
     API->>DB: Update Job status to 'running'
     API->>Graph: Dispatch run_graph(session_id) via BackgroundTasks
     API-->>Web: 202 Accepted (job_id, status='running')
 
     rect rgb(20, 30, 45)
-        Note over Graph,Model: Asynchronous LangGraph Execution
-        Graph->>Graph: input_validator -> metadata_parser -> pair_fitness_gate
-        Graph->>Graph: query_router (OpenRouter Gemma / Rule Fallback)
+        Note over Graph,Model: Asynchronous LangGraph Execution (Canonical Data Flow)
+        Graph->>Plan: Build explicit QueryPlan (intent, target_class, spatial_op, mode)
+        Graph->>Graph: input_validator -> metadata_parser
+        alt Single Scene Query
+            Graph->>Graph: Bypass pair_fitness_gate -> query_router
+        else Pair Comparison Query
+            Graph->>Graph: pair_fitness_gate (Spatial overlap & CRS evaluation)
+            Graph->>Graph: query_router
+        end
         Graph->>DB: tool_selector queries ToolRegistry table
-        Graph->>Graph: preprocess (tiling, composite generation)
-        Graph->>Model: Execute Specialist (sar_map / lulc_map / bit_cd)
-        Model-->>Graph: Return feature masks, class fractions, detections
-        Graph->>Graph: evidence_fusion (confidence calibration)
+        Graph->>Graph: preprocess (isolate active slot raster, tiling)
+        Graph->>Model: Execute Specialist (lulc_map with target_class / sar_map / bit_cd)
+        Model-->>Graph: Return class-specific masks, GeoJSON overlays, fractions
+        Graph->>Graph: evidence_fusion (confidence calibration, spatial refs)
         Graph->>Graph: audit_logger (record execution traces)
-        Graph->>Reasoner: Synthesize grounded explanation
-        Reasoner-->>Graph: Final structured report
-        Graph->>DB: persist_run() -> Job, Outputs, Traces, SpatialFeatures
+        Graph->>Reasoner: Synthesize grounded explanation matching QueryPlan & evidence
+        Reasoner-->>Graph: Final structured report (guaranteed non-contradictory)
+        Graph->>DB: persist_run() -> Job, Outputs, Traces, SpatialFeatures (SQLAlchemy)
     end
 
     loop Polling until terminal state
@@ -139,9 +146,21 @@ sequenceDiagram
     end
 
     Web->>API: GET /jobs/{id}/export.geojson
-    API-->>Web: FeatureCollection (detections, change polygons, footprint)
-    Web->>User: Render MapLibre raster composite + GeoJSON overlays + Report
+    API-->>Web: FeatureCollection (class-specific masks, change polygons, footprint)
+    Web->>User: Render MapLibre raster + Class-Specific Vector Overlays + Grounded Report
 ```
+
+### Authoritative Canonical Data Flow
+```
+USER ──► CURRENT SCENE ──► QUERY ──► QUERY PLAN ──► IMMUTABLE JOB CONTEXT
+     ──► LANGGRAPH ──► SPECIALIST ──► STRUCTURED EVIDENCE ──► SPATIAL ARTIFACTS
+     ──► EVIDENCE FUSION ──► FINALREASONER ──► JOB RESULT ──► FRONTEND ──► MAPLIBRE
+```
+
+### PostGIS Spatial Data Layer & AI Specialist Separation
+- **Authoritative Database**: PostgreSQL 17 + PostGIS 3.5/3.6 is the single source of truth for spatial metadata, job records, asset bounds, and vectorized footprints.
+- **AI Specialist Isolation**: Specialist vision models (Dynamic World, reBEN SAR, BIT-CD) operate on in-memory NumPy/Rasterio buffers and do **NOT** directly connect to or execute SQL queries against PostgreSQL/PostGIS.
+- **Mediation**: All database reads, writes, and spatial queries are mediated strictly through FastAPI backend services via SQLAlchemy 2.0 and GeoAlchemy2.
 
 ---
 

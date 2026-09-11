@@ -73,6 +73,8 @@ def format_rich_bit_change_answer(
 
 
 def _synthesize_optical_lulc_answer(query: str, payload: dict[str, Any], method: str = "") -> str:
+    from backend.agents.query_plan import normalize_target_class, TargetClass
+
     ql = query.lower()
     if "fractions" in payload and isinstance(payload["fractions"], dict):
         fractions = payload.get("fractions") or {}
@@ -83,31 +85,113 @@ def _synthesize_optical_lulc_answer(query: str, payload: dict[str, Any], method:
     bare_pct = fractions.get("bare", 0.0) * 100.0
     veg_pct = sum(fractions.get(k, 0.0) for k in ["trees", "grass", "crops", "shrub_and_scrub", "flooded_vegetation"]) * 100.0
     built_pct = fractions.get("built", 0.0) * 100.0
+    crops_pct = fractions.get("crops", 0.0) * 100.0
+    trees_pct = fractions.get("trees", 0.0) * 100.0
+    grass_pct = fractions.get("grass", 0.0) * 100.0
     dominant_class, dominant_val = ranked[0] if ranked else ("bare", 0.0)
-    has_spatial_mask = bool((payload.get("overlays") or {}).get("features"))
+    
+    features = (payload.get("overlays") or {}).get("features") or []
+    has_spatial_mask = len(features) > 0
+    overlay_class = features[0].get("properties", {}).get("class") if has_spatial_mask else None
+    
+    target_class_raw = payload.get("target_class")
+    if target_class_raw:
+        if isinstance(target_class_raw, TargetClass):
+            target_class = target_class_raw
+        elif str(target_class_raw).upper() in TargetClass.__members__:
+            target_class = TargetClass[str(target_class_raw).upper()]
+        else:
+            target_class = normalize_target_class(str(target_class_raw))
+    else:
+        target_class = normalize_target_class(query)
 
-    if "water" in ql and any(w in ql for w in ["percentage", "percent", "%", "fraction", "how much", "ratio", "proportion", "amount"]):
-        return (
-            f"Surface water is estimated to cover approximately **{water_pct:.0f}%** of this optical scene. "
-            f"The remainder is predominantly {dominant_class.replace('_', ' ')} terrain (**{dominant_val * 100:.0f}%**)."
-        )
+    is_highlight = any(w in ql for w in ["highlight", "segment", "isolate", "outline", "where is", "locate", "show on map", "visualize", "mask"])
+    is_statistic = any(w in ql for w in ["percentage", "percent", "%", "fraction", "how much", "ratio", "proportion", "amount", "area"])
 
-    if any(w in ql for w in ["highlight", "segment", "isolate", "outline", "where is", "locate water", "locate the water", "show water"]):
-        if has_spatial_mask and water_pct > 0:
+    # 1. SPATIAL HIGHLIGHT / LOCALIZATION QUERIES
+    if is_highlight:
+        if target_class == TargetClass.BUILT:
+            if has_spatial_mask and built_pct > 0:
+                return (
+                    f"The built-up / urban area (estimated at **{built_pct:.0f}%** of the scene) has been localized and highlighted "
+                    "as a spatial overlay on top of the original optical imagery in the map viewer."
+                )
+            elif built_pct == 0:
+                return "No built-up or urban structures were detected in this optical scene (estimated at **0%**), so no urban regions are highlighted."
+            else:
+                return (
+                    f"Built-up area is estimated at approximately **{built_pct:.0f}%** of the scene based on land-cover classification. "
+                    "However, no reliable pixel-level urban polygon mask could be generated for this scene."
+                )
+
+        if target_class == TargetClass.WATER or target_class == TargetClass.FLOOD:
+            if has_spatial_mask and water_pct > 0:
+                return (
+                    f"The surface water region (estimated at **{water_pct:.1f}%** of the scene) has been localized and highlighted "
+                    "as a spatial overlay on top of the original optical imagery in the map viewer."
+                )
+            elif water_pct == 0:
+                return "No surface water was detected in this optical scene (estimated at **0%**), so no water regions are highlighted."
+            else:
+                return (
+                    f"Surface water is estimated at approximately **{water_pct:.1f}%** of the scene based on land-cover area classification. "
+                    "The current analysis estimates area fractions across the scene but no reliable pixel-level polygon mask could be produced."
+                )
+
+        if target_class in (TargetClass.TREES, TargetClass.VEGETATION):
+            pct = trees_pct if target_class == TargetClass.TREES else veg_pct
+            name = "tree canopy" if target_class == TargetClass.TREES else "vegetation"
+            if has_spatial_mask and pct > 0:
+                return (
+                    f"The {name} region (estimated at **{pct:.0f}%** of the scene) has been localized and highlighted "
+                    "as a spatial overlay on top of the original optical imagery in the map viewer."
+                )
+            elif pct == 0:
+                return f"No significant {name} was detected in this optical scene (estimated at **0%**)."
+            else:
+                return f"{name.capitalize()} is estimated at approximately **{pct:.0f}%** of the scene based on land-cover classification."
+
+        if target_class == TargetClass.CROPS:
+            if has_spatial_mask and crops_pct > 0:
+                return (
+                    f"The agricultural crop area (estimated at **{crops_pct:.0f}%** of the scene) has been localized and highlighted "
+                    "as a spatial overlay on top of the original optical imagery in the map viewer."
+                )
+            return f"Agricultural crops are estimated at approximately **{crops_pct:.0f}%** of the scene."
+
+        if target_class == TargetClass.BARE:
+            if has_spatial_mask and bare_pct > 0:
+                return (
+                    f"The bare soil / open ground region (estimated at **{bare_pct:.0f}%** of the scene) has been localized and highlighted "
+                    "as a spatial overlay on top of the original optical imagery in the map viewer."
+                )
+            return f"Bare ground is estimated at approximately **{bare_pct:.0f}%** of the scene."
+
+        # Generic highlight fallback if no target class matched
+        if has_spatial_mask:
             return (
-                f"The surface water region (estimated at **{water_pct:.0f}%** of the scene) has been localized and highlighted "
+                f"The localized surface feature ({overlay_class or 'target area'}) has been highlighted "
                 "as a spatial overlay on top of the original optical imagery in the map viewer."
             )
-        elif water_pct == 0:
-            return (
-                "No surface water was detected in this optical scene (estimated at **0%**), so no water regions are highlighted."
-            )
-        else:
-            return (
-                f"Surface water is estimated at approximately **{water_pct:.0f}%** of the scene based on land-cover area classification. "
-                "The current analysis estimates area fractions across the scene but no reliable pixel-level polygon mask could be produced, so the water body cannot be highlighted."
-            )
 
+    # 2. CLASS STATISTIC QUERIES
+    if is_statistic:
+        if target_class == TargetClass.BUILT:
+            return f"Built-up and urban infrastructure is estimated to cover approximately **{built_pct:.0f}%** of this optical scene."
+        if target_class == TargetClass.WATER:
+            return f"Surface water is estimated to cover approximately **{water_pct:.1f}%** of this optical scene."
+        if target_class == TargetClass.TREES:
+            return f"Tree canopy is estimated to cover approximately **{trees_pct:.0f}%** of this optical scene."
+        if target_class == TargetClass.GRASS:
+            return f"Grassland is estimated to cover approximately **{grass_pct:.0f}%** of this optical scene."
+        if target_class == TargetClass.CROPS:
+            return f"Agricultural crops are estimated to cover approximately **{crops_pct:.0f}%** of this optical scene."
+        if target_class == TargetClass.BARE:
+            return f"Bare soil / open ground is estimated to cover approximately **{bare_pct:.0f}%** of this optical scene."
+        if target_class == TargetClass.VEGETATION:
+            return f"Total vegetated area is estimated to cover approximately **{veg_pct:.0f}%** of this optical scene."
+
+    # 3. OBJECT DETECTION QUERIES (Honest capability limitation)
     if any(w in ql for w in ["object", "objects", "vehicle", "ship", "building", "structure"]):
         return (
             f"The land-cover analysis identifies broad surface categories across the scene (**{built_pct:.0f}%** built-up area, "
@@ -115,6 +199,7 @@ def _synthesize_optical_lulc_answer(query: str, payload: dict[str, Any], method:
             "but the optical classification specialist does not perform discrete object instance detection."
         )
 
+    # 4. LAND COVER COMPOSITION
     if any(w in ql for w in ["land cover", "composition", "distribution", "class"]):
         top_parts = [f"**{k.replace('_', ' ')}** ({v * 100:.0f}%)" for k, v in ranked if v >= 0.04][:4]
         top_str = ", ".join(top_parts) if top_parts else "unclassified"
@@ -124,7 +209,7 @@ def _synthesize_optical_lulc_answer(query: str, payload: dict[str, Any], method:
             f"vegetation comprises **{veg_pct:.0f}%**, and surface water covers **{water_pct:.1f}%**."
         )
 
-    # General scene explanation
+    # 5. GENERAL SCENE EXPLANATION
     top_parts = [f"**{k.replace('_', ' ')}** ({v * 100:.0f}%)" for k, v in ranked if v >= 0.04][:3]
     top_str = ", ".join(top_parts) if top_parts else f"**{dominant_class.replace('_', ' ')}** ({dominant_val * 100:.0f}%)"
     

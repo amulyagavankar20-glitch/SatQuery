@@ -285,6 +285,65 @@ def _fractions(labels: np.ndarray) -> dict[str, float]:
         out[name] = float(np.count_nonzero(labels == i)) / n if n else 0.0
     return out
 
+CLASS_METADATA: dict[str, dict[str, Any]] = {
+    "water": {
+        "title": "Surface Water Extent",
+        "kind": "water_mask",
+        "fill": "#00a8ff",
+        "stroke": "#00e5ff",
+        "rgba": [0, 168, 255, 180],
+    },
+    "built": {
+        "title": "Built-up / Urban Extent",
+        "kind": "built_mask",
+        "fill": "#e84118",
+        "stroke": "#ff6b6b",
+        "rgba": [232, 65, 24, 180],
+    },
+    "trees": {
+        "title": "Tree Canopy / Forest Extent",
+        "kind": "tree_mask",
+        "fill": "#2ed573",
+        "stroke": "#7bed9f",
+        "rgba": [46, 213, 115, 180],
+    },
+    "grass": {
+        "title": "Grassland / Meadow Extent",
+        "kind": "grass_mask",
+        "fill": "#7bed9f",
+        "stroke": "#2ed573",
+        "rgba": [123, 237, 159, 180],
+    },
+    "crops": {
+        "title": "Agricultural Crops Extent",
+        "kind": "crop_mask",
+        "fill": "#ffa502",
+        "stroke": "#eccc68",
+        "rgba": [255, 165, 2, 180],
+    },
+    "bare": {
+        "title": "Bare Soil / Open Ground Extent",
+        "kind": "bare_mask",
+        "fill": "#f1f2f6",
+        "stroke": "#ced6e0",
+        "rgba": [241, 242, 246, 180],
+    },
+    "flood": {
+        "title": "Flood Inundation Extent",
+        "kind": "flood_mask",
+        "fill": "#0097e6",
+        "stroke": "#00d2d3",
+        "rgba": [0, 151, 230, 200],
+    },
+    "vegetation": {
+        "title": "Combined Vegetation Extent",
+        "kind": "vegetation_mask",
+        "fill": "#2ed573",
+        "stroke": "#7bed9f",
+        "rgba": [46, 213, 115, 180],
+    },
+}
+
 
 def _mask_to_real_geojson(
     mask: np.ndarray,
@@ -299,6 +358,13 @@ def _mask_to_real_geojson(
 
     h, w = mask.shape
     pct_str = f"{share * 100:.1f}%" if share > 0 else f"{float(np.count_nonzero(mask)) / mask.size * 100:.1f}%"
+    cfg = CLASS_METADATA.get(kind.lower(), {
+        "title": f"{kind.replace('_', ' ').title()} Extent",
+        "kind": f"{kind}_mask",
+        "fill": "#5E8F8A",
+        "stroke": "#5E8F8A",
+        "rgba": [94, 143, 138, 180],
+    })
 
     # Method A: If we have real GeoTIFF affine transform and CRS
     if meta.get("is_geotiff") and meta.get("transform") is not None:
@@ -337,11 +403,12 @@ def _mask_to_real_geojson(
                         "type": "Feature",
                         "properties": {
                             "id": f"{kind}-mask-0",
-                            "kind": "water_mask" if kind in ("water", "flood") else "mask",
+                            "kind": cfg["kind"],
                             "class": kind,
-                            "fill": "#00a8ff" if kind == "water" else "#5E8F8A",
-                            "stroke": "#00e5ff" if kind == "water" else "#5E8F8A",
-                            "label": f"{kind.replace('_', ' ').title()} Feature ({pct_str} of AOI)",
+                            "target_class": kind.upper(),
+                            "fill": cfg["fill"],
+                            "stroke": cfg["stroke"],
+                            "label": f"{cfg['title']} ({pct_str} of AOI)",
                         },
                         "geometry": wgs_geom,
                     }
@@ -370,11 +437,12 @@ def _mask_to_real_geojson(
                         "type": "Feature",
                         "properties": {
                             "id": f"{kind}-mask-0",
-                            "kind": "water_mask" if kind in ("water", "flood") else "mask",
+                            "kind": cfg["kind"],
                             "class": kind,
-                            "fill": "#00a8ff" if kind == "water" else "#5E8F8A",
-                            "stroke": "#00e5ff" if kind == "water" else "#5E8F8A",
-                            "label": f"{kind.replace('_', ' ').title()} Feature ({pct_str} of AOI)",
+                            "target_class": kind.upper(),
+                            "fill": cfg["fill"],
+                            "stroke": cfg["stroke"],
+                            "label": f"{cfg['title']} ({pct_str} of AOI)",
                         },
                         "geometry": mapping(union),
                     }
@@ -400,13 +468,15 @@ def _save_mask_artifacts(
     mask_tif = job_processed / f"{kind}_mask.tif"
     mask_png = job_processed / f"{kind}_mask.png"
 
+    cfg = CLASS_METADATA.get(kind.lower(), {"rgba": [94, 143, 138, 180]})
+
     try:
         from PIL import Image
 
         h, w = mask.shape
         rgba = np.zeros((h, w, 4), dtype=np.uint8)
         is_pos = mask > 0
-        rgba[is_pos] = [0, 168, 255, 180] if kind == "water" else [94, 143, 138, 180]
+        rgba[is_pos] = cfg["rgba"]
         Image.fromarray(rgba, mode="RGBA").save(mask_png)
     except Exception:
         pass
@@ -569,17 +639,81 @@ class LulcMapTool(BaseTool):
             else:
                 flood_mask = (labels == 0) | (labels == 3)
                 flood_share = float(flood_mask.mean())
-        water_mask = (labels == 0) | (labels == 3)
+
+        # Determine target class from query or params
+        from backend.agents.query_plan import normalize_target_class, TargetClass
+
+        target_class_raw = params.get("target_class")
+        if target_class_raw:
+            if isinstance(target_class_raw, TargetClass):
+                target_class = target_class_raw
+            elif str(target_class_raw).upper() in TargetClass.__members__:
+                target_class = TargetClass[str(target_class_raw).upper()]
+            else:
+                target_class = normalize_target_class(str(target_class_raw))
+        else:
+            target_class = normalize_target_class(query)
+
+        is_highlight_requested = any(w in query.lower() for w in [
+            "highlight", "segment", "isolate", "outline", "where is", "locate", "mask", "show on map", "visualize"
+        ])
+
+        target_kind = None
+        target_mask = None
+        target_share = 0.0
+
+        if target_class == TargetClass.BUILT:
+            target_kind = "built"
+            target_mask = (labels == 6)
+            target_share = fractions.get("built", 0.0)
+        elif target_class == TargetClass.WATER:
+            target_kind = "water"
+            target_mask = (labels == 0) | (labels == 3)
+            target_share = fractions.get("water", 0.0) + fractions.get("flooded_vegetation", 0.0)
+        elif target_class == TargetClass.FLOOD:
+            target_kind = "flood"
+            target_mask = flood_mask if flood_mask is not None else ((labels == 0) | (labels == 3))
+            target_share = flood_share if flood_share is not None else (fractions.get("water", 0.0) + fractions.get("flooded_vegetation", 0.0))
+        elif target_class == TargetClass.TREES:
+            target_kind = "trees"
+            target_mask = (labels == 1)
+            target_share = fractions.get("trees", 0.0)
+        elif target_class == TargetClass.GRASS:
+            target_kind = "grass"
+            target_mask = (labels == 2)
+            target_share = fractions.get("grass", 0.0)
+        elif target_class == TargetClass.CROPS:
+            target_kind = "crops"
+            target_mask = (labels == 4)
+            target_share = fractions.get("crops", 0.0)
+        elif target_class == TargetClass.BARE:
+            target_kind = "bare"
+            target_mask = (labels == 7)
+            target_share = fractions.get("bare", 0.0)
+        elif target_class == TargetClass.VEGETATION:
+            target_kind = "vegetation"
+            target_mask = (labels == 1) | (labels == 2) | (labels == 4) | (labels == 5)
+            target_share = sum(fractions.get(k, 0.0) for k in ["trees", "grass", "crops", "shrub_and_scrub"])
+        elif is_highlight_requested:
+            # If highlight requested without specific class, select dominant class or water
+            if fractions.get("water", 0.0) > 0.05:
+                target_kind = "water"
+                target_mask = (labels == 0) | (labels == 3)
+                target_share = fractions.get("water", 0.0) + fractions.get("flooded_vegetation", 0.0)
+            elif fractions.get("built", 0.0) > 0.15:
+                target_kind = "built"
+                target_mask = (labels == 6)
+                target_share = fractions.get("built", 0.0)
+            else:
+                target_kind = "trees"
+                target_mask = (labels == 1)
+                target_share = fractions.get("trees", 0.0)
+
         overlays: list[dict[str, Any]] = []
         mask_artifacts: dict[str, str] = {}
 
-        # Generate spatial mask overlay whenever water/flood is present or requested
-        target_mask = flood_mask if flood_mask is not None else water_mask
-        target_kind = "flood" if focus == "flood" else "water"
-        water_share = flood_share if flood_share is not None else (fractions.get("water", 0.0) + fractions.get("flooded_vegetation", 0.0))
-
-        if target_mask.sum() > 0:
-            overlays.extend(_mask_to_real_geojson(target_mask, meta, bbox, target_kind, share=water_share))
+        if target_mask is not None and target_mask.sum() > 0 and is_highlight_requested:
+            overlays.extend(_mask_to_real_geojson(target_mask, meta, bbox, target_kind, share=target_share))
             mask_artifacts = _save_mask_artifacts(target_mask, meta, str(job_id) if job_id else None, target_kind)
 
         from backend.agents.tools.bigearthnet import scene_tags, try_resnet_tags
@@ -591,14 +725,18 @@ class LulcMapTool(BaseTool):
             "modality": "OPTICAL",
             "backend": backend,
             "focus": focus,
+            "target_class": target_class.value if target_class else None,
+            "target_kind": target_kind,
             "fractions": fractions,
             "flood_share": flood_share,
             "scene_tags": tags,
             "answer": answer,
             "overlays": {"type": "FeatureCollection", "features": overlays},
             "spatial_outputs": {
-                "water_mask_tif": mask_artifacts.get("mask_tif", ""),
-                "water_mask_png": mask_artifacts.get("mask_png", ""),
+                f"{target_kind or 'spatial'}_mask_tif": mask_artifacts.get("mask_tif", ""),
+                f"{target_kind or 'spatial'}_mask_png": mask_artifacts.get("mask_png", ""),
+                "target_class": target_class.value if target_class else None,
+                "target_kind": target_kind,
                 "bounds": meta.get("bounds_wgs84") or bbox,
                 "crs": str(meta.get("crs") or "EPSG:4326"),
                 "has_spatial_mask": len(overlays) > 0,
@@ -622,3 +760,4 @@ class LulcMapTool(BaseTool):
             feats = (payload.get("overlays") or {}).get("features") or []
             return result.model_copy(update={"confidence": conf, "spatial_refs": list(feats)})
         return result
+

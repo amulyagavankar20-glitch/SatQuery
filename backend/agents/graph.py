@@ -171,6 +171,19 @@ def input_validator(state: GraphState) -> dict[str, Any]:
         _record_event(state, "REFUSED", "input_validator", message="Empty query")
         return updates
 
+    # Build explicit structured QueryPlan
+    from backend.agents.query_plan import build_query_plan
+    active_slot = state.get("active_slot") or (state.get("asset_metadata") or {}).get("active_slot")
+    mode_hint = state.get("mode") or (state.get("asset_metadata") or {}).get("mode")
+    query_plan = build_query_plan(
+        query=query,
+        active_slot=active_slot,
+        mode_hint=mode_hint,
+        manifest=state.get("asset_metadata"),
+    )
+    updates["query_plan"] = query_plan.model_dump()
+    updates["mode"] = query_plan.mode
+
     input_class_val = state.get("input_class") or ""
     if not input_class_val and state.get("asset_metadata"):
         input_class_val = str(state["asset_metadata"].get("input_class", ""))
@@ -197,6 +210,18 @@ def metadata_parser(state: GraphState) -> dict[str, Any]:
     # Normalise input_class from asset_metadata if not already set
     if not state.get("input_class") and state.get("asset_metadata"):
         updates["input_class"] = state["asset_metadata"].get("input_class", "")  # type: ignore[index]
+    if "query_plan" not in state:
+        from backend.agents.query_plan import build_query_plan
+        active_slot = state.get("active_slot") or (state.get("asset_metadata") or {}).get("active_slot")
+        mode_hint = state.get("mode") or (state.get("asset_metadata") or {}).get("mode")
+        query_plan = build_query_plan(
+            query=state.get("user_query", ""),
+            active_slot=active_slot,
+            mode_hint=mode_hint,
+            manifest=state.get("asset_metadata"),
+        )
+        updates["query_plan"] = query_plan.model_dump()
+        updates["mode"] = query_plan.mode
     return updates
 
 
@@ -216,14 +241,15 @@ def _is_single_scene_query(query: str) -> bool:
     single_keywords = [
         "explain", "describe", "water", "highlight", "what is",
         "how much", "identify", "classify", "land-cover", "land cover",
-        "what objects", "objects", "caption", "overview"
+        "what objects", "objects", "caption", "overview", "urban", "built"
     ]
     return any(k in q for k in single_keywords)
 
 
 def _requires_pair_evaluation(state: GraphState) -> bool:
     query = state.get("user_query", "")
-    mode = state.get("mode") or (state.get("asset_metadata") or {}).get("mode")
+    query_plan = state.get("query_plan") or {}
+    mode = state.get("mode") or (state.get("asset_metadata") or {}).get("mode") or query_plan.get("mode")
     input_class = state.get("input_class") or ""
 
     if mode == "single_scene":
@@ -568,12 +594,14 @@ def _raw_raster_refs(state: GraphState) -> list[str]:
 
 def lulc_map(state: GraphState) -> dict[str, Any]:
     refs = _raw_raster_refs(state) or _image_refs(state)
+    query_plan = state.get("query_plan") or {}
     params = {
         "question": state.get("user_query", ""),
         "image_refs": refs,
         "input_refs": refs,
         "bounds": _asset_bounds(state),
         "job_id": state.get("job_id"),
+        "target_class": query_plan.get("target_class"),
     }
     return _execute_tool(state, "lulc_map", params)
 
@@ -803,6 +831,8 @@ def report_generator(state: GraphState) -> dict[str, Any]:
         "original_query": state.get("user_query"),
         "input_class": state.get("input_class"),
         "detected_task": state.get("detected_task"),
+        "query_plan": state.get("query_plan"),
+        "target_class": (state.get("query_plan") or {}).get("target_class"),
         "selected_tools": state.get("selected_tools", []),
         "execution_summary": _visited_nodes(state),
         "final_answer": final_answer,
