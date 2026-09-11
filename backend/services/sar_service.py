@@ -97,13 +97,45 @@ class SARChatService:
     _lock = threading.Lock()
 
     def __init__(self) -> None:
-        self.model_path = settings.SARCHAT_MODEL_PATH
+        self.model_path = self._resolve_model_path()
         self.device = self._resolve_device()
         self.tokenizer: Any = None
         self.model: Any = None
         self.transform = build_transform(input_size=448)
         self._is_loaded = False
         self._load_lock = threading.Lock()
+
+    @staticmethod
+    def _looks_like_model_dir(path: Path) -> bool:
+        if not path.is_dir():
+            return False
+        return (
+            (path / "config.json").is_file()
+            or (path / "tokenizer_config.json").is_file()
+            or any(path.glob("*.safetensors"))
+            or any(path.glob("*.bin"))
+        )
+
+    def _resolve_model_path(self) -> str | None:
+        """Prefer SARCHAT_MODEL_PATH, then repo weights, then common caches."""
+        candidates: list[Path] = []
+        if settings.SARCHAT_MODEL_PATH:
+            candidates.append(Path(settings.SARCHAT_MODEL_PATH))
+        root = Path(settings.BASE_DIR)
+        candidates.append(root / "weights" / "specialists" / "sarchat")
+        home = Path.home()
+        candidates.extend(
+            [
+                home / ".cache" / "modelscope" / "models" / "JimmyMa99--SARChat-InternVL2.5-2B" / "snapshots" / "master",
+                home / ".cache" / "modelscope" / "hub" / "JimmyMa99" / "SARChat-InternVL2.5-2B",
+                home / ".cache" / "huggingface" / "hub" / "models--JimmyMa99--SARChat-InternVL2.5-2B",
+            ]
+        )
+        for raw in candidates:
+            path = raw if raw.is_absolute() else root / raw
+            if self._looks_like_model_dir(path):
+                return str(path)
+        return str(candidates[0]) if candidates else None
 
     @classmethod
     def get_instance(cls) -> SARChatService:
@@ -123,10 +155,10 @@ class SARChatService:
         return "cpu"
 
     def is_available(self) -> bool:
-        """Check if SARCHAT_MODEL_PATH exists on the filesystem."""
+        """True only when a loadable SARChat checkpoint is on disk."""
         if not self.model_path:
             return False
-        return Path(self.model_path).exists()
+        return self._looks_like_model_dir(Path(self.model_path))
 
     def load_model(self) -> None:
         """Loads tokenizer and model weights into memory if not already loaded."""
@@ -202,6 +234,12 @@ class SARChatService:
         """
         if not question or not question.strip():
             raise ValueError("SAR question cannot be empty.")
+
+        if not self.is_available():
+            logging.warning(
+                "[SAR] SARChat weights not on disk; using OpenRouter Gemma on the SAR composite."
+            )
+            return self._infer_via_gemma(image_source, question)
 
         self.load_model()
 
@@ -289,6 +327,36 @@ class SARChatService:
                 "status": "error",
                 "error": str(e),
             }
+
+    def _infer_via_gemma(
+        self,
+        image_source: str | Path | Image.Image,
+        question: str,
+    ) -> dict[str, Any]:
+        """Talk over a SAR RGB composite when local InternVL weights are absent."""
+        from backend.services.vlm import get_vlm_client
+
+        start_time = time.time()
+        pil_img = load_sar_image_to_pil(image_source)
+        client = get_vlm_client()
+        prompt = (
+            "You are reading a synthetic-aperture radar (SAR) composite, not optical RGB. "
+            "Bright returns are typically built-up or rough surface; dark returns are water or "
+            "smooth specular. Answer only from this image.\n\n"
+            f"Question: {question.strip()}"
+        )
+        answer = client.generate_multimodal_sync(
+            prompt=prompt,
+            images=[pil_img],
+            temperature=0.0,
+        )
+        return {
+            "answer": str(answer).strip(),
+            "model": f"openrouter:{client.model} (SAR composite; SARChat weights not loaded)",
+            "modality": "SAR",
+            "latency_ms": round((time.time() - start_time) * 1000.0, 2),
+            "status": "success",
+        }
 
     def query(self, image_path: str | Path, question: str) -> dict[str, Any]:
         """Programmatic interface for benchmark datasets and automated evaluations."""

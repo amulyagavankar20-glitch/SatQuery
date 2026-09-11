@@ -142,17 +142,49 @@ Input Class / Normalized Metadata: {json.dumps(request.manifest, default=str)}""
 
     def _parse_raw_response(self, raw_text: str) -> RouteResponse:
         json_str = self._extract_json_block(raw_text)
-        try:
-            parsed = RouteResponse.model_validate_json(json_str)
-        except ValidationError:
-            dict_data = json.loads(json_str)
-            parsed = RouteResponse.model_validate(dict_data)
+        dict_data = json.loads(json_str)
+        if not isinstance(dict_data, dict):
+            raise RouterError("Router model did not return a JSON object")
+        if dict_data.get("tools") is None:
+            dict_data["tools"] = []
+        if isinstance(dict_data.get("tools"), list):
+            cleaned = []
+            for item in dict_data["tools"]:
+                if item is None:
+                    continue
+                cleaned.append(item.value if hasattr(item, "value") else item)
+            dict_data["tools"] = cleaned
+        parsed = RouteResponse.model_validate(dict_data)
         return self.validate_intent(parsed)
 
+    def _route_via_qwen_ollama(self, request: RouteRequest) -> RouteResponse:
+        """Second-hop router: local Qwen2.5-3B via Ollama (from .env NEW section)."""
+        import httpx
+
+        model = settings.OLLAMA_ROUTER_MODEL
+        if not model:
+            raise RouterError("OLLAMA_ROUTER_MODEL is not configured")
+        base = (settings.OLLAMA_BASE_URL or "http://localhost:11434").rstrip("/")
+        payload = {
+            "model": model,
+            "prompt": f"{self.build_system_prompt()}\n\n{self.build_user_prompt(request)}",
+            "stream": False,
+            "format": "json",
+            "options": {"temperature": 0},
+        }
+        with httpx.Client(timeout=settings.OLLAMA_TIMEOUT_SECONDS) as client:
+            resp = client.post(f"{base}/api/generate", json=payload)
+            resp.raise_for_status()
+            raw = resp.json().get("response") or ""
+        parsed = self._parse_raw_response(raw)
+        parsed.reasoning = f"Qwen Ollama intent classifier ({model})"
+        return parsed
+
     async def route(self, request: RouteRequest) -> RouteResponse:
-        """Asynchronously route the query using VLM via OpenRouter."""
+        """Gemma (OpenRouter) then Qwen (Ollama) then deterministic rules."""
         system_prompt = self.build_system_prompt()
         user_prompt = self.build_user_prompt(request)
+        gemma_error: str | None = None
 
         try:
             raw_response = await self.client.generate_text_async(
@@ -162,19 +194,28 @@ Input Class / Normalized Metadata: {json.dumps(request.manifest, default=str)}""
                 temperature=0.0,
             )
             parsed = self._parse_raw_response(raw_response)
-            parsed.reasoning = f"VLM intent classifier ({self.client.model})"
+            parsed.reasoning = f"Gemma OpenRouter intent classifier ({self.client.model})"
             return parsed
         except (VLMError, ValidationError, json.JSONDecodeError, Exception) as exc:
+            gemma_error = str(exc)
+            logging.warning(f"[Router] Gemma OpenRouter hop failed ({exc}). Trying Qwen Ollama.")
+
+        try:
+            return self._route_via_qwen_ollama(request)
+        except Exception as exc:
             logging.warning(
-                f"[Router] VLM routing failed or unavailable ({exc}). "
-                f"Falling back to deterministic rule classifier."
+                f"[Router] Qwen Ollama hop failed ({exc}). Falling back to deterministic rules."
             )
-            return self._fallback_route(request, error_reason=str(exc))
+            return self._fallback_route(
+                request,
+                error_reason=f"gemma: {gemma_error}; qwen: {exc}",
+            )
 
     def route_sync(self, request: RouteRequest) -> RouteResponse:
-        """Synchronous route used by LangGraph sync nodes."""
+        """Synchronous two-hop router used by LangGraph nodes."""
         system_prompt = self.build_system_prompt()
         user_prompt = self.build_user_prompt(request)
+        gemma_error: str | None = None
 
         try:
             raw_response = self.client.generate_text_sync(
@@ -184,14 +225,22 @@ Input Class / Normalized Metadata: {json.dumps(request.manifest, default=str)}""
                 temperature=0.0,
             )
             parsed = self._parse_raw_response(raw_response)
-            parsed.reasoning = f"VLM intent classifier ({self.client.model})"
+            parsed.reasoning = f"Gemma OpenRouter intent classifier ({self.client.model})"
             return parsed
         except (VLMError, ValidationError, json.JSONDecodeError, Exception) as exc:
+            gemma_error = str(exc)
+            logging.warning(f"[Router] Gemma OpenRouter hop failed ({exc}). Trying Qwen Ollama.")
+
+        try:
+            return self._route_via_qwen_ollama(request)
+        except Exception as exc:
             logging.warning(
-                f"[Router] VLM routing failed or unavailable ({exc}). "
-                f"Falling back to deterministic rule classifier."
+                f"[Router] Qwen Ollama hop failed ({exc}). Falling back to deterministic rules."
             )
-            return self._fallback_route(request, error_reason=str(exc))
+            return self._fallback_route(
+                request,
+                error_reason=f"gemma: {gemma_error}; qwen: {exc}",
+            )
 
     def _fallback_route(self, request: RouteRequest, error_reason: str = "") -> RouteResponse:
         """
