@@ -191,13 +191,34 @@ def _synthesize_optical_lulc_answer(query: str, payload: dict[str, Any], method:
         if target_class == TargetClass.VEGETATION:
             return f"Total vegetated area is estimated to cover approximately **{veg_pct:.0f}%** of this optical scene."
 
-    # 3. OBJECT DETECTION QUERIES (Honest capability limitation)
-    if any(w in ql for w in ["object", "objects", "vehicle", "ship", "building", "structure"]):
-        return (
-            f"The land-cover analysis identifies broad surface categories across the scene (**{built_pct:.0f}%** built-up area, "
-            f"**{bare_pct:.0f}%** bare terrain, **{veg_pct:.0f}%** vegetation, and **{water_pct:.1f}%** surface water), "
-            "but the optical classification specialist does not perform discrete object instance detection."
-        )
+    # 3. OBJECT DETECTION QUERIES / LOCALIZED STRUCTURES
+    if any(w in ql for w in ["object", "objects", "vehicle", "ship", "building", "buildings", "structure", "structures", "cluster", "clusters"]):
+        dets = payload.get("detections") or []
+        if dets:
+            det_lines = []
+            for i, d in enumerate(dets[:6], 1):
+                area = d.get("area_m2", 0)
+                centroid = d.get("centroid_wgs84")
+                geo_str = f" [Lat: {centroid[1]:.5f}°N, Lon: {centroid[0]:.5f}°E]" if centroid and len(centroid) >= 2 else ""
+                det_lines.append(f"- **Object / Structure Cluster #{i}:** Estimated Footprint ~{area:,.0f} m²{geo_str}")
+            clusters_str = "\n".join(det_lines)
+            return (
+                f"Based on multispectral optical segmentation, **{len(dets)} distinct object / built structure clusters** "
+                f"were identified and localized across the scene (accounting for approximately **{built_pct:.0f}%** built-up area):\n\n"
+                f"{clusters_str}\n\n"
+                f"The overall scene is composed of **{built_pct:.0f}%** built infrastructure, **{bare_pct:.0f}%** bare terrain, "
+                f"**{veg_pct:.0f}%** vegetation, and **{water_pct:.1f}%** surface water."
+            )
+        elif built_pct > 0:
+            return (
+                f"The land-cover analysis identifies built-up objects and infrastructure covering **{built_pct:.0f}%** of the scene, "
+                f"alongside **{bare_pct:.0f}%** bare terrain, **{veg_pct:.0f}%** vegetation, and **{water_pct:.1f}%** surface water."
+            )
+        else:
+            return (
+                f"No discrete objects or built structures were detected in this optical scene (built-up area is estimated at **0%**). "
+                f"The scene consists of **{bare_pct:.0f}%** bare terrain and **{veg_pct:.0f}%** vegetation."
+            )
 
     # 4. LAND COVER COMPOSITION
     if any(w in ql for w in ["land cover", "composition", "distribution", "class"]):

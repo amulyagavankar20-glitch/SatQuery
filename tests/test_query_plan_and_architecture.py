@@ -171,3 +171,36 @@ def test_final_reasoner_honest_limitation_when_no_mask_exists():
     }
     answer = _synthesize_optical_lulc_answer("highlight the urban area", payload)
     assert "no built-up or urban structures were detected" in answer.lower()
+
+
+def test_optical_object_cluster_detection_and_synthesis():
+    """Verify optical object detection returns localized cluster details when structures exist."""
+    payload = {
+        "target_class": "BUILT",
+        "fractions": {"built": 0.25, "bare": 0.50, "water": 0.10, "trees": 0.15},
+        "detections": [
+            {
+                "id": "det_built_1",
+                "type": "building_cluster",
+                "bbox_wgs84": [10.0, 50.0, 10.05, 50.05],
+                "centroid_wgs84": [10.025, 50.025],
+                "area_m2": 45000.0,
+                "confidence": 0.88,
+            },
+            {
+                "id": "det_built_2",
+                "type": "building_cluster",
+                "bbox_wgs84": [10.1, 50.1, 10.12, 50.12],
+                "centroid_wgs84": [10.11, 50.11],
+                "area_m2": 12500.0,
+                "confidence": 0.88,
+            },
+        ],
+        "overlays": {"type": "FeatureCollection", "features": []},
+    }
+    answer = _synthesize_optical_lulc_answer("What objects or buildings are visible in this optical image?", payload)
+    assert "distinct object / built structure clusters" in answer.lower()
+    assert "45,000 m²" in answer or "45000" in answer
+    assert "Lat: 50.02500°N" in answer
+    assert "25%" in answer
+
