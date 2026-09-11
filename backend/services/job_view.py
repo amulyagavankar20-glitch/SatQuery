@@ -39,14 +39,11 @@ def resolve_composite_path(job_id: str) -> Path | None:
     processed = _job_dir(job_id) / "processed"
     if not processed.is_dir():
         return None
-    comp = processed / "composite.png"
-    if comp.is_file():
-        return comp
+    named = sorted(processed.glob("composite*.png"))
+    if named:
+        return named[0]
     pngs = sorted(processed.glob("*.png"))
-    if pngs:
-        return pngs[0]
-    tifs = sorted(processed.glob("*.tif")) + sorted(processed.glob("*.tiff"))
-    return tifs[0] if tifs else None
+    return pngs[0] if pngs else None
 
 
 def resolve_vv_path(job_id: str) -> Path | None:

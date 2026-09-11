@@ -112,14 +112,23 @@ Response Format Guidelines:
             "\n--- Specialist Model Findings ---",
         ]
 
-        if not specialist_results:
+        skip = {"geochat_vqa", "geochat_describe", "grounding", "vectorize", "align"}
+        real = [r for r in specialist_results if r.tool_id not in skip]
+        if not real:
             prompt_parts.append("No specialist tool results available.")
         else:
-            for idx, res in enumerate(specialist_results, 1):
+            for idx, res in enumerate(real, 1):
+                raw = res.result
+                if isinstance(raw, dict):
+                    dumped = json.dumps(raw, default=str)
+                else:
+                    dumped = str(raw)
+                if dumped.startswith("MOCK_"):
+                    continue
                 prompt_parts.append(
                     f"Specialist Tool #{idx} ({res.tool_id}):\n"
                     f"  Status: {res.status}\n"
-                    f"  Raw Result: {json.dumps(res.result, default=str) if isinstance(res.result, dict) else res.result}\n"
+                    f"  Raw Result: {dumped}\n"
                     f"  Explanation: {res.explanation or 'None'}\n"
                     f"  Confidence: {res.confidence or 'N/A'}"
                 )
@@ -164,7 +173,10 @@ Response Format Guidelines:
         Deterministic template synthesis used when VLM is unavailable.
         Explicitly marked so it is never misrepresented as VLM output.
         """
-        # 1. Check if SARChat result is present
+        lulc_res = next((r for r in specialist_results if r.tool_id == "lulc_map" and r.status == "success"), None)
+        if lulc_res and isinstance(lulc_res.result, dict) and lulc_res.result.get("answer"):
+            return str(lulc_res.result["answer"])
+
         sarchat_res = next((r for r in specialist_results if r.tool_id == "sar_map" and r.status == "success"), None)
         if sarchat_res and isinstance(sarchat_res.result, dict):
             raw_ans = str(sarchat_res.result.get("answer", ""))
@@ -206,13 +218,17 @@ Response Format Guidelines:
             f"Analysis completed for query: *\"{query}\"*",
         ]
 
+        skip = {"geochat_vqa", "geochat_describe", "grounding", "vectorize", "align"}
         for r in specialist_results:
-            if r.status == "success":
-                val = r.result.get("answer") if isinstance(r.result, dict) else r.result
-                if val:
-                    sections.append(f"\n**{r.tool_id.upper()} Observation:**\n{val}")
-                if r.explanation:
-                    sections.append(f"*{r.explanation}*")
+            if r.tool_id in skip or r.status != "success":
+                continue
+            val = r.result.get("answer") if isinstance(r.result, dict) else r.result
+            if val is None:
+                continue
+            text = str(val)
+            if text.startswith("MOCK_"):
+                continue
+            sections.append(text)
 
         return "\n".join(sections)
 

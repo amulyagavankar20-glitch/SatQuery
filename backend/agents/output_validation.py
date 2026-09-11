@@ -54,12 +54,12 @@ def _required_tools_for_task(task: str, input_class: str = "") -> list[str]:
             return sar_mapping[task]
 
     mapping: dict[str, list[str]] = {
-        "SINGLE_VQA":           ["geochat_vqa"],
-        "CAPTIONING":           ["geochat_vqa"],
-        "GROUNDING":            ["geochat_vqa", "grounding"],
+        "SINGLE_VQA":           ["lulc_map"],
+        "CAPTIONING":           ["lulc_map"],
+        "GROUNDING":            ["lulc_map"],
         "CHANGE_DETECTION":     ["bit_cd"],
-        "CHANGE_VQA":           ["bit_cd", "geochat_describe"],
-        "OPTICAL_SAR_ANALYSIS": ["coregister", "fusion_s1s2", "agreement", "geochat_describe"],
+        "CHANGE_VQA":           ["bit_cd"],
+        "OPTICAL_SAR_ANALYSIS": ["coregister", "fusion_s1s2", "agreement"],
     }
     return mapping.get(task, [])
 
@@ -68,7 +68,7 @@ def _collect_evidence(state: "GraphState") -> Evidence:
     ev = Evidence()
     for tr in state.get("specialist_results", []):  # type: ignore[union-attr]
         # Model evidence – tools that produce a textual or semantic answer
-        if tr.tool_id in {"sar_map", "geochat_vqa", "grounding", "geochat_describe"}:
+        if tr.tool_id in {"sar_map", "lulc_map"}:
             ev.model_evidence.append(tr)
         # Temporal evidence – tools that operate on a time series
         if tr.tool_id in {"bit_cd", "vectorize", "align"}:

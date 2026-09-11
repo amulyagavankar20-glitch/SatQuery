@@ -142,8 +142,7 @@ async def get_composite(job_id: str):
     safe = safe_job_file(job_id, path) if path else None
     if safe is None:
         raise HTTPException(status_code=404, detail="Composite not ready")
-    media = "image/png" if safe.suffix.lower() == ".png" else "image/tiff"
-    return FileResponse(safe, media_type=media, filename=safe.name)
+    return FileResponse(safe, media_type="image/png", filename=safe.name)
 
 
 @router.get("/jobs/{job_id}/artifacts/vv")

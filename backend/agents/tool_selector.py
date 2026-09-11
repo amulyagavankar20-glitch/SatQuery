@@ -79,12 +79,12 @@ TASK_INPUT_COMPATIBILITY: dict[RouterTask, set[InputClass]] = {
 
 # Locked deterministic routing sequences (§5, §9)
 TASK_TO_TOOLS: dict[RouterTask, list[str]] = {
-    RouterTask.SINGLE_VQA: ["preprocess", "lulc_map", "geochat_vqa"],
-    RouterTask.CAPTIONING: ["preprocess", "lulc_map", "geochat_vqa"],
-    RouterTask.GROUNDING: ["preprocess", "lulc_map", "geochat_vqa", "grounding"],
+    RouterTask.SINGLE_VQA: ["preprocess", "lulc_map"],
+    RouterTask.CAPTIONING: ["preprocess", "lulc_map"],
+    RouterTask.GROUNDING: ["preprocess", "lulc_map"],
     RouterTask.CHANGE_DETECTION: ["preprocess", "bit_cd"],
-    RouterTask.CHANGE_VQA: ["preprocess", "bit_cd", "geochat_describe"],
-    RouterTask.OPTICAL_SAR_ANALYSIS: ["preprocess", "coregister", "fusion_s1s2", "agreement", "geochat_describe"],
+    RouterTask.CHANGE_VQA: ["preprocess", "bit_cd"],
+    RouterTask.OPTICAL_SAR_ANALYSIS: ["preprocess", "coregister", "fusion_s1s2", "agreement"],
 }
 
 

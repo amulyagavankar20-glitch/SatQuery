@@ -139,13 +139,17 @@ function mapLiveJob(job: JobView, slots: SceneSlot[], overlays?: OverlayCollecti
     confidence: prettyConfidence(job.answer?.confidence),
     jobId: job.job_id,
     bounds,
-    opticalUrl: optical?.preview_url ? apiUrl(optical.preview_url) : (slots.find((s) => s.modality === "OPTICAL")?.previewUrl ?? null),
-    sarUrl: sar?.preview_url ? apiUrl(sar.preview_url) : (slots.find((s) => s.modality === "SAR")?.previewUrl ?? null),
+    opticalUrl: job.job_id
+      ? apiUrl(`/jobs/${job.job_id}/artifacts/composite`)
+      : (optical?.preview_url ? apiUrl(optical.preview_url) : (slots.find((s) => s.modality === "OPTICAL")?.previewUrl ?? null)),
+    sarUrl: job.job_id && sar
+      ? apiUrl(`/jobs/${job.job_id}/artifacts/composite`)
+      : (sar?.preview_url ? apiUrl(sar.preview_url) : (slots.find((s) => s.modality === "SAR")?.previewUrl ?? null)),
     vvUrl: sar ? apiUrl(`/jobs/${job.job_id}/artifacts/vv`) : null,
     vhUrl: sar ? apiUrl(`/jobs/${job.job_id}/artifacts/vh`) : null,
     overlayUrl: sar ? apiUrl(`/jobs/${job.job_id}/artifacts/overlay`) : null,
     compareUrl: slots.find((s) => s.slot === "T2" && s.modality === "OPTICAL")?.previewUrl ?? null,
-    overlays: overlays ?? mockAssistantTurn(job.query, slots).overlays,
+    overlays: overlays ?? { type: "FeatureCollection", features: [] },
     lulc: job.lulc
       ? {
           backend: job.lulc.backend,
@@ -153,7 +157,7 @@ function mapLiveJob(job: JobView, slots: SceneSlot[], overlays?: OverlayCollecti
           fractions: job.lulc.fractions,
           sceneTags: (job.lulc.scene_tags ?? []).map((t) => ({ name: t.name, score: t.score })),
         }
-      : mockAssistantTurn(job.query, slots).lulc,
+      : undefined,
     trace:
       job.traces.length > 0
         ? job.traces.map((t) => ({

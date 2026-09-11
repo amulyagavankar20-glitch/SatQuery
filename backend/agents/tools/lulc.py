@@ -161,25 +161,15 @@ def _fractions(labels: np.ndarray) -> dict[str, float]:
     return out
 
 
-def _mask_to_boxes(mask: np.ndarray, max_boxes: int = 6) -> list[list[float]]:
-    """Axis-aligned boxes in normalized image coords [x0,y0,x1,y1]."""
+def _mask_to_boxes(mask: np.ndarray, max_boxes: int = 1) -> list[list[float]]:
+    """One axis-aligned box around the mask, in normalized image coords [x0,y0,x1,y1]."""
     h, w = mask.shape
     ys, xs = np.where(mask)
     if ys.size == 0:
         return []
-    # coarse grid to avoid thousands of pixels
-    gy, gx = max(h // 24, 1), max(w // 24, 1)
-    cells: dict[tuple[int, int], int] = {}
-    for y, x in zip(ys[:: max(len(ys) // 4000, 1)], xs[:: max(len(xs) // 4000, 1)]):
-        cells[(int(y // gy), int(x // gx))] = 1
-    boxes: list[list[float]] = []
-    for (cy, cx) in list(cells)[:max_boxes]:
-        y0 = cy * gy / h
-        x0 = cx * gx / w
-        y1 = min(1.0, (cy + 1) * gy / h)
-        x1 = min(1.0, (cx + 1) * gx / w)
-        boxes.append([round(x0, 4), round(y0, 4), round(x1, 4), round(y1, 4)])
-    return boxes
+    y0, y1 = float(ys.min()) / h, float(ys.max() + 1) / h
+    x0, x1 = float(xs.min()) / w, float(xs.max() + 1) / w
+    return [[round(x0, 4), round(y0, 4), round(x1, 4), round(y1, 4)]]
 
 
 def _boxes_to_geojson(boxes: list[list[float]], bounds: list[float] | None, kind: str) -> list[dict[str, Any]]:

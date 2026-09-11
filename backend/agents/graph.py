@@ -669,9 +669,11 @@ def report_generator(state: GraphState) -> dict[str, Any]:
             input_class=input_class_val,
         )
 
+        if final_answer and "MOCK_" in str(final_answer):
+            final_answer = str(lulc_ans) if lulc_ans else None
         if lulc_ans and (not final_answer or str(final_answer).startswith("MOCK_")):
             final_answer = str(lulc_ans)
-        elif lulc_ans and str(lulc_ans) not in str(final_answer):
+        elif lulc_ans and str(lulc_ans) not in str(final_answer or ""):
             final_answer = f"{final_answer}\n\n{lulc_ans}"
 
         _record_event(
@@ -777,38 +779,19 @@ def after_preprocess(state: GraphState) -> str:
 
 
 def after_lulc_map(state: GraphState) -> str:
-    return "geochat_vqa"
-
-
-def after_geochat_vqa(state: GraphState) -> str:
-    task = state.get("detected_task", "")
-    if task == RouterTask.GROUNDING.value:
-        return "grounding"
     return "evidence_fusion"
 
 
 def after_sar_map(state: GraphState) -> str:
-    task = state.get("detected_task", "")
-    if task == RouterTask.GROUNDING.value:
-        return "grounding"
     return "evidence_fusion"
 
 
 def after_bit_cd(state: GraphState) -> str:
-    task = state.get("detected_task", "")
-    if task == RouterTask.CHANGE_VQA.value:
-        return "geochat_describe"
     return "vectorize"
 
 
 def after_vectorize(state: GraphState) -> str:
-    task = state.get("detected_task", "")
-    if task == RouterTask.CHANGE_DETECTION.value:
-        return "evidence_fusion"
-    if task == RouterTask.CHANGE_VQA.value:
-        return "geochat_describe"
-    # Should not reach here for other tasks
-    return "refusal"
+    return "evidence_fusion"
 
 
 # ---------------------------------------------------------------------------
@@ -824,13 +807,10 @@ for name, fn in {
     "tool_selector":    tool_selector,
     "preprocess":       preprocess,
     "lulc_map":         lulc_map,
-    "sar_map":      sar_map,
-    "geochat_vqa":      geochat_vqa,
-    "grounding":        grounding,
+    "sar_map":          sar_map,
     "align":            align,
     "bit_cd":           bit_cd,
     "vectorize":        vectorize,
-    "geochat_describe": geochat_describe,
     "coregister":       coregister,
     "fusion_s1s2":      fusion_s1s2,
     "agreement":        agreement,
@@ -865,9 +845,8 @@ workflow.add_conditional_edges(
 workflow.add_conditional_edges(
     "preprocess", after_preprocess,
     {
-        "sar_map":  "sar_map",
+        "sar_map":      "sar_map",
         "lulc_map":     "lulc_map",
-        "geochat_vqa":  "geochat_vqa",
         "bit_cd":       "bit_cd",
         "align":        "align",
         "coregister":   "coregister",
@@ -875,45 +854,23 @@ workflow.add_conditional_edges(
     },
 )
 
-# Sentinel-1 land-cover path
-workflow.add_conditional_edges(
-    "sar_map", after_sar_map,
-    {"grounding": "grounding", "evidence_fusion": "evidence_fusion"},
-)
+workflow.add_edge("sar_map", "evidence_fusion")
+workflow.add_edge("lulc_map", "evidence_fusion")
 
-workflow.add_conditional_edges(
-    "lulc_map", after_lulc_map,
-    {"geochat_vqa": "geochat_vqa"},
-)
-
-# GeoChat VQA path
-workflow.add_conditional_edges(
-    "geochat_vqa", after_geochat_vqa,
-    {"grounding": "grounding", "evidence_fusion": "evidence_fusion"},
-)
-workflow.add_edge("grounding", "evidence_fusion")
-
-# CHANGE_DETECTION / CHANGE_VQA paths (direct real execution)
 workflow.add_conditional_edges(
     "bit_cd", after_bit_cd,
     {
-        "evidence_fusion":  "evidence_fusion",
-        "geochat_describe": "geochat_describe",
         "vectorize":        "vectorize",
+        "evidence_fusion":  "evidence_fusion",
         "refusal":          "refusal",
     },
 )
-# Retain align and vectorize node edges for test compatibility
 workflow.add_edge("align", "bit_cd")
 workflow.add_edge("vectorize", "evidence_fusion")
 
-# OPTICAL_SAR_ANALYSIS path: coregister → fusion_s1s2 → agreement → geochat_describe
 workflow.add_edge("coregister",  "fusion_s1s2")
 workflow.add_edge("fusion_s1s2", "agreement")
-workflow.add_edge("agreement",   "geochat_describe")
-
-# geochat_describe always leads to evidence_fusion
-workflow.add_edge("geochat_describe", "evidence_fusion")
+workflow.add_edge("agreement",   "evidence_fusion")
 
 # Final tail – common to all successful paths
 workflow.add_edge("evidence_fusion",  "audit_logger")
