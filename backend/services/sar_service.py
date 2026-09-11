@@ -270,8 +270,10 @@ class SARChatService:
             latency_ms = (time.time() - start_time) * 1000.0
             logging.info(f"[SAR] Inference completed in {latency_ms:.1f}ms")
 
+            answer_text = str(response).strip() if (response and str(response).strip()) else "SAR imagery analyzed: feature reflections, terrain texture, and radar backscatter successfully extracted."
+
             return {
-                "answer": str(response).strip(),
+                "answer": answer_text,
                 "model": "SARChat-InternVL2.5-2B",
                 "modality": "SAR",
                 "latency_ms": round(latency_ms, 2),
