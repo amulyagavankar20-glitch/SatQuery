@@ -159,11 +159,11 @@ def _answer_from_session(session: SessionContext) -> JobAnswer | None:
 
     is_sar = (
         session.input_mode == "SINGLE_SAR"
-        or any(t.tool_id == "sarchat_vqa" for t in session.traces if hasattr(t, "tool_id"))
-        or any(isinstance(t, dict) and t.get("tool_id") == "sarchat_vqa" for t in session.traces)
+        or any(t.tool_id == "sar_map" for t in session.traces if hasattr(t, "tool_id"))
+        or any(isinstance(t, dict) and t.get("tool_id") == "sar_map" for t in session.traces)
     )
-    model_name = "SARChat-InternVL2.5-2B" if is_sar else settings.TALKING_VLM_MODEL
-    backend_name = "sarchat" if is_sar else settings.TALKING_VLM_BACKEND
+    model_name = "reBEN-ResNet50-S1" if is_sar else settings.TALKING_VLM_MODEL
+    backend_name = "reben_s1" if is_sar else settings.TALKING_VLM_BACKEND
 
     return JobAnswer(
         text=text,
@@ -299,10 +299,10 @@ def build_job_view_from_db(job_id: str) -> JobView | None:
         if text_out is not None or job.status in ("completed", "failed", "refused"):
             is_sar = (
                 job.input_mode == "SINGLE_SAR"
-                or any(t.tool_id == "sarchat_vqa" for t in traces)
+                or any(t.tool_id == "sar_map" for t in traces)
             )
-            model_name = "SARChat-InternVL2.5-2B" if is_sar else settings.TALKING_VLM_MODEL
-            backend_name = "sarchat" if is_sar else settings.TALKING_VLM_BACKEND
+            model_name = "reBEN-ResNet50-S1" if is_sar else settings.TALKING_VLM_MODEL
+            backend_name = "reben_s1" if is_sar else settings.TALKING_VLM_BACKEND
             answer = JobAnswer(
                 text=text_out.text_result if text_out else None,
                 model=model_name,

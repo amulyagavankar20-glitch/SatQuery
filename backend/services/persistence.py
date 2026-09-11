@@ -318,7 +318,7 @@ def _persist_spatial_features(db: Session, job_id: uuid.UUID, result: GraphState
             continue
 
         # SAR detections -> SpatialFeature (DETECTION bounding box)
-        if tool_id == "sarchat_vqa":
+        if tool_id == "sar_map":
             dets = payload.get("detections") or []
             for det in dets:
                 if not isinstance(det, dict):

@@ -147,8 +147,9 @@ class SARChatService:
         return cls._instance
 
     def _resolve_device(self) -> str:
-        if settings.SARCHAT_DEVICE:
-            return settings.SARCHAT_DEVICE.lower()
+        device = getattr(settings, "SARCHAT_DEVICE", None)
+        if device:
+            return str(device).lower()
         if torch.backends.mps.is_available():
             return "mps"
         if torch.cuda.is_available():

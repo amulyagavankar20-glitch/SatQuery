@@ -9,7 +9,7 @@ class ToolSelectorError(Exception):
 
 # Machine-readable specialist capability definitions (§11)
 CAPABILITY_MATRIX: dict[str, dict[str, Any]] = {
-    "sarchat_vqa": {
+    "sar_map": {
         "tasks": {RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value},
         "modalities": {InputClass.SINGLE_SAR.value},
     },
@@ -107,14 +107,13 @@ class ToolSelector:
         if not isinstance(task, RouterTask) or task not in self.TASK_TO_TOOLS:
             raise ToolSelectorError(f"Unsupported task for deterministic routing: {task}")
         
-        # When input is SINGLE_SAR, route single-image VQA/captioning/grounding through sarchat_vqa
         if input_class == InputClass.SINGLE_SAR:
             if task == RouterTask.SINGLE_VQA:
-                return ["preprocess", "sarchat_vqa"]
+                return ["preprocess", "sar_map"]
             elif task == RouterTask.CAPTIONING:
-                return ["preprocess", "sarchat_vqa"]
+                return ["preprocess", "sar_map"]
             elif task == RouterTask.GROUNDING:
-                return ["preprocess", "sarchat_vqa", "grounding"]
+                return ["preprocess", "sar_map", "grounding"]
 
         return list(self.TASK_TO_TOOLS[task])
 

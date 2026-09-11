@@ -165,7 +165,7 @@ Response Format Guidelines:
         Explicitly marked so it is never misrepresented as VLM output.
         """
         # 1. Check if SARChat result is present
-        sarchat_res = next((r for r in specialist_results if r.tool_id == "sarchat_vqa" and r.status == "success"), None)
+        sarchat_res = next((r for r in specialist_results if r.tool_id == "sar_map" and r.status == "success"), None)
         if sarchat_res and isinstance(sarchat_res.result, dict):
             raw_ans = str(sarchat_res.result.get("answer", ""))
             stats = scene_statistics or sarchat_res.result.get("scene_statistics")

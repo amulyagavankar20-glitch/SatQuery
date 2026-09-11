@@ -370,15 +370,15 @@ def _image_refs(state: GraphState) -> list[str]:
 # Specialist tool nodes
 # ---------------------------------------------------------------------------
 
-def sarchat_vqa(state: GraphState) -> dict[str, Any]:
-    """Specialist SARChat-InternVL2.5-2B tool node for SAR imagery understanding."""
+def sar_map(state: GraphState) -> dict[str, Any]:
+    """Sentinel-1 specialist: reBEN ResNet50 + dual-pol backscatter."""
     refs = _raw_raster_refs(state) or _image_refs(state)
     params = {
         "question": state.get("user_query", ""),
         "image_refs": refs,
         "input_refs": refs,
     }
-    return _execute_tool(state, "sarchat_vqa", params)
+    return _execute_tool(state, "sar_map", params)
 
 
 def _asset_bounds(state: GraphState) -> list[float] | None:
@@ -762,10 +762,10 @@ def after_preprocess(state: GraphState) -> str:
     input_class = state.get("input_class", "")
     selected_tools = state.get("selected_tools", [])
 
-    # Route SAR single-image understanding through sarchat_vqa
-    if "sarchat_vqa" in selected_tools or input_class == InputClass.SINGLE_SAR.value:
+    # Route SAR single-image understanding through sar_map
+    if "sar_map" in selected_tools or input_class == InputClass.SINGLE_SAR.value:
         if task in (RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value):
-            return "sarchat_vqa"
+            return "sar_map"
 
     if task in (RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value):
         return "lulc_map"
@@ -787,7 +787,7 @@ def after_geochat_vqa(state: GraphState) -> str:
     return "evidence_fusion"
 
 
-def after_sarchat_vqa(state: GraphState) -> str:
+def after_sar_map(state: GraphState) -> str:
     task = state.get("detected_task", "")
     if task == RouterTask.GROUNDING.value:
         return "grounding"
@@ -824,7 +824,7 @@ for name, fn in {
     "tool_selector":    tool_selector,
     "preprocess":       preprocess,
     "lulc_map":         lulc_map,
-    "sarchat_vqa":      sarchat_vqa,
+    "sar_map":      sar_map,
     "geochat_vqa":      geochat_vqa,
     "grounding":        grounding,
     "align":            align,
@@ -865,7 +865,7 @@ workflow.add_conditional_edges(
 workflow.add_conditional_edges(
     "preprocess", after_preprocess,
     {
-        "sarchat_vqa":  "sarchat_vqa",
+        "sar_map":  "sar_map",
         "lulc_map":     "lulc_map",
         "geochat_vqa":  "geochat_vqa",
         "bit_cd":       "bit_cd",
@@ -875,9 +875,9 @@ workflow.add_conditional_edges(
     },
 )
 
-# SARChat VQA path
+# Sentinel-1 land-cover path
 workflow.add_conditional_edges(
-    "sarchat_vqa", after_sarchat_vqa,
+    "sar_map", after_sar_map,
     {"grounding": "grounding", "evidence_fusion": "evidence_fusion"},
 )
 

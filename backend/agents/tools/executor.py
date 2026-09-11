@@ -33,7 +33,7 @@ from backend.agents.tools.mock_tools import (
     MockAgreement,
     MockMobileSAM,
 )
-from backend.agents.tools.sarchat import SARChatTool
+from backend.agents.tools.sar_map import SarMapTool
 from backend.agents.tools.bit_cd import BITChangeDetectionTool
 from backend.agents.tools.lulc import LulcMapTool
 
@@ -42,7 +42,7 @@ from backend.agents.tools.lulc import LulcMapTool
 # Every tool ID used by graph.py / ToolSelector MUST appear here.
 # ---------------------------------------------------------------------------
 _TOOL_IMPLEMENTATIONS: dict[str, type[BaseTool]] = {
-    "sarchat_vqa":      SARChatTool,
+    "sar_map":          SarMapTool,
     "geochat_vqa":      MockGeochatVQA,
     "geochat_describe": MockGeochatDescribe,
     "grounding":        MockGrounding,

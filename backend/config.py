@@ -92,9 +92,8 @@ class Settings(BaseSettings):
     # the Dynamic World / spectral fractions (taxonomy only, no extra download).
     BIGEARTHNET_WEIGHTS_PATH: str | None = None
 
-    # SARChat Specialist Model
-    SARCHAT_MODEL_PATH: str | None = None
-    SARCHAT_DEVICE: str | None = None
+    # Sentinel-1 reBEN ResNet50 (BigEarthNet v2)
+    BEN_S1_WEIGHTS_PATH: str | None = None
 
     # CORS
     CORS_ORIGINS: str
