@@ -1,0 +1,14 @@
+SatQuery presentation scenes
+Upload the .tif into the console. PNGs are what you see.
+
+file                         ask                                              expect
+------------------------------------------------------------------------------------------------
+s2_water.tif                 Highlight the water body                         DW water basin west, inland waters tag
+s2_vegetation.tif            Describe land-cover and major objects            trees/crops/grass fractions
+s2_flood.tif                 Map the flood inundation                         water + flooded vegetation
+s2_urban.tif                 Where is the built-up area?                      built grid, urban fabric tag
+s2_coast.tif                 Describe land-cover and major objects            marine water + port built
+s1_harbor.tif                Describe this SAR scene                          bright built, dark water, reBEN S1 tags
+s1_flood.tif                 What objects are visible in this SAR image?      dark inundation, bright settlement
+bit_urban_t1+t2.tif          What changed between these two dates, and where? new built block, BIT polygons
+bit_flood_t1+t2.tif          What changed between these two dates, and where? larger water, BIT change
