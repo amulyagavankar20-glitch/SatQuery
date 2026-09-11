@@ -1,5 +1,5 @@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { formatTraceChain, formatTraceStep } from "@/lib/thinking";
+import { formatTraceStep } from "@/lib/thinking";
 import type { TraceStep } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -17,9 +17,12 @@ export function TraceAccordion({
       <AccordionItem value="trace" className="min-w-0 border-0">
         <AccordionTrigger
           id="sq-trace"
-          className={cn("min-w-0 font-mono text-[11px] tracking-wide", focus && "text-primary")}
+          className={cn("min-w-0 font-mono text-[11px] tracking-wide text-mute hover:text-ink", focus && "text-primary")}
         >
-          <span className="min-w-0 truncate">{formatTraceChain(steps, confidence)}</span>
+          <span className="min-w-0 truncate">
+            Execution Trace ({steps.length} step{steps.length === 1 ? "" : "s"}
+            {confidence ? ` · ${confidence.toLowerCase()} confidence` : ""})
+          </span>
         </AccordionTrigger>
         <AccordionContent>
           <ol className="flex flex-col gap-1.5 font-mono text-[11px] leading-relaxed text-mute">

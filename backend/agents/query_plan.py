@@ -69,7 +69,8 @@ SYNONYM_MAP: dict[TargetClass, list[str]] = {
     ],
     TargetClass.BARE: [
         "bare", "bare land", "bare soil", "sand", "dirt", "exposed ground",
-        "soil", "barren", "desert", "open terrain",
+        "soil", "barren", "desert", "open terrain", "land", "the land", "open land",
+        "dry land", "terrain", "ground",
     ],
     TargetClass.VEGETATION: [
         "vegetation", "greenery", "green area", "plants", "flora", "green space",
@@ -181,10 +182,11 @@ def build_query_plan(
         intent = QueryIntent.MODALITY_QUERY
         specialists = ["metadata_parser"]
         resp_type = "explanation"
-    elif any(w in q for w in ["vehicle", "ship", "bridge", "airplane", "individual building", "object detection", "what objects are visible"]):
+    elif any(w in q for w in ["vehicle", "ship", "bridge", "airplane", "individual building", "object detection", "what objects are visible", "detect objects", "find objects", "locate structures"]):
         intent = QueryIntent.OBJECT_QUERY
-        specialists = ["lulc_map"]  # Note: LULC provides land-cover context with honest object limitation
-        resp_type = "limitation"
+        specialists = ["yolo_detector"]
+        resp_type = "spatial"
+
     elif spatial_op == SpatialOperation.HIGHLIGHT:
         intent = QueryIntent.SPATIAL_HIGHLIGHT
         specialists = ["lulc_map"]

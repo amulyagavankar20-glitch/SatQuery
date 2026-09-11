@@ -5,6 +5,7 @@ import { InspectDialog } from "@/components/InspectDialog";
 import { JobsDrawer } from "@/components/JobsDrawer";
 import { ShortcutsDialog } from "@/components/ShortcutsDialog";
 import { Toasts } from "@/components/Toasts";
+import { UploadChoiceDialog } from "@/components/UploadChoiceDialog";
 import { useShortcuts } from "@/hooks/use-shortcuts";
 
 export function GlobalOverlays() {
@@ -20,6 +21,7 @@ export function GlobalOverlays() {
       <CommandPalette />
       <ShortcutsDialog />
       <InspectDialog />
+      <UploadChoiceDialog />
       <Toasts />
     </>
   );

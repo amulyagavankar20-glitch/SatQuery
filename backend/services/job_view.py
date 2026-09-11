@@ -35,70 +35,139 @@ def list_tile_paths(job_id: str) -> list[Path]:
     return sorted(p for p in tiles_dir.glob("*.png") if p.is_file())
 
 
-def resolve_composite_path(job_id: str) -> Path | None:
-    processed = _job_dir(job_id) / "processed"
+def generate_raster_preview_png(tif_path: Path, output_png: Path) -> Path | None:
+    """Generate high-quality contrast-stretched preview PNG from raw GeoTIFF."""
+    if not tif_path.is_file():
+        return None
+    try:
+        import numpy as np
+        import rasterio
+        from PIL import Image
+
+        output_png.parent.mkdir(parents=True, exist_ok=True)
+        if tif_path.suffix.lower() in (".png", ".jpg", ".jpeg"):
+            try:
+                img = Image.open(tif_path).convert("RGB")
+                img.save(output_png)
+                return output_png
+            except Exception:
+                pass
+
+        with rasterio.open(tif_path) as src:
+            count = src.count
+            dtypes = src.dtypes
+            is_float = any("float" in str(d).lower() for d in dtypes)
+
+            def _stretch_channel(ch: np.ndarray) -> np.ndarray:
+                p2, p98 = np.percentile(ch, 2), np.percentile(ch, 98)
+                if p98 > p2:
+                    return np.clip((ch - p2) / (p98 - p2) * 255.0, 0, 255).astype(np.uint8)
+                return np.clip(ch, 0, 255).astype(np.uint8)
+
+            if count >= 9:
+                # 9+ band Sentinel-2: True color R=B4(3), G=B3(2), B=B2(1)
+                data = src.read([3, 2, 1]).astype(np.float32)
+                r = _stretch_channel(data[0])
+                g = _stretch_channel(data[1])
+                b = _stretch_channel(data[2])
+                rgb = np.stack([r, g, b], axis=-1)
+            elif count == 4:
+                # 4-band Sentinel-2 [B2(Blue), B3(Green), B4(Red), B8(NIR)]
+                # True color RGB: Red=Band 3 (B4), Green=Band 2 (B3), Blue=Band 1 (B2)
+                data = src.read([3, 2, 1]).astype(np.float32)
+                r = _stretch_channel(data[0])
+                g = _stretch_channel(data[1])
+                b = _stretch_channel(data[2])
+                rgb = np.stack([r, g, b], axis=-1)
+            elif count >= 3:
+                # Standard 3-band RGB [1, 2, 3]
+                data = src.read([1, 2, 3]).astype(np.float32)
+                r = _stretch_channel(data[0])
+                g = _stretch_channel(data[1])
+                b = _stretch_channel(data[2])
+                rgb = np.stack([r, g, b], axis=-1)
+            elif count == 2:
+                # Dual-polarization SAR (VV, VH)
+                vv = src.read(1).astype(np.float32)
+                vh = src.read(2).astype(np.float32)
+                vv_db = 10.0 * np.log10(np.clip(vv, 1e-5, None))
+                vh_db = 10.0 * np.log10(np.clip(vh, 1e-5, None))
+                vv_min, vv_max = np.percentile(vv_db, 2), np.percentile(vv_db, 98)
+                vh_min, vh_max = np.percentile(vh_db, 2), np.percentile(vh_db, 98)
+                r = np.clip((vv_db - vv_min) / (vv_max - vv_min + 1e-6), 0, 1)
+                g = np.clip((vh_db - vh_min) / (vh_max - vh_min + 1e-6), 0, 1)
+                b = np.clip(r / (g + 0.1), 0, 1)
+                rgb = (np.stack([r, g, b], axis=-1) * 255).astype(np.uint8)
+            else:
+                # Single band grayscale / intensity
+                b = src.read(1).astype(np.float32)
+                if is_float:
+                    b_db = 10.0 * np.log10(np.clip(b, 1e-5, None))
+                    b_min, b_max = np.percentile(b_db, 2), np.percentile(b_db, 98)
+                    norm_b = np.clip((b_db - b_min) / (b_max - b_min + 1e-6) * 255.0, 0, 255).astype(np.uint8)
+                else:
+                    norm_b = _stretch_channel(b)
+                rgb = np.stack([norm_b, norm_b, norm_b], axis=-1)
+
+        Image.fromarray(rgb).save(output_png)
+        return output_png
+    except Exception as exc:
+        logging.warning("Failed to generate raster preview for %s: %s", tif_path, exc)
+        return None
+
+
+def resolve_composite_path(job_id: str | Path, target_filename: str | None = None, prefer_t2: bool = False) -> Path | None:
+    jdir = Path(job_id) if isinstance(job_id, (Path, str)) and "/" in str(job_id) else _job_dir(str(job_id))
+    processed = jdir / "processed"
+    raw_dir = jdir / "raw"
+
+    if target_filename:
+        # Match target filename in processed or raw
+        target_stem = Path(target_filename).stem
+        if processed.is_dir():
+            candidates = list(processed.glob(f"*{target_stem}*.png"))
+            if candidates:
+                return candidates[0]
+        if raw_dir.is_dir():
+            tifs = list(raw_dir.glob(f"*{target_stem}*.tif*"))
+            if tifs:
+                processed.mkdir(parents=True, exist_ok=True)
+                preview_png = processed / f"composite_preview_{tifs[0].stem}.png"
+                if preview_png.is_file():
+                    return preview_png
+                res = generate_raster_preview_png(tifs[0], preview_png)
+                if res:
+                    return res
+
     if processed.is_dir():
+        # First priority: explicit composite or preview files
         named = sorted(processed.glob("composite*.png"))
         if named:
-            return named[0]
-        pngs = sorted(processed.glob("*.png"))
-        if pngs:
-            return pngs[0]
+            return named[-1] if prefer_t2 and len(named) > 1 else named[0]
+
+        # Check for preview images that are NOT masks or overlays
+        candidates = [
+            p for p in sorted(processed.glob("*.png"))
+            if not p.stem.endswith("_mask")
+            and not p.stem.startswith("mask_")
+            and p.name not in ("overlay.png", "vv.png", "vh.png")
+            and not p.name.startswith("tile_")
+        ]
+        if candidates:
+            return candidates[-1] if prefer_t2 and len(candidates) > 1 else candidates[0]
 
     # If processed composite is not ready, generate preview from raw GeoTIFF
-    raw_dir = _job_dir(job_id) / "raw"
     if raw_dir.is_dir():
         tifs = sorted(raw_dir.glob("*.tif*"))
         if tifs:
+            target_tif = tifs[-1] if prefer_t2 and len(tifs) > 1 else tifs[0]
             processed.mkdir(parents=True, exist_ok=True)
-            preview_png = processed / f"composite_preview_{tifs[0].stem}.png"
+            preview_png = processed / f"composite_preview_{target_tif.stem}.png"
             if preview_png.is_file():
                 return preview_png
-            try:
-                import numpy as np
-                import rasterio
-                from PIL import Image
-
-                with rasterio.open(tifs[0]) as src:
-                    count = src.count
-                    dtypes = src.dtypes
-                    is_float = any("float" in str(d).lower() for d in dtypes)
-                    if count >= 9:
-                        data = src.read([3, 2, 1]).astype(np.float32)
-                        p2, p98 = np.percentile(data, 2), np.percentile(data, 98)
-                        norm = np.clip((data - p2) / (p98 - p2 + 1e-6) * 255.0, 0, 255).astype(np.uint8)
-                        rgb = np.transpose(norm, (1, 2, 0))
-                    elif count >= 3:
-                        data = src.read([1, 2, 3]).astype(np.float32)
-                        p2, p98 = np.percentile(data, 2), np.percentile(data, 98)
-                        norm = np.clip((data - p2) / (p98 - p2 + 1e-6) * 255.0, 0, 255).astype(np.uint8)
-                        rgb = np.transpose(norm, (1, 2, 0))
-                    elif count == 2:
-                        vv = src.read(1).astype(np.float32)
-                        vh = src.read(2).astype(np.float32)
-                        vv_db = 10.0 * np.log10(np.clip(vv, 1e-5, None))
-                        vh_db = 10.0 * np.log10(np.clip(vh, 1e-5, None))
-                        vv_min, vv_max = np.percentile(vv_db, 2), np.percentile(vv_db, 98)
-                        vh_min, vh_max = np.percentile(vh_db, 2), np.percentile(vh_db, 98)
-                        r = np.clip((vv_db - vv_min) / (vv_max - vv_min + 1e-6), 0, 1)
-                        g = np.clip((vh_db - vh_min) / (vh_max - vh_min + 1e-6), 0, 1)
-                        b = np.clip(r / (g + 0.1), 0, 1)
-                        rgb = (np.stack([r, g, b], axis=-1) * 255).astype(np.uint8)
-                    else:
-                        b = src.read(1).astype(np.float32)
-                        if is_float:
-                            b_db = 10.0 * np.log10(np.clip(b, 1e-5, None))
-                            b_min, b_max = np.percentile(b_db, 2), np.percentile(b_db, 98)
-                            norm_b = np.clip((b_db - b_min) / (b_max - b_min + 1e-6) * 255.0, 0, 255).astype(np.uint8)
-                        else:
-                            p2, p98 = np.percentile(b, 2), np.percentile(b, 98)
-                            norm_b = np.clip((b - p2) / (p98 - p2 + 1e-6) * 255.0, 0, 255).astype(np.uint8)
-                        rgb = np.stack([norm_b, norm_b, norm_b], axis=-1)
-
-                Image.fromarray(rgb).save(preview_png)
-                return preview_png
-            except Exception:
-                pass
+            res = generate_raster_preview_png(target_tif, preview_png)
+            if res:
+                return res
 
     return None
 
@@ -159,51 +228,9 @@ def resolve_asset_preview_path(job_id: str, asset_index: int = 0) -> Path | None
         preview_png = processed / f"composite_preview_{target_tif.stem}.png"
         if preview_png.is_file():
             return preview_png
-        try:
-            import numpy as np
-            import rasterio
-            from PIL import Image
-
-            with rasterio.open(target_tif) as src:
-                count = src.count
-                dtypes = src.dtypes
-                is_float = any("float" in str(d).lower() for d in dtypes)
-                if count >= 9:
-                    data = src.read([3, 2, 1]).astype(np.float32)
-                    p2, p98 = np.percentile(data, 2), np.percentile(data, 98)
-                    norm = np.clip((data - p2) / (p98 - p2 + 1e-6) * 255.0, 0, 255).astype(np.uint8)
-                    rgb = np.transpose(norm, (1, 2, 0))
-                elif count >= 3:
-                    data = src.read([1, 2, 3]).astype(np.float32)
-                    p2, p98 = np.percentile(data, 2), np.percentile(data, 98)
-                    norm = np.clip((data - p2) / (p98 - p2 + 1e-6) * 255.0, 0, 255).astype(np.uint8)
-                    rgb = np.transpose(norm, (1, 2, 0))
-                elif count == 2:
-                    vv = src.read(1).astype(np.float32)
-                    vh = src.read(2).astype(np.float32)
-                    vv_db = 10.0 * np.log10(np.clip(vv, 1e-5, None))
-                    vh_db = 10.0 * np.log10(np.clip(vh, 1e-5, None))
-                    vv_min, vv_max = np.percentile(vv_db, 2), np.percentile(vv_db, 98)
-                    vh_min, vh_max = np.percentile(vh_db, 2), np.percentile(vh_db, 98)
-                    r = np.clip((vv_db - vv_min) / (vv_max - vv_min + 1e-6), 0, 1)
-                    g = np.clip((vh_db - vh_min) / (vh_max - vh_min + 1e-6), 0, 1)
-                    b = np.clip(r / (g + 0.1), 0, 1)
-                    rgb = (np.stack([r, g, b], axis=-1) * 255).astype(np.uint8)
-                else:
-                    b = src.read(1).astype(np.float32)
-                    if is_float:
-                        b_db = 10.0 * np.log10(np.clip(b, 1e-5, None))
-                        b_min, b_max = np.percentile(b_db, 2), np.percentile(b_db, 98)
-                        norm_b = np.clip((b_db - b_min) / (b_max - b_min + 1e-6) * 255.0, 0, 255).astype(np.uint8)
-                    else:
-                        p2, p98 = np.percentile(b, 2), np.percentile(b, 98)
-                        norm_b = np.clip((b - p2) / (p98 - p2 + 1e-6) * 255.0, 0, 255).astype(np.uint8)
-                    rgb = np.stack([norm_b, norm_b, norm_b], axis=-1)
-
-            Image.fromarray(rgb).save(preview_png)
-            return preview_png
-        except Exception:
-            pass
+        res = generate_raster_preview_png(target_tif, preview_png)
+        if res:
+            return res
 
     return resolve_composite_path(job_id)
 
@@ -302,6 +329,15 @@ def _answer_from_session(session: SessionContext) -> JobAnswer | None:
 
 
 def _lulc_from_session(session: SessionContext) -> JobLulcView | None:
+    # Strictly isolate SAR from optical LULC evidence
+    if session.input_mode in ("SINGLE_SAR", "SAR"):
+        return None
+    assets = [r for r in (session.metadata.get("assets") or []) if isinstance(r, dict)]
+    active_slot = session.metadata.get("active_slot", "T1")
+    active_asset = assets[1] if active_slot == "T2" and len(assets) > 1 else (assets[0] if assets else None)
+    if active_asset and str(active_asset.get("modality", "")).upper() == "SAR":
+        return None
+
     for res in session.tool_results:
         if not isinstance(res, dict) or res.get("tool_id") != "lulc_map":
             continue
@@ -386,6 +422,16 @@ def build_job_view_from_session(session: SessionContext) -> JobView:
         for t in session.traces
         if isinstance(t, dict)
     ]
+    analysis_objects: list[Any] = []
+    for res in session.tool_results:
+        if isinstance(res, dict) and isinstance(res.get("result"), dict):
+            objs = res["result"].get("analysis_objects") or []
+            for obj in objs:
+                if isinstance(obj, dict):
+                    analysis_objects.append(obj)
+                elif hasattr(obj, "model_dump"):
+                    analysis_objects.append(obj.model_dump())
+
     return JobView(
         job_id=job_id,
         session_id=session.session_id,
@@ -397,6 +443,7 @@ def build_job_view_from_session(session: SessionContext) -> JobView:
         answer=_answer_from_session(session),
         assets=assets,
         overlays=overlays,
+        analysis_objects=analysis_objects,
         traces=traces,
         warnings=_warnings_from_session(session),
         errors=list(session.errors),
@@ -515,27 +562,28 @@ def footprint_geojson(job_id: str) -> dict[str, Any] | None:
             }
         )
 
-    # Check for SAR or Grounding detections in the session
+    # Check for SAR, BIT Change, or Grounding detections in the session
     session = get_session_by_job_id(job_id)
     if session:
         for res in session.tool_results:
             if isinstance(res, dict) and isinstance(res.get("result"), dict):
-                dets = res["result"].get("detections") or []
-                ov = res["result"].get("overlays")
+                rdict = res["result"]
+                dets = rdict.get("detections") or []
+                ov = rdict.get("overlays") or rdict.get("geojson")
                 if isinstance(ov, dict):
                     for feat in ov.get("features") or []:
                         if isinstance(feat, dict) and feat.get("geometry"):
                             features.append(feat)
                 for det in dets:
-                    geo_box = det.get("bbox_wgs84")
-                    if geo_box and len(geo_box) == 4:
+                    geo_box = det.get("bbox_wgs84") or det.get("bbox")
+                    if geo_box and len(geo_box) == 4 and not isinstance(det.get("centroid"), list):
                         d_minx, d_miny, d_maxx, d_maxy = geo_box
                         features.append({
                             "type": "Feature",
                             "properties": {
                                 "feature_type": "DETECTION",
-                                "kind": "grounding",
-                                "label": det.get("type", "structure"),
+                                "kind": det.get("kind", "grounding"),
+                                "label": det.get("type") or det.get("label", "structure"),
                                 "id": det.get("id"),
                                 "confidence": det.get("confidence", 0.88),
                                 "image_position": det.get("image_position"),

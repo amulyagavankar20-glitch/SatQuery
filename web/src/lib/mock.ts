@@ -1,23 +1,5 @@
 import type { AssistantTurn, BBox, LulcReport, OverlayCollection, SceneSlot, TraceStep } from "./types";
 
-/** Image y grows down; geographic y grows north. xs/ys are normalized image coords. */
-function ring(bounds: BBox, xs: number[], ys: number[]): number[][] {
-  const [w, s, e, n] = bounds;
-  const dx = e - w;
-  const dy = n - s;
-  const coords = xs.map((x, i) => [w + dx * x, n - dy * ys[i]!]);
-  coords.push(coords[0]!);
-  return coords;
-}
-
-function poly(bounds: BBox, xs: number[], ys: number[], id: string, kind: "change" | "uncertain", cls: string) {
-  return {
-    type: "Feature" as const,
-    properties: { id, kind, class: cls, label: cls.replaceAll("_", " ") },
-    geometry: { type: "Polygon" as const, coordinates: [ring(bounds, xs, ys)] },
-  };
-}
-
 const DW_TO_BEN: Record<string, [string, number][]> = {
   water: [["Inland waters", 1.0]],
   trees: [
@@ -74,50 +56,9 @@ function sceneTagsFromFractions(fractions: Record<string, number>, coastal = fal
     .map(([name, score]) => ({ name, score: Math.round(score * 1000) / 1000 }));
 }
 
-export function mockOverlays(bounds: BBox, query = ""): OverlayCollection {
-  const q = query.toLowerCase();
-  if (q.includes("water body") || q.includes("highlight the water") || q.includes("flood")) {
-    return {
-      type: "FeatureCollection",
-      features: [
-        poly(
-          bounds,
-          [0.1, 0.26, 0.36, 0.46, 0.54, 0.52, 0.42, 0.2, 0.14, 0.1],
-          [0.18, 0.1, 0.14, 0.26, 0.48, 0.68, 0.86, 0.94, 0.76, 0.46],
-          "water-1",
-          "change",
-          "water",
-        ),
-      ],
-    };
-  }
-  if (q.includes("land-cover") || q.includes("vegetation") || q.includes("objects")) {
-    return {
-      type: "FeatureCollection",
-      features: [
-        poly(
-          bounds,
-          [0.0, 0.16, 0.36, 0.46, 0.54, 0.52, 0.42, 0.2, 0.04, 0.0],
-          [0.18, 0.1, 0.14, 0.26, 0.48, 0.68, 0.86, 0.94, 0.76, 0.46],
-          "water-1",
-          "change",
-          "water",
-        ),
-        poly(bounds, [0.54, 0.74, 0.76, 0.54], [0.36, 0.36, 0.58, 0.58], "built-1", "uncertain", "built"),
-        poly(bounds, [0.56, 0.98, 0.98, 0.62], [0.02, 0.02, 0.36, 0.38], "crops-1", "uncertain", "crops"),
-      ],
-    };
-  }
-  if (q.includes("changed") || q.includes("difference") || q.includes("increased") || q.includes("decreased")) {
-    return {
-      type: "FeatureCollection",
-      features: [
-        poly(bounds, [0.42, 0.58, 0.61, 0.44], [0.62, 0.59, 0.44, 0.45], "chg-1", "change", "change"),
-        poly(bounds, [0.62, 0.78, 0.81, 0.64], [0.82, 0.8, 0.64, 0.66], "chg-2", "change", "change"),
-        poly(bounds, [0.22, 0.36, 0.38, 0.24], [0.38, 0.36, 0.22, 0.24], "unc-1", "uncertain", "uncertain"),
-      ],
-    };
-  }
+export function mockOverlays(_bounds: BBox, _query = ""): OverlayCollection {
+  // Never return fake/octagonal/convex-hull polygons.
+  // Overlays are strictly populated by genuine validated model outputs from the backend.
   return {
     type: "FeatureCollection",
     features: [],
@@ -126,10 +67,12 @@ export function mockOverlays(bounds: BBox, query = ""): OverlayCollection {
 
 function mockLulc(query: string, slots: SceneSlot[]): LulcReport | undefined {
   const q = query.toLowerCase();
-  // Don't trigger optical LULC for SAR queries
-  if (q.includes("sar") || q.includes("radar") || slots.every((s) => s.modality === "SAR")) {
+  const activeMod = slots.find((s) => s.modality === "SAR") ? "SAR" : "OPTICAL";
+  // Don't trigger optical LULC for SAR queries or SAR active assets
+  if (q.includes("sar") || q.includes("radar") || activeMod === "SAR" || slots.every((s) => s.modality === "SAR")) {
     return undefined;
   }
+
   const id = `${slots[0]?.filename ?? ""} ${query}`;
   const coastal = /port|coast|harbour|harbor|marine/.test(id.toLowerCase());
   const cloudy = id.toLowerCase().includes("cloud");

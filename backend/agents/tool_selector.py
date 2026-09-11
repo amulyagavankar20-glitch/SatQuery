@@ -17,6 +17,10 @@ CAPABILITY_MATRIX: dict[str, dict[str, Any]] = {
         "tasks": {RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value},
         "modalities": {InputClass.SINGLE_OPTICAL.value, InputClass.BI_TEMPORAL.value},
     },
+    "yolo_detector": {
+        "tasks": {RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value},
+        "modalities": {InputClass.SINGLE_OPTICAL.value, InputClass.BI_TEMPORAL.value},
+    },
     "align": {
         "tasks": {RouterTask.CHANGE_DETECTION.value, RouterTask.CHANGE_VQA.value},
         "modalities": {InputClass.BI_TEMPORAL.value},
@@ -53,9 +57,9 @@ CAPABILITY_MATRIX: dict[str, dict[str, Any]] = {
 
 # Strict task-to-input compatibility matrix (§5, §6)
 TASK_INPUT_COMPATIBILITY: dict[RouterTask, set[InputClass]] = {
-    RouterTask.SINGLE_VQA: {InputClass.SINGLE_OPTICAL, InputClass.SINGLE_SAR},
-    RouterTask.CAPTIONING: {InputClass.SINGLE_OPTICAL, InputClass.SINGLE_SAR},
-    RouterTask.GROUNDING: {InputClass.SINGLE_OPTICAL, InputClass.SINGLE_SAR},
+    RouterTask.SINGLE_VQA: {InputClass.SINGLE_OPTICAL, InputClass.SINGLE_SAR, InputClass.OPTICAL_SAR},
+    RouterTask.CAPTIONING: {InputClass.SINGLE_OPTICAL, InputClass.SINGLE_SAR, InputClass.OPTICAL_SAR},
+    RouterTask.GROUNDING: {InputClass.SINGLE_OPTICAL, InputClass.SINGLE_SAR, InputClass.OPTICAL_SAR},
     RouterTask.CHANGE_DETECTION: {InputClass.BI_TEMPORAL},
     RouterTask.CHANGE_VQA: {InputClass.BI_TEMPORAL},
     RouterTask.OPTICAL_SAR_ANALYSIS: {InputClass.OPTICAL_SAR},
@@ -98,6 +102,9 @@ class ToolSelector:
                 return ["preprocess", "sar_map"]
             elif task == RouterTask.GROUNDING:
                 return ["preprocess", "sar_map"]
+        elif input_class == InputClass.OPTICAL_SAR:
+            if task in (RouterTask.OPTICAL_SAR_ANALYSIS, RouterTask.SINGLE_VQA, RouterTask.CAPTIONING, RouterTask.GROUNDING):
+                return ["preprocess", "coregister", "fusion_s1s2", "agreement"]
 
         return list(self.TASK_TO_TOOLS[task])
 

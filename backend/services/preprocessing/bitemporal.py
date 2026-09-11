@@ -88,66 +88,106 @@ class BitemporalPreprocessor(BasePreprocessor):
 
         try:
             # Inspect T1 and T2
+            from backend.services.geospatial import _infer_fallback_bounds
+
             with rasterio.open(path1) as src1, rasterio.open(path2) as src2:
+                has_georef_1 = src1.crs is not None and not getattr(src1.transform, "is_identity", False)
+                has_georef_2 = src2.crs is not None and not getattr(src2.transform, "is_identity", False)
+                
                 crs1 = src1.crs.to_string() if src1.crs else "EPSG:4326"
                 crs2 = src2.crs.to_string() if src2.crs else "EPSG:4326"
-                
-                # Check spatial intersection
-                spatial_rel = compute_spatial_overlap(
-                    bounds1=[src1.bounds.left, src1.bounds.bottom, src1.bounds.right, src1.bounds.top],
-                    crs1=crs1,
-                    bounds2=[src2.bounds.left, src2.bounds.bottom, src2.bounds.right, src2.bounds.top],
-                    crs2=crs2,
-                )
-                if not spatial_rel.has_sufficient_overlap or not spatial_rel.intersection_bbox_wgs84:
-                    raise InsufficientOverlapError(
-                        "Bitemporal rasters do not share sufficient geographic intersection."
+
+                if has_georef_1 and has_georef_2:
+                    # Check spatial intersection
+                    spatial_rel = compute_spatial_overlap(
+                        bounds1=[src1.bounds.left, src1.bounds.bottom, src1.bounds.right, src1.bounds.top],
+                        crs1=crs1,
+                        bounds2=[src2.bounds.left, src2.bounds.bottom, src2.bounds.right, src2.bounds.top],
+                        crs2=crs2,
                     )
-
-                # Reference CRS & resolution: Use T1 CRS and resolution
-                target_crs = CRS.from_string(crs1)
-                x_res = abs(src1.transform.a)
-                y_res = abs(src1.transform.e)
-
-                # Calculate intersection bounding box in T1 CRS
-                if target_crs.is_geographic:
-                    inter_bounds = spatial_rel.intersection_bbox_wgs84
-                else:
-                    inter_bounds = list(
-                        transform_bounds(
-                            "EPSG:4326",
-                            target_crs,
-                            *spatial_rel.intersection_bbox_wgs84,
+                    if not spatial_rel.has_sufficient_overlap or not spatial_rel.intersection_bbox_wgs84:
+                        raise InsufficientOverlapError(
+                            "Bitemporal rasters do not share sufficient geographic intersection."
                         )
+
+                    # Reference CRS & resolution: Use T1 CRS and resolution
+                    target_crs = CRS.from_string(crs1)
+                    x_res = abs(src1.transform.a)
+                    y_res = abs(src1.transform.e)
+
+                    # Calculate intersection bounding box in T1 CRS
+                    if target_crs.is_geographic:
+                        inter_bounds = spatial_rel.intersection_bbox_wgs84
+                    else:
+                        inter_bounds = list(
+                            transform_bounds(
+                                "EPSG:4326",
+                                target_crs,
+                                *spatial_rel.intersection_bbox_wgs84,
+                            )
+                        )
+
+                    left, bottom, right, top = inter_bounds
+                    # Snap to pixel grid
+                    grid_w = max(1, int(round((right - left) / x_res)))
+                    grid_h = max(1, int(round((top - bottom) / y_res)))
+                    grid_transform = from_bounds(left, bottom, right, top, grid_w, grid_h)
+
+                    steps.append("coregister_and_resample_t1_t2_to_common_grid")
+                    aligned_t1_tif = proc_t1_dir / f"aligned_t1_{path1.stem}.tif"
+                    aligned_t2_tif = proc_t2_dir / f"aligned_t2_{path2.stem}.tif"
+
+                    # Resample both rasters onto the exact common intersection grid
+                    reproject_and_resample_raster(
+                        src_path=path1,
+                        dst_path=aligned_t1_tif,
+                        target_crs=crs1,
+                        target_bounds=[left, bottom, right, top],
+                        target_resolution=(x_res, y_res),
+                        resampling_method=Resampling.bilinear,
                     )
+                    reproject_and_resample_raster(
+                        src_path=path2,
+                        dst_path=aligned_t2_tif,
+                        target_crs=crs1,
+                        target_bounds=[left, bottom, right, top],
+                        target_resolution=(x_res, y_res),
+                        resampling_method=Resampling.bilinear,
+                    )
+                else:
+                    # Unreferenced demo or presentation TIFF pair: align pixel arrays directly
+                    fb = a1.get("bounds_wgs84") or a2.get("bounds_wgs84") or _infer_fallback_bounds(path1.name)
+                    grid_w = src1.width
+                    grid_h = src1.height
+                    left, bottom, right, top = fb[0], fb[1], fb[2], fb[3]
+                    grid_transform = from_bounds(left, bottom, right, top, grid_w, grid_h)
+                    crs1 = "EPSG:4326"
 
-                left, bottom, right, top = inter_bounds
-                # Snap to pixel grid
-                grid_w = max(1, int(round((right - left) / x_res)))
-                grid_h = max(1, int(round((top - bottom) / y_res)))
-                grid_transform = from_bounds(left, bottom, right, top, grid_w, grid_h)
+                    aligned_t1_tif = proc_t1_dir / f"aligned_t1_{path1.stem}.tif"
+                    aligned_t2_tif = proc_t2_dir / f"aligned_t2_{path2.stem}.tif"
 
-            steps.append("coregister_and_resample_t1_t2_to_common_grid")
-            aligned_t1_tif = proc_t1_dir / f"aligned_t1_{path1.stem}.tif"
-            aligned_t2_tif = proc_t2_dir / f"aligned_t2_{path2.stem}.tif"
+                    d1 = src1.read()
+                    d2 = src2.read()
+                    if d2.shape[1:] != d1.shape[1:]:
+                        from PIL import Image as _PILImg
+                        # Resize T2 to match T1 shape
+                        chans = []
+                        for c in range(d2.shape[0]):
+                            im = _PILImg.fromarray(d2[c]).resize((grid_w, grid_h), _PILImg.BILINEAR)
+                            chans.append(np.array(im))
+                        d2 = np.stack(chans, axis=0)
 
-            # Resample both rasters onto the exact common intersection grid
-            reproject_and_resample_raster(
-                src_path=path1,
-                dst_path=aligned_t1_tif,
-                target_crs=crs1,
-                target_bounds=[left, bottom, right, top],
-                target_resolution=(x_res, y_res),
-                resampling_method=Resampling.bilinear,
-            )
-            reproject_and_resample_raster(
-                src_path=path2,
-                dst_path=aligned_t2_tif,
-                target_crs=crs1,
-                target_bounds=[left, bottom, right, top],
-                target_resolution=(x_res, y_res),
-                resampling_method=Resampling.bilinear,
-            )
+                    with rasterio.open(
+                        aligned_t1_tif, "w", driver="GTiff", height=grid_h, width=grid_w,
+                        count=d1.shape[0], dtype=d1.dtype, crs=crs1, transform=grid_transform
+                    ) as dst1:
+                        dst1.write(d1)
+
+                    with rasterio.open(
+                        aligned_t2_tif, "w", driver="GTiff", height=grid_h, width=grid_w,
+                        count=d2.shape[0], dtype=d2.dtype, crs=crs1, transform=grid_transform
+                    ) as dst2:
+                        dst2.write(d2)
 
             steps.append("consistent_radiometric_normalization")
             with rasterio.open(aligned_t1_tif) as s1, rasterio.open(aligned_t2_tif) as s2:

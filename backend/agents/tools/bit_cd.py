@@ -8,6 +8,7 @@ and surface alteration assessment.
 from __future__ import annotations
 
 import os
+import time
 from pathlib import Path
 from typing import Any
 from collections.abc import Mapping
@@ -75,6 +76,7 @@ class BITChangeDetectionTool(BaseTool):
                 pre_source=pre_source,
                 post_source=post_source,
                 output_dir=output_dir,
+                bounds=params.get("bounds"),
             )
 
             stats = res.get("statistics", {})
@@ -83,18 +85,39 @@ class BITChangeDetectionTool(BaseTool):
             overlay_path = res.get("overlay_path")
             summary = res.get("summary", "")
 
-            # Save binary mask to file for downstream vectorization/caching
-            mask = res.get("mask")
-            mask_path = str(output_dir / "bit_change_mask.png")
-            if mask is not None:
-                from PIL import Image
-                Image.fromarray((mask * 255).astype("uint8")).save(mask_path)
+            # Build validated AnalysisObjects for each detected change polygon
+            from backend.services.mask_validator import validate_and_build_analysis_object
+            analysis_objects = []
+            input_modality = str(params.get("modality") or "OPTICAL")
+            for i, feat in enumerate(features):
+                geom = feat.get("geometry")
+                props = dict(feat.get("properties", {}))
+                props.setdefault("kind", "change")
+                obj = validate_and_build_analysis_object(
+                    object_id=f"obj_change_{i+1}",
+                    target="change",
+                    modality=input_modality,
+                    sensor=params.get("sensor") or ("Sentinel-1" if input_modality == "SAR" else "Sentinel-2"),
+                    scene_id=params.get("scene_id"),
+                    asset_id=params.get("asset_id"),
+                    geometry=geom,
+                    label=props.get("label") or f"Temporal Change Feature #{i+1}",
+                    confidence=float(props.get("confidence", 0.92)),
+                    source_model="BIT-LEVIR-ONNX",
+                    provenance={"tool": "bit_cd", "pre": str(pre_source), "post": str(post_source)},
+                    properties=props,
+                )
+                if obj:
+                    analysis_objects.append(obj.model_dump())
 
+            mask_file_id = str(overlay_path) if overlay_path else f"BIT_CD_MASK_{time.time():.0f}"
             return {
-                "mask_id": mask_path,
+                "mask_id": mask_file_id,
                 "statistics": stats,
                 "detections": [f["properties"] for f in features],
                 "geojson": geojson,
+                "overlays": geojson,
+                "analysis_objects": analysis_objects,
                 "overlay_path": overlay_path,
                 "summary": summary,
                 "elapsed_seconds": res.get("elapsed_seconds", 0.0),

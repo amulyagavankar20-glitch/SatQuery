@@ -10,10 +10,13 @@ import { Grain } from "@/components/Grain";
 import { Button } from "@/components/ui/button";
 import { DEMOS, type DemoScene } from "@/lib/demos";
 import {
+  bboxArea,
   bboxFromCorners,
   bboxPolygon,
-  bestSceneForBox,
   cropScenePng,
+  fetchAoiSnippet,
+  intersectBBox,
+  sanitizeBounds,
   sceneUnderPoint,
 } from "@/lib/geo";
 import type { DemoId } from "@/lib/types";
@@ -33,16 +36,17 @@ function imageCoords(bounds: number[]): [[number, number], [number, number], [nu
 const EMPTY_BOX = bboxPolygon([0, 0, 0, 0]);
 
 export function ExplorePage() {
-  const { loadDemo, attachFiles, dragging, onDragEnter, onDragLeave, onDrop, toast } = useConsole();
+  const { loadDemo, loadExploreCrop, dragging, onDragEnter, onDragLeave, onDrop, toast } = useConsole();
   const navigate = useNavigate();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const selectModeRef = useRef(false);
   const dragStartRef = useRef<{ lng: number; lat: number } | null>(null);
-  const openFullRef = useRef<(id: DemoId) => void>(() => {});
-  const sendCropRef = useRef<(box: ReturnType<typeof bboxFromCorners>) => Promise<void>>(async () => {});
+  const openFullRef = useRef<(id: DemoId) => void>(() => { });
+  const sendCropRef = useRef<(box: ReturnType<typeof bboxFromCorners>) => Promise<void>>(async () => { });
   const [selected, setSelected] = useState<DemoId>("coastal");
   const [selectMode, setSelectMode] = useState(false);
+  const [baseMode, setBaseMode] = useState<"satellite" | "dark">("satellite");
   const demo = DEMOS.find((d) => d.id === selected) ?? DEMOS[1]!;
 
   selectModeRef.current = selectMode;
@@ -53,26 +57,86 @@ export function ExplorePage() {
   };
 
   const sendCrop = async (box: ReturnType<typeof bboxFromCorners>) => {
-    const match = bestSceneForBox(DEMOS, box);
-    if (!match) {
-      toast("No scene in that box", "bad");
-      return;
-    }
+    const [w, s, e, n] = sanitizeBounds(box);
     setSelectMode(false);
-    if (match.coverage >= 0.8) {
-      openFull(match.demo.id);
-      return;
-    }
-    try {
-      const file = await cropScenePng(match.demo, match.hit);
-      if (!file) {
-        toast("Could not crop that portion", "bad");
+
+    // 1. Check if the box matches one of our demo scenes
+    const hitDemo = DEMOS.find((d) => {
+      const hit = intersectBBox(box, d.slots[0]!.bounds);
+      if (!hit) return false;
+      const coverage = bboxArea(hit) / bboxArea(box);
+      return coverage >= 0.25;
+    });
+
+    if (hitDemo) {
+      const hit = intersectBBox(box, hitDemo.slots[0]!.bounds)!;
+      const coverage = bboxArea(hit) / bboxArea(hitDemo.slots[0]!.bounds);
+      if (coverage >= 0.8) {
+        openFull(hitDemo.id);
         return;
       }
-      attachFiles([file], match.hit);
+      try {
+        const file = await cropScenePng(hitDemo, hit);
+        if (file) {
+          loadExploreCrop(hitDemo, file, hit);
+          void navigate({ to: "/console" });
+          return;
+        }
+      } catch (err) {
+        console.warn("Demo crop failed, extracting satellite snippet", err);
+      }
+    }
+
+    // 2. Global AOI Snippet: Fetch real satellite imagery for this exact bounding box anywhere in the world!
+    try {
+      toast("Extracting satellite snippet for selected AOI...", "ok");
+      const { file, previewUrl } = await fetchAoiSnippet([w, s, e, n], mapRef.current);
+      if (!file || !previewUrl) {
+        toast("Could not extract imagery for that region", "bad");
+        return;
+      }
+
+      const centerLat = (s + n) / 2;
+      const centerLng = (w + e) / 2;
+      const latStr = centerLat >= 0 ? `${centerLat.toFixed(2)}°N` : `${Math.abs(centerLat).toFixed(2)}°S`;
+      const lngStr = centerLng >= 0 ? `${centerLng.toFixed(2)}°E` : `${Math.abs(centerLng).toFixed(2)}°W`;
+
+      const customDemo: DemoScene = {
+        id: "custom" as DemoId,
+        title: `AOI (${latStr}, ${lngStr})`,
+        place: `Global Coordinates: [${w.toFixed(3)}, ${s.toFixed(3)}, ${e.toFixed(3)}, ${n.toFixed(3)}]`,
+        thumb: previewUrl,
+        thumbPos: "center",
+        gsd: "10 m",
+        blurb: `High-resolution satellite snippet captured from Explore map at [${w.toFixed(3)}, ${s.toFixed(3)}, ${e.toFixed(3)}, ${n.toFixed(3)}].`,
+        queries: [
+          "What land cover classes are in this region?",
+          "Highlight water bodies and reservoirs",
+          "Detect structures and built-up areas",
+          "Analyze vegetation and green cover",
+        ],
+        pairFitness: null,
+        slots: [
+          {
+            slot: "T1",
+            filename: `aoi_${w.toFixed(4)}_${s.toFixed(4)}_${e.toFixed(4)}_${n.toFixed(4)}.png`,
+            sensor: "Sentinel-2",
+            modality: "OPTICAL",
+            bounds: [w, s, e, n],
+            crs: "EPSG:4326",
+            date: new Date().toISOString().slice(0, 10),
+            bands: 3,
+            previewUrl: previewUrl,
+          },
+        ],
+      };
+
+      loadExploreCrop(customDemo, file, [w, s, e, n]);
+      toast("AOI loaded in console", "ok");
       void navigate({ to: "/console" });
-    } catch {
-      toast("Could not crop that portion", "bad");
+    } catch (err) {
+      console.error("Global AOI extraction failed", err);
+      toast("Failed to extract satellite snippet", "bad");
     }
   };
 
@@ -83,9 +147,19 @@ export function ExplorePage() {
     if (!containerRef.current || mapRef.current) return;
     const map = new maplibregl.Map({
       container: containerRef.current,
+      ...({ preserveDrawingBuffer: true } as any),
       style: {
         version: 8,
         sources: {
+          satellite: {
+            type: "raster",
+            tiles: [
+              "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+            ],
+            tileSize: 256,
+            attribution: "© Esri",
+            maxzoom: 19,
+          },
           gray: {
             type: "raster",
             tiles: [
@@ -97,18 +171,19 @@ export function ExplorePage() {
           box: { type: "geojson", data: EMPTY_BOX },
         },
         layers: [
-          { id: "gray", type: "raster", source: "gray", paint: { "raster-opacity": 0.55 } },
+          { id: "satellite", type: "raster", source: "satellite", paint: { "raster-opacity": 0.88 } },
+          { id: "gray", type: "raster", source: "gray", paint: { "raster-opacity": 0.0 } },
           {
             id: "box-fill",
             type: "fill",
             source: "box",
-            paint: { "fill-color": "#5E8F8A", "fill-opacity": 0.16 },
+            paint: { "fill-color": "#5E8F8A", "fill-opacity": 0.22 },
           },
           {
             id: "box-line",
             type: "line",
             source: "box",
-            paint: { "line-color": "#5E8F8A", "line-width": 1 },
+            paint: { "line-color": "#5E8F8A", "line-width": 1.8 },
           },
         ],
       },
@@ -263,6 +338,17 @@ export function ExplorePage() {
   useEffect(() => {
     const map = mapRef.current;
     if (!map?.isStyleLoaded()) return;
+    if (map.getLayer("satellite")) {
+      map.setPaintProperty("satellite", "raster-opacity", baseMode === "satellite" ? 0.88 : 0.0);
+    }
+    if (map.getLayer("gray")) {
+      map.setPaintProperty("gray", "raster-opacity", baseMode === "dark" ? 0.85 : 0.0);
+    }
+  }, [baseMode]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map?.isStyleLoaded()) return;
     for (const scene of DEMOS) {
       const id = `line-${scene.id}`;
       if (map.getLayer(id)) {
@@ -291,25 +377,49 @@ export function ExplorePage() {
       <AppHeader />
       <div className="relative min-h-0 flex-1">
         <div ref={containerRef} className="h-full w-full" />
-        <button
-          type="button"
-          onClick={() => setSelectMode((on) => !on)}
-          className={cn(
-            "sq-glass absolute top-3 left-3 z-10 flex items-center gap-2 rounded-lg px-3 py-1.5 font-mono text-[11px] tracking-wide transition-all duration-200 active:scale-95",
-            selectMode
-              ? "border-primary/50 text-primary"
-              : "text-mute hover:text-ink hover:border-white/20",
-          )}
-        >
-          {selectMode ? (
-            <>
-              <span className="size-1.5 rounded-full bg-primary animate-pulse" />
-              Drawing portion
-            </>
-          ) : (
-            "Select portion"
-          )}
-        </button>
+        <div className="absolute top-3 left-3 z-10 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setSelectMode((on) => !on)}
+            className={cn(
+              "sq-glass flex items-center gap-2 rounded-lg px-3 py-1.5 font-mono text-[11px] tracking-wide transition-all duration-200 active:scale-95 shadow-sm",
+              selectMode
+                ? "border-primary/50 text-primary bg-primary/10"
+                : "text-mute hover:text-ink hover:border-white/20",
+            )}
+          >
+            {selectMode ? (
+              <>
+                <span className="size-1.5 rounded-full bg-primary animate-pulse" />
+                Drawing portion
+              </>
+            ) : (
+              "Select portion"
+            )}
+          </button>
+          <div className="sq-glass flex items-center gap-1 rounded-lg p-0.5 font-mono text-[10px] shadow-sm">
+            <button
+              type="button"
+              onClick={() => setBaseMode("satellite")}
+              className={cn(
+                "rounded px-2 py-1 transition-colors",
+                baseMode === "satellite" ? "bg-primary/20 text-primary font-medium" : "text-mute hover:text-ink",
+              )}
+            >
+              Satellite
+            </button>
+            <button
+              type="button"
+              onClick={() => setBaseMode("dark")}
+              className={cn(
+                "rounded px-2 py-1 transition-colors",
+                baseMode === "dark" ? "bg-primary/20 text-primary font-medium" : "text-mute hover:text-ink",
+              )}
+            >
+              Dark
+            </button>
+          </div>
+        </div>
         <aside className="sq-glass absolute top-3 right-3 z-10 hidden w-[min(320px,calc(100%-2rem))] flex-col overflow-hidden rounded-xl sm:bottom-3 sm:flex">
           <SceneCard demo={demo} onAsk={() => openFull(demo.id)} />
           <ul className="sq-scroll border-t border-hairline p-2">

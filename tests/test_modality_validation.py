@@ -75,9 +75,9 @@ def test_graph_recovers_sar_wording_on_optical_asset():
 
     assert result["status"] == "completed"
     assert "Your uploaded image is optical, not SAR. I'll analyze it as an optical image." in (result.get("final_answer") or "")
-    # Ensure optical specialist was executed, NOT sar_map
+    # Ensure optical specialist was executed (lulc_map or yolo_detector), NOT sar_map
     visited = [e["node"] for e in result.get("execution_trace", [])]
-    assert "lulc_map" in visited
+    assert ("lulc_map" in visited or "yolo_detector" in visited)
     assert "sar_map" not in visited
 
 

@@ -67,6 +67,23 @@ class SarMapTool(BaseTool):
         if talk:
             answer = f"{talk}\n\n{answer}"
 
+        analysis_objects = []
+        for tag in tags:
+            analysis_objects.append({
+                "object_id": f"obj_sar_{tag['name'].lower().replace(' ', '_')}",
+                "target": tag["name"],
+                "modality": "SAR",
+                "sensor": "Sentinel-1",
+                "scene_id": params.get("scene_id"),
+                "asset_id": params.get("asset_id"),
+                "geometry": None,
+                "label": tag["name"],
+                "confidence": float(tag["score"]),
+                "source_model": "reBEN-ResNet50-S1",
+                "provenance": {"tool": "sar_map", "backend": backend},
+                "properties": {"tag_type": "scene_class"},
+            })
+
         return {
             "backend": backend,
             "answer": answer,
@@ -74,6 +91,7 @@ class SarMapTool(BaseTool):
             "modality": "SAR",
             "scene_statistics": scene_stats,
             "scene_tags": tags,
+            "analysis_objects": analysis_objects,
             "visualizations": visualizations,
             "status": "success",
         }

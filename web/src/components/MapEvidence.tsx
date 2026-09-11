@@ -1,6 +1,7 @@
 import maplibregl, { type GeoJSONSource } from "maplibre-gl";
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
+import { sanitizeBounds } from "@/lib/geo";
 import { registerMapFit } from "@/lib/map-registry";
 import type { BBox, LayerId, OverlayCollection } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -22,7 +23,8 @@ type Props = {
 const EMPTY: OverlayCollection = { type: "FeatureCollection", features: [] };
 
 function imageCoords(bounds: BBox): [[number, number], [number, number], [number, number], [number, number]] {
-  const [west, south, east, north] = bounds;
+  const safe = sanitizeBounds(bounds);
+  const [west, south, east, north] = safe;
   return [
     [west, north],
     [east, north],
@@ -47,6 +49,8 @@ export function MapEvidence({
   t2Date,
   fill,
 }: Props) {
+  const [bw, bs, be, bn] = bounds;
+  const safeBounds = useMemo(() => sanitizeBounds([bw, bs, be, bn]), [bw, bs, be, bn]);
   const { evidencePulse, setAnswerFocus } = useConsole();
   const boxRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -62,14 +66,14 @@ export function MapEvidence({
     if (!map) return;
     map.fitBounds(
       [
-        [bounds[0], bounds[1]],
-        [bounds[2], bounds[3]],
+        [safeBounds[0], safeBounds[1]],
+        [safeBounds[2], safeBounds[3]],
       ],
       { padding: 16, maxZoom: 15, duration: 450 },
     );
   };
 
-  useEffect(() => registerMapFit(fit), [bounds]);
+  useEffect(() => registerMapFit(fit), [safeBounds]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -88,14 +92,21 @@ export function MapEvidence({
             type: "fill",
             source: "overlays",
             filter: ["==", ["get", "kind"], "change"],
-            paint: { "fill-color": "#5E8F8A", "fill-opacity": 0.34 },
+            paint: {
+              "fill-color": ["coalesce", ["get", "fill"], ["get", "color"], "#ff3838"],
+              "fill-opacity": 0.45,
+            },
           },
           {
             id: "change-line",
             type: "line",
             source: "overlays",
             filter: ["==", ["get", "kind"], "change"],
-            paint: { "line-color": "#5E8F8A", "line-width": 2.25, "line-opacity": 1 },
+            paint: {
+              "line-color": ["coalesce", ["get", "stroke"], ["get", "color"], "#ff3838"],
+              "line-width": 2.5,
+              "line-opacity": 1,
+            },
           },
           {
             id: "grounding-fill",
@@ -174,8 +185,8 @@ export function MapEvidence({
         ],
       },
       bounds: [
-        [bounds[0], bounds[1]],
-        [bounds[2], bounds[3]],
+        [safeBounds[0], safeBounds[1]],
+        [safeBounds[2], safeBounds[3]],
       ],
       fitBoundsOptions: { padding: 16, maxZoom: 15 },
       attributionControl: false,
@@ -228,43 +239,81 @@ export function MapEvidence({
       src?.setData(overlays ?? EMPTY);
       map.fitBounds(
         [
-          [bounds[0], bounds[1]],
-          [bounds[2], bounds[3]],
+          [safeBounds[0], safeBounds[1]],
+          [safeBounds[2], safeBounds[3]],
         ],
         { padding: 16, maxZoom: 15, duration: 0 },
       );
     };
     if (map.isStyleLoaded()) apply();
     else map.once("load", apply);
-  }, [overlays, bounds]);
+  }, [overlays, safeBounds]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    const applyRaster = (id: string, url: string | null, op: number) => {
+    const applyRaster = (id: string, url: string | null, op: number, isVis: boolean) => {
+      const coords = imageCoords(safeBounds);
+
+      if (!url) {
+        if (map.getLayer(id)) map.removeLayer(id);
+        if (map.getSource(id)) map.removeSource(id);
+        return;
+      }
+
+      const existingSource = map.getSource(id) as maplibregl.ImageSource | undefined;
+      if (existingSource && typeof existingSource.updateImage === "function") {
+        try {
+          existingSource.updateImage({ url, coordinates: coords });
+          if (map.getLayer(id)) {
+            map.setLayoutProperty(id, "visibility", isVis ? "visible" : "none");
+            map.setPaintProperty(id, "raster-opacity", op);
+          }
+          return;
+        } catch {
+          /* fallback to recreate */
+        }
+      }
+
       if (map.getLayer(id)) map.removeLayer(id);
       if (map.getSource(id)) map.removeSource(id);
-      if (!url) return;
-      map.addSource(id, { type: "image", url, coordinates: imageCoords(bounds) });
-      const beforeLayer = map.getLayer("change-fill") ? "change-fill" : undefined;
-      map.addLayer(
-        {
-          id,
-          type: "raster",
-          source: id,
-          paint: { "raster-opacity": op, "raster-fade-duration": 0 },
-        },
-        beforeLayer,
-      );
+
+      try {
+        map.addSource(id, { type: "image", url, coordinates: coords });
+        const beforeLayer = map.getLayer("change-fill")
+          ? "change-fill"
+          : map.getLayer("grounding-fill")
+            ? "grounding-fill"
+            : undefined;
+        map.addLayer(
+          {
+            id,
+            type: "raster",
+            source: id,
+            layout: { visibility: isVis ? "visible" : "none" },
+            paint: { "raster-opacity": op, "raster-fade-duration": 0 },
+          },
+          beforeLayer,
+        );
+      } catch {
+        // ignore add error
+      }
     };
     const apply = () => {
-      applyRaster("optical", opticalUrl, 0.92);
-      applyRaster("sar", sarUrl, 0.72);
+      applyRaster("optical", opticalUrl, 0.95, layers.optical);
+      applyRaster("sar", sarUrl, 0.75, layers.sar && hasSar);
+      map.fitBounds(
+        [
+          [safeBounds[0], safeBounds[1]],
+          [safeBounds[2], safeBounds[3]],
+        ],
+        { padding: 16, maxZoom: 15, duration: 250 },
+      );
       map.resize();
     };
     if (map.isStyleLoaded()) apply();
     else map.once("load", apply);
-  }, [opticalUrl, sarUrl, bounds]);
+  }, [opticalUrl, sarUrl, safeBounds, layers.optical, layers.sar, hasSar]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -289,7 +338,7 @@ export function MapEvidence({
     const map = mapRef.current;
     if (!map || !wipeUrl || !ready) return;
     const update = () => {
-      const [w, s, e, n] = bounds;
+      const [w, s, e, n] = safeBounds;
       const tl = map.project([w, n]);
       const br = map.project([e, s]);
       setFrame({ left: tl.x, top: tl.y, width: Math.max(1, br.x - tl.x), height: Math.max(1, br.y - tl.y) });
@@ -303,7 +352,7 @@ export function MapEvidence({
       map.off("zoom", update);
       map.off("resize", update);
     };
-  }, [wipeUrl, bounds, ready]);
+  }, [wipeUrl, safeBounds, ready]);
 
   useEffect(() => {
     const map = mapRef.current;

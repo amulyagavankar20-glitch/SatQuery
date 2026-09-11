@@ -16,7 +16,7 @@ export function AssistantTurn({
   query: string;
   hasSar: boolean;
 }) {
-  const { insertChip, setEvidencePulse, answerFocus, setAnswerFocus } = useConsole();
+  const { insertChip, setEvidencePulse, answerFocus, setAnswerFocus, slots, activeSlot } = useConsole();
 
   if (turn.status === "pending") {
     return <RoutingLine query={query} sar={hasSar} />;
@@ -120,7 +120,7 @@ export function AssistantTurn({
       ) : null}
 
       <div className="mt-5 flex flex-wrap gap-2">
-        {followUpQuestions(query).map((chip) => (
+        {followUpQuestions(query, slots, activeSlot).map((chip) => (
           <button key={chip} type="button" onClick={() => insertChip(chip)} className="sq-chip">
             {chip}
           </button>

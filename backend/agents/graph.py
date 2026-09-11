@@ -252,10 +252,11 @@ def metadata_parser(state: GraphState) -> dict[str, Any]:
 def _is_pair_query(query: str) -> bool:
     q = query.lower()
     pair_keywords = [
-        "change", "changed", "difference", "compare", "between",
+        "change", "changes", "difference", "differences", "compare", "comparison", "between",
+        "what changed", "explain the changes", "explain me the changes",
         "increased", "decreased", "construction increased",
         "fuse", "fusion", "optical and sar", "sar and optical",
-        "t1 and t2", "t1 vs t2", "both images", "pair"
+        "t1 and t2", "t1 vs t2", "both images", "pair", "temporal"
     ]
     return any(k in q for k in pair_keywords)
 
@@ -640,6 +641,21 @@ def lulc_map(state: GraphState) -> dict[str, Any]:
     return _execute_tool(state, "lulc_map", params)
 
 
+def yolo_detector(state: GraphState) -> dict[str, Any]:
+    refs = _raw_raster_refs(state) or _image_refs(state)
+    query_plan = state.get("query_plan") or {}
+    params = {
+        "image_refs": refs,
+        "modality": "OPTICAL",
+        "bounds": _asset_bounds(state),
+        "target_classes": [query_plan.get("target_class")] if query_plan.get("target_class") else None,
+        "scene_id": state.get("job_id"),
+        "asset_id": None,
+    }
+    return _execute_tool(state, "yolo_detector", params)
+
+
+
 
 
 def align(state: GraphState) -> dict[str, Any]:
@@ -685,7 +701,12 @@ def bit_cd(state: GraphState) -> dict[str, Any]:
         pre = _existing(align_result.result.get("aligned_pre"), str(pre))
         post = _existing(align_result.result.get("aligned_post"), str(post))
 
-    params = {"pre_image": pre, "post_image": post, "input_refs": image_refs}
+    params = {
+        "pre_image": pre,
+        "post_image": post,
+        "input_refs": image_refs,
+        "bounds": _asset_bounds(state),
+    }
     result_updates = _execute_tool(state, "bit_cd", params)
     results: list[ToolResult] = result_updates.get("specialist_results", [])
     if results:
@@ -752,9 +773,26 @@ def evidence_fusion(state: GraphState) -> dict[str, Any]:
     updates = _visit(state, "evidence_fusion")
 
     results: list[ToolResult] = list(state.get("specialist_results", []))  # type: ignore[arg-type]
-    # Collect spatial evidence from tool results
-    spatial_evidence = []
+    input_class_val = str(state.get("input_class") or "")
+    assets = state.get("assets") or []
+    active_slot = state.get("active_slot") or (state.get("asset_metadata") or {}).get("active_slot")
+    active_asset = assets[1] if active_slot == "T2" and len(assets) > 1 else (assets[0] if assets else None)
+    active_modality = (active_asset.get("modality") if isinstance(active_asset, dict) else None) or ("SAR" if input_class_val == "SINGLE_SAR" else "OPTICAL")
+
+    # Filter specialist results by active modality to eliminate cross-modal contamination
+    filtered_results: list[ToolResult] = []
     for r in results:
+        if input_class_val == "SINGLE_SAR" or active_modality == "SAR":
+            if r.tool_id in ("lulc_map", "yolo_detector") and not any(isinstance(a, dict) and a.get("modality") == "OPTICAL" for a in assets):
+                continue
+        elif input_class_val == "SINGLE_OPTICAL" or active_modality == "OPTICAL":
+            if r.tool_id == "sar_map" and not any(isinstance(a, dict) and a.get("modality") == "SAR" for a in assets):
+                continue
+        filtered_results.append(r)
+
+    # Collect spatial evidence from filtered tool results
+    spatial_evidence = []
+    for r in filtered_results:
         if r.spatial_refs:
             spatial_evidence.extend(r.spatial_refs)
 
@@ -770,7 +808,7 @@ def evidence_fusion(state: GraphState) -> dict[str, Any]:
 
     # Aggregate evidence items for the report
     evidence_items = []
-    for r in results:
+    for r in filtered_results:
         if r.status == "success" and r.result is not None:
             evidence_items.append({
                 "tool_id": r.tool_id,
@@ -953,11 +991,16 @@ def after_preprocess(state: GraphState) -> str:
     task = state.get("detected_task", "")
     input_class = state.get("input_class", "")
     selected_tools = state.get("selected_tools", [])
+    query_plan = state.get("query_plan") or {}
 
     # Route SAR single-image understanding through sar_map
     if "sar_map" in selected_tools or input_class == InputClass.SINGLE_SAR.value:
         if task in (RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value):
             return "sar_map"
+
+    # Route explicit object queries or yolo_detector selection
+    if "yolo_detector" in selected_tools or (query_plan.get("intent") == "OBJECT_QUERY" and input_class in ("SINGLE_OPTICAL", InputClass.SINGLE_OPTICAL.value)):
+        return "yolo_detector"
 
     if task in (RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value):
         return "lulc_map"
@@ -969,6 +1012,10 @@ def after_preprocess(state: GraphState) -> str:
 
 
 def after_lulc_map(state: GraphState) -> str:
+    return "evidence_fusion"
+
+
+def after_yolo_detector(state: GraphState) -> str:
     return "evidence_fusion"
 
 
@@ -1000,6 +1047,7 @@ for name, fn in {
     "tool_selector":    tool_selector,
     "preprocess":       preprocess,
     "lulc_map":         lulc_map,
+    "yolo_detector":    yolo_detector,
     "sar_map":          sar_map,
     "align":            align,
     "bit_cd":           bit_cd,
@@ -1041,17 +1089,20 @@ workflow.add_conditional_edges(
 workflow.add_conditional_edges(
     "preprocess", after_preprocess,
     {
-        "sar_map":      "sar_map",
-        "lulc_map":     "lulc_map",
-        "bit_cd":       "bit_cd",
-        "align":        "align",
-        "coregister":   "coregister",
-        "refusal":      "refusal",
+        "sar_map":        "sar_map",
+        "lulc_map":       "lulc_map",
+        "yolo_detector":  "yolo_detector",
+        "bit_cd":         "bit_cd",
+        "align":          "align",
+        "coregister":     "coregister",
+        "refusal":        "refusal",
     },
 )
 
 workflow.add_edge("sar_map", "evidence_fusion")
 workflow.add_edge("lulc_map", "evidence_fusion")
+workflow.add_edge("yolo_detector", "evidence_fusion")
+
 
 workflow.add_conditional_edges(
     "bit_cd", after_bit_cd,

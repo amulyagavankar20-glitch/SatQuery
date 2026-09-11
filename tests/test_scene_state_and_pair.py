@@ -237,3 +237,53 @@ def test_multi_asset_preview_resolution(tmp_path, monkeypatch):
     assert "T2_2023" in asset_1_preview.name
 
 
+def test_sar_pair_routes_to_change_detection(tmp_path):
+    """Verify that a bi-temporal SAR pair with a change query routes to bit_cd_specialist and not lulc_map."""
+    import rasterio
+    from rasterio.transform import from_bounds
+
+    tif1 = tmp_path / "S1_T1.tif"
+    tif2 = tmp_path / "S1_T2.tif"
+    transform = from_bounds(72.0, 19.0, 72.1, 19.1, 64, 64)
+    for p in [tif1, tif2]:
+        arr = np.random.uniform(0.01, 0.5, size=(2, 64, 64)).astype(np.float32)
+        with rasterio.open(
+            p,
+            "w",
+            driver="GTiff",
+            height=64,
+            width=64,
+            count=2,
+            dtype="float32",
+            crs="EPSG:4326",
+            transform=transform,
+        ) as dst:
+            dst.write(arr)
+
+    initial_state: GraphState = {
+        "job_id": "test-sar-pair-change",
+        "session_id": "sess-sar-pair",
+        "user_query": "explain me the changes",
+        "input_class": "BI_TEMPORAL",
+        "assets": [
+            {"filename": "S1_T1.tif", "modality": "SAR", "file_path": str(tif1)},
+            {"filename": "S1_T2.tif", "modality": "SAR", "file_path": str(tif2)},
+        ],
+        "asset_metadata": {"input_class": "BI_TEMPORAL", "mode": "pair"},
+        "pair_fitness": {"compatible": True, "has_sufficient_overlap": True, "iou": 1.0},
+        "warnings": [],
+        "status": "running",
+        "specialist_results": [],
+        "execution_trace": [],
+    }
+
+    result = app.invoke(initial_state)
+    visited = [e["node"] for e in result.get("execution_trace", [])]
+
+    assert "bit_cd" in visited
+    assert "lulc_map" not in visited
+    assert result["status"] == "completed"
+    answer = result.get("final_answer", "")
+    assert "optical satellite image" not in answer.lower()
+
+

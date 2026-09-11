@@ -68,6 +68,16 @@ TOOL_CATALOG: list[dict[str, Any]] = [
         supported_modalities=[InputClass.SINGLE_OPTICAL.value, InputClass.BI_TEMPORAL.value],
     ),
     _tool(
+        "yolo_detector",
+        "Earth Observation YOLO Detector",
+        "DETECTION",
+        model_name="EO-YOLO-RemoteSensing",
+        model_version="v8-rs-eo",
+        description="Remote sensing object detection and instance grounding for optical imagery.",
+        supported_tasks=[RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value],
+        supported_modalities=[InputClass.SINGLE_OPTICAL.value, InputClass.BI_TEMPORAL.value],
+    ),
+    _tool(
         "align",
         "Bitemporal aligner",
         "UTILITY",

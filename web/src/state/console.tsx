@@ -46,7 +46,13 @@ type ConsoleContextValue = {
   setDraft: (value: string) => void;
   insertChip: (query: string) => void;
   loadDemo: (id: DemoId) => void;
-  attachFiles: (files: File[], bounds?: BBox) => void;
+  loadExploreCrop: (demo: any, file: File, bounds: BBox) => void;
+  attachFiles: (files: File[], bounds?: BBox, forceNewScene?: boolean) => void;
+  attachAsT2: (file: File, bounds?: BBox) => void;
+  pendingUpload: { files: File[]; bounds?: BBox } | null;
+  confirmNewScene: () => void;
+  confirmT2Pair: () => void;
+  cancelUploadChoice: () => void;
   removeSlot: (slot: "T1" | "T2") => void;
   setLayer: (id: LayerId, on: boolean) => void;
   toggleLayer: (id: LayerId) => void;
@@ -133,9 +139,6 @@ function mapLiveJob(job: JobView, slots: SceneSlot[], overlays?: OverlayCollecti
   const sar = job.assets.find((a) => a.modality === "SAR");
   const failed = job.status === "failed" || job.status === "refused";
 
-  const opticalSlot = slots.find((s) => s.modality === "OPTICAL") ?? slots[0];
-  const sarSlot = slots.find((s) => s.modality === "SAR");
-
   const rawTraces: TraceStep[] =
     job.traces.length > 0
       ? job.traces.map((t) => ({
@@ -159,6 +162,10 @@ function mapLiveJob(job: JobView, slots: SceneSlot[], overlays?: OverlayCollecti
     }
   }
 
+  const opticalSlot = slots.find((s) => s.modality === "OPTICAL") ?? slots[0];
+  const sarSlot = slots.find((s) => s.modality === "SAR");
+  const compareSlot = slots.find((s) => s.slot === "T2" && s.modality === "OPTICAL");
+
   return {
     role: "assistant",
     status: failed ? "failed" : "completed",
@@ -166,16 +173,18 @@ function mapLiveJob(job: JobView, slots: SceneSlot[], overlays?: OverlayCollecti
     confidence: prettyConfidence(job.answer?.confidence),
     jobId: job.job_id,
     bounds,
-    opticalUrl: job.job_id
-      ? apiUrl(`/jobs/${job.job_id}/artifacts/composite`)
-      : (optical?.preview_url ? apiUrl(optical.preview_url) : (opticalSlot?.previewUrl ?? null)),
-    sarUrl: job.job_id && (sar || sarSlot)
-      ? apiUrl(`/jobs/${job.job_id}/artifacts/composite`)
-      : (sar?.preview_url ? apiUrl(sar.preview_url) : (sarSlot?.previewUrl ?? null)),
+    opticalUrl: opticalSlot?.previewUrl
+      ? opticalSlot.previewUrl
+      : (optical?.preview_url ? apiUrl(optical.preview_url) : (job.job_id ? apiUrl(`/jobs/${job.job_id}/artifacts/assets/0`) : null)),
+    sarUrl: sarSlot?.previewUrl
+      ? sarSlot.previewUrl
+      : (sar?.preview_url ? apiUrl(sar.preview_url) : (job.job_id && (sar || sarSlot) ? apiUrl(`/jobs/${job.job_id}/artifacts/composite`) : null)),
     vvUrl: sar ? apiUrl(`/jobs/${job.job_id}/artifacts/vv`) : null,
     vhUrl: sar ? apiUrl(`/jobs/${job.job_id}/artifacts/vh`) : null,
     overlayUrl: sar ? apiUrl(`/jobs/${job.job_id}/artifacts/overlay`) : null,
-    compareUrl: slots.find((s) => s.slot === "T2" && s.modality === "OPTICAL")?.previewUrl ?? null,
+    compareUrl: compareSlot?.previewUrl
+      ? compareSlot.previewUrl
+      : (job.assets[1]?.preview_url ? apiUrl(job.assets[1].preview_url) : (job.assets.length > 1 ? apiUrl(`/jobs/${job.job_id}/artifacts/assets/1`) : null)),
     overlays: overlays ?? { type: "FeatureCollection", features: [] },
     lulc: job.lulc
       ? {
@@ -208,6 +217,7 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
   const [answerFocus, setAnswerFocus] = useState(false);
   const [activeSlot, setActiveSlot] = useState<"T1" | "T2">("T1");
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [pendingUpload, setPendingUpload] = useState<{ files: File[]; bounds?: BBox } | null>(null);
   const dragCount = useRef(0);
   const toastId = useRef(0);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
@@ -240,14 +250,133 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
   const loadDemo = useCallback(
     (id: DemoId) => {
       const demo = demoById(id);
-      applySlots(demo.slots.map((s) => ({ ...s, id: crypto.randomUUID() })));
+      const initialized = demo.slots.map((s) => ({ ...s, id: crypto.randomUUID() }));
+      applySlots(initialized);
       setPairFitness(demo.pairFitness);
       setTurns([]);
+      setDraft("");
       setActiveSlot("T1");
       setSceneSheetOpen(false);
       toast(`Loaded ${demo.title}`);
+
+      // Background hydration of demo images as real Files so live backend execution runs
+      void Promise.all(
+        demo.slots.map(async (slot) => {
+          try {
+            if (!slot.previewUrl) return null;
+            const res = await fetch(slot.previewUrl);
+            if (!res.ok) return null;
+            const blob = await res.blob();
+            const file = new File([blob], slot.filename, { type: blob.type || "image/jpeg" });
+            return { slotName: slot.slot, file };
+          } catch {
+            return null;
+          }
+        }),
+      ).then((hydrated) => {
+        setSlots((current) =>
+          current.map((s) => {
+            const match = hydrated.find((h) => h && h.slotName === s.slot);
+            return match && match.file ? { ...s, file: match.file } : s;
+          }),
+        );
+      });
     },
     [applySlots, toast],
+  );
+
+  const loadExploreCrop = useCallback(
+    (demo: any, file: File, bounds: BBox) => {
+      const parentSlot = demo?.slots?.[0];
+      const stem = parentSlot?.filename?.replace(/\.[^/.]+$/, "") ?? (demo?.id || "scene");
+      const mod: "OPTICAL" | "SAR" = parentSlot?.modality === "SAR" ? "SAR" : "OPTICAL";
+      const createdSlot: SceneSlot = {
+        id: crypto.randomUUID(),
+        slot: "T1",
+        filename: file.name || `${stem}_crop.png`,
+        modality: mod,
+        sensor: parentSlot?.sensor ?? (mod === "SAR" ? "Sentinel-1" : "Cartosat-2S"),
+        crs: parentSlot?.crs ?? "EPSG:4326",
+        date: parentSlot?.date ?? new Date().toISOString().slice(0, 10),
+        bands: parentSlot?.bands ?? (mod === "SAR" ? 2 : 4),
+        gsd: demo?.gsd,
+        bounds: bounds,
+        previewUrl: URL.createObjectURL(file),
+        file: file,
+      };
+
+      // Strict reset of previous scene state
+      setTurns([]);
+      setDraft("");
+      setPairFitness(null);
+      setActiveSlot("T1");
+      setLayers({ ...DEFAULT_LAYERS });
+      setSlots([createdSlot]);
+      setSceneSheetOpen(false);
+      toast(`Loaded ${demo?.title ?? "scene"} portion`);
+
+      if (apiUp) {
+        void ingestRasters([file], undefined, "Explore AOI extraction").then((ingest) => {
+          if (ingest.valid && ingest.assets.length) {
+            const a = ingest.assets[0];
+            if (a) {
+              setSlots([
+                {
+                  ...createdSlot,
+                  bounds: createdSlot.bounds, // Keep the exact AOI bounds selected on Explore map
+                  crs: a.crs ?? createdSlot.crs,
+                  modality: (a.modality as SceneSlot["modality"]) ?? createdSlot.modality,
+                  sensor: a.sensor ?? createdSlot.sensor,
+                  previewUrl: createdSlot.previewUrl || (a.preview_url ? apiUrl(a.preview_url) : ""),
+                },
+              ]);
+            }
+          }
+        }).catch(() => {});
+      }
+    },
+    [apiUp, toast],
+  );
+
+  const attachAsT2 = useCallback(
+    (file: File, bounds?: BBox) => {
+      const created = slotFromFile(file, "T2", 1, bounds);
+      setSlots((prev) => {
+        const next = [...prev.filter((s) => s.slot !== "T2"), created].sort((a, b) => a.slot.localeCompare(b.slot));
+        setPairFitness(next.length >= 2 ? 0.91 : null);
+        setActiveSlot("T2");
+
+        const allFiles = next.map((s) => s.file).filter((f): f is File => Boolean(f));
+        if (apiUp && allFiles.length) {
+          void ingestRasters(allFiles, undefined, "Preview uploaded T2").then((ingest) => {
+            if (ingest.valid && ingest.assets.length) {
+              setSlots((current) =>
+                current.map((s, idx) => {
+                  const a = ingest.assets[idx];
+                  if (!a) return s;
+                  const previewUrl = a.preview_url
+                    ? apiUrl(a.preview_url)
+                    : ingest.job_id
+                      ? apiUrl(`/jobs/${ingest.job_id}/artifacts/assets/${idx}`)
+                      : s.previewUrl;
+                  return {
+                    ...s,
+                    bounds: (a.bounds_wgs84 as BBox | undefined) ?? s.bounds,
+                    crs: a.crs ?? s.crs,
+                    modality: (a.modality as SceneSlot["modality"]) ?? s.modality,
+                    sensor: a.sensor ?? s.sensor,
+                    previewUrl,
+                  };
+                }),
+              );
+            }
+          }).catch(() => {});
+        }
+        return next;
+      });
+      toast("Attached as T2 temporal pair");
+    },
+    [apiUp, toast],
   );
 
   const attachFiles = useCallback(
@@ -257,11 +386,20 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
         toast("Drop a GeoTIFF or PNG", "bad");
         return;
       }
+
+      // If already has an active scene and exactly 1 file is attached without explicit forceNewScene, ask the user
+      if (!forceNewScene && slots.length > 0 && files.length === 1) {
+        setPendingUpload({ files, bounds });
+        return;
+      }
+
       setSlots((prev) => {
         let next: SceneSlot[] = [];
         if (forceNewScene || files.length === 2 || prev.length === 0) {
           next = files.map((file, i) => slotFromFile(file, i === 0 ? "T1" : "T2", i, bounds));
           setActiveSlot("T1");
+          setTurns([]);
+          setDraft("");
         } else {
           const slot: "T1" | "T2" = activeSlot === "T2" || prev.some((s) => s.slot === "T1") ? "T2" : "T1";
           const created = slotFromFile(files[0], slot, slot === "T2" ? 1 : 0, bounds);
@@ -302,8 +440,26 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
       });
       toast("Scene attached");
     },
-    [activeSlot, apiUp, toast],
+    [activeSlot, apiUp, slots.length, toast],
   );
+
+  const confirmNewScene = useCallback(() => {
+    if (!pendingUpload) return;
+    const { files, bounds } = pendingUpload;
+    setPendingUpload(null);
+    attachFiles(files, bounds, true);
+  }, [attachFiles, pendingUpload]);
+
+  const confirmT2Pair = useCallback(() => {
+    if (!pendingUpload) return;
+    const { files, bounds } = pendingUpload;
+    setPendingUpload(null);
+    attachAsT2(files[0], bounds);
+  }, [attachAsT2, pendingUpload]);
+
+  const cancelUploadChoice = useCallback(() => {
+    setPendingUpload(null);
+  }, []);
 
   const removeSlot = useCallback((slot: "T1" | "T2") => {
     setSlots((prev) => {
@@ -378,22 +534,46 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
     void (async () => {
       let result: Omit<AssistantTurn, "id"> | null = null;
 
-      if (apiUp && files.length) {
+      let resolvedFiles = files;
+      if (resolvedFiles.length < snapshot.length) {
         try {
-          const ingest = await ingestRasters(files, undefined, query);
+          const hydrated = await Promise.all(
+            snapshot.map(async (s) => {
+              if (s.file) return s.file;
+              if (s.previewUrl) {
+                const res = await fetch(s.previewUrl);
+                if (res.ok) {
+                  const blob = await res.blob();
+                  return new File([blob], s.filename, { type: blob.type || "image/jpeg" });
+                }
+              }
+              return null;
+            }),
+          );
+          resolvedFiles = hydrated.filter((f): f is File => Boolean(f));
+        } catch {
+          resolvedFiles = files;
+        }
+      }
+
+      if (apiUp && resolvedFiles.length) {
+        try {
+          const ingest = await ingestRasters(resolvedFiles, undefined, query);
           if (ingest.valid) {
             applySlots(
               snapshot.map((s, i) => {
                 const asset = ingest.assets[i];
                 if (!asset) return s;
+                const assetPreview = asset.preview_url ? apiUrl(asset.preview_url) : "";
                 return {
                   ...s,
                   crs: asset.crs ?? s.crs,
                   bands: asset.width && asset.height ? s.bands : s.bands,
-                  bounds: (asset.bounds_wgs84 as BBox | undefined) ?? s.bounds,
+                  bounds: s.bounds && s.bounds !== DEFAULT_BOUNDS ? s.bounds : ((asset.bounds_wgs84 as BBox | undefined) ?? s.bounds),
                   filename: asset.filename ?? s.filename,
                   modality: (asset.modality as SceneSlot["modality"]) ?? s.modality,
                   sensor: asset.sensor ?? s.sensor,
+                  previewUrl: s.previewUrl || assetPreview,
                 };
               }),
             );
@@ -576,7 +756,13 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
       setDraft,
       insertChip,
       loadDemo,
+      loadExploreCrop,
       attachFiles,
+      attachAsT2,
+      pendingUpload,
+      confirmNewScene,
+      confirmT2Pair,
+      cancelUploadChoice,
       removeSlot,
       toggleSlotModality,
       setLayer,
@@ -610,9 +796,13 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
     }),
     [
       apiUp,
+      attachAsT2,
       attachFiles,
+      cancelUploadChoice,
       clearThread,
       closeOverlays,
+      confirmNewScene,
+      confirmT2Pair,
       copyAnswer,
       copyJobId,
       dragging,
@@ -630,11 +820,13 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
       latestJobId,
       layers,
       loadDemo,
+      loadExploreCrop,
       onDragEnter,
       onDragLeave,
       onDrop,
       pairFitness,
       paletteOpen,
+      pendingUpload,
       removeSlot,
       toggleSlotModality,
       resetScene,

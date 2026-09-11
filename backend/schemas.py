@@ -46,6 +46,7 @@ class RouterTool(str, Enum):
     FUSION_S1S2 = "fusion_s1s2"
     VECTORIZER = "vectorizer"
     PREPROCESS = "preprocess"
+    YOLO_DETECTOR = "yolo_detector"
 
 
 # ---------------------------------------------------------------------------
@@ -430,6 +431,33 @@ class JobResponse(BaseModel):
     outputs: list[OutputResponse] = Field(default_factory=list)
     traces: list[TraceResponse] = Field(default_factory=list)
     spatial_features: list[SpatialFeatureResponse] = Field(default_factory=list)
+    analysis_objects: list["AnalysisObject"] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# AnalysisObject Schema (§8 - Consolidated Architecture)
+# ---------------------------------------------------------------------------
+class AnalysisObject(BaseModel):
+    """
+    Standardized spatial object abstraction bridging specialist models,
+    spatial validation, PostGIS records, MapLibre UI overlays, and language grounding.
+    """
+    object_id: str = Field(..., description="Unique identifier for the detected/segmented object")
+    target: str = Field(..., description="Semantic target class or object name")
+    modality: str = Field(..., description="Sensor modality: OPTICAL, SAR, or MULTIMODAL")
+    sensor: str | None = Field(None, description="Source satellite sensor (e.g. Sentinel-2, Sentinel-1)")
+    scene_id: str | None = Field(None, description="Associated scene identifier")
+    asset_id: str | None = Field(None, description="Associated raster asset identifier")
+    mask_path: str | None = Field(None, description="Local or relative path to raster mask if available")
+    geometry: dict[str, Any] | None = Field(None, description="GeoJSON geometry object")
+    bbox: list[float] | None = Field(None, description="Bounding box [min_lon, min_lat, max_lon, max_lat] in WGS84")
+    centroid: list[float] | None = Field(None, description="Center coordinate [lon, lat] in WGS84")
+    label: str = Field(..., description="Human-readable label / class name")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Model prediction confidence score")
+    source_model: str = Field(..., description="Name of the specialist model producing the object")
+    provenance: dict[str, Any] = Field(default_factory=dict, description="Detailed trace and metadata provenance")
+    area_m2: float | None = Field(None, description="Calculated area in square meters")
+    properties: dict[str, Any] = Field(default_factory=dict, description="Additional domain or detection properties")
 
 
 # ---------------------------------------------------------------------------
@@ -492,6 +520,7 @@ class JobView(BaseModel):
     answer: JobAnswer | None = None
     assets: list[JobAssetView] = Field(default_factory=list)
     overlays: list[JobOverlay] = Field(default_factory=list)
+    analysis_objects: list[AnalysisObject] = Field(default_factory=list)
     traces: list[JobTraceView] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)

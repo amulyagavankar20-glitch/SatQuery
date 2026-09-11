@@ -17,7 +17,7 @@ from shapely import wkt
 from backend.config import settings
 
 # Supported satellite raster and artifact extensions
-ALLOWED_RASTER_EXTENSIONS = {".tif", ".tiff", ".geotiff"}
+ALLOWED_RASTER_EXTENSIONS = {".tif", ".tiff", ".geotiff", ".png", ".jpg", ".jpeg"}
 ALLOWED_VECTOR_EXTENSIONS = {".geojson", ".json", ".kml", ".shp"}
 ALLOWED_REPORT_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg"}
 

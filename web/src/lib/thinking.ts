@@ -1,5 +1,5 @@
-import { OFFICIAL_CHIPS } from "./constants";
-import type { TraceStep } from "./types";
+import { getSuggestedQuestions } from "./constants";
+import type { SceneSlot, TraceStep } from "./types";
 
 export function specialistId(query: string, sar: boolean): string {
   const q = query.toLowerCase();
@@ -41,6 +41,7 @@ export function formatTraceChain(steps: TraceStep[], confidence?: string | null)
   return parts.join(" -> ");
 }
 
-export function followUpQuestions(lastQuery: string): string[] {
-  return OFFICIAL_CHIPS.filter((chip) => chip !== lastQuery).slice(0, 3);
+export function followUpQuestions(lastQuery: string, slots?: SceneSlot[], activeSlot?: "T1" | "T2"): string[] {
+  const chips = getSuggestedQuestions(slots ?? [], activeSlot ?? "T1");
+  return chips.filter((chip) => chip.toLowerCase() !== lastQuery.toLowerCase()).slice(0, 3);
 }

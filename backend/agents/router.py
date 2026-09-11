@@ -215,9 +215,37 @@ Input Class / Normalized Metadata: {json.dumps(request.manifest, default=str)}""
         Explicitly marked with fallback reasoning for auditability.
         """
         q = (request.query or "").lower()
+        manifest = request.manifest or {}
+        input_class = str(manifest.get("input_class") or "").upper()
+        assets = manifest.get("assets") or []
+        is_sar = (
+            input_class in ("SINGLE_SAR", "SAR")
+            or (len(assets) == 1 and str(assets[0].get("modality", "")).upper() == "SAR")
+            or any(w in q for w in ["sar", "radar", "sentinel-1", "backscatter"])
+        )
         reason = f"Deterministic fallback rule classifier (VLM unavailable: {error_reason})" if error_reason else "Deterministic rule classifier fallback"
 
-        if any(w in q for w in ["change", "changed", "difference", "compare", "between", "increased", "decreased"]):
+        # 1. Cross-Modal Fusion & Optical + SAR Comparison Queries
+        if input_class in ("OPTICAL_SAR", "SAR_OPTICAL") or any(
+            w in q for w in [
+                "fuse", "fusion", "optical and sar", "sar and optical",
+                "radar backscatter", "optical surface", "optical and radar", "radar and optical"
+            ]
+        ):
+            return RouteResponse(
+                task=RouterTask.OPTICAL_SAR_ANALYSIS,
+                requires_optical_sar_analysis=True,
+                tools=[RouterTool.GEOSPATIAL_VALIDATOR, RouterTool.FUSION_S1S2],
+                reasoning=reason,
+            )
+
+        # 2. Temporal Change Detection / Difference Queries
+        change_keywords = [
+            "change", "changes", "difference", "differences", "between two dates",
+            "what changed", "explain the changes", "explain me the changes",
+            "increased", "decreased", "temporal"
+        ]
+        if any(w in q for w in change_keywords) or (input_class == "BI_TEMPORAL" and any(w in q for w in ["compare", "comparison"])):
             task = RouterTask.CHANGE_VQA if ("?" in q or any(w in q for w in ["what", "how", "has", "did"])) else RouterTask.CHANGE_DETECTION
             return RouteResponse(
                 task=task,
@@ -226,33 +254,30 @@ Input Class / Normalized Metadata: {json.dumps(request.manifest, default=str)}""
                 reasoning=reason,
             )
 
+        # 3. Object Grounding / Spatial Highlighting Queries
         if any(w in q for w in ["ground", "locate", "segment", "highlight", "bounding", "box"]):
+            primary_tool = RouterTool.SAR_MAP if is_sar else RouterTool.LULC_MAP
             return RouteResponse(
                 task=RouterTask.GROUNDING,
                 requires_grounding=True,
-                tools=[RouterTool.GEOSPATIAL_VALIDATOR, RouterTool.LULC_MAP],
+                tools=[RouterTool.GEOSPATIAL_VALIDATOR, primary_tool],
                 reasoning=reason,
             )
 
-        if any(w in q for w in ["fuse", "fusion", "optical and sar", "sar and optical"]):
-            return RouteResponse(
-                task=RouterTask.OPTICAL_SAR_ANALYSIS,
-                requires_optical_sar_analysis=True,
-                tools=[RouterTool.GEOSPATIAL_VALIDATOR, RouterTool.FUSION_S1S2],
-                reasoning=reason,
-            )
-
+        # 4. Captioning / Scene Overview Queries
         if any(w in q for w in ["describe", "caption", "overview"]):
+            primary_tool = RouterTool.SAR_MAP if is_sar else RouterTool.LULC_MAP
             return RouteResponse(
                 task=RouterTask.CAPTIONING,
-                tools=[RouterTool.GEOSPATIAL_VALIDATOR, RouterTool.LULC_MAP],
+                tools=[RouterTool.GEOSPATIAL_VALIDATOR, primary_tool],
                 reasoning=reason,
             )
 
-        # Default single-image visual question answering
+        # 5. Default single-image visual question answering
+        primary_tool = RouterTool.SAR_MAP if is_sar else RouterTool.LULC_MAP
         return RouteResponse(
             task=RouterTask.SINGLE_VQA,
-            tools=[RouterTool.GEOSPATIAL_VALIDATOR, RouterTool.LULC_MAP],
+            tools=[RouterTool.GEOSPATIAL_VALIDATOR, primary_tool],
             reasoning=reason,
         )
 

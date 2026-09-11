@@ -329,6 +329,17 @@ def format_rich_sar_answer(
         sections.append(f"• **Vegetation / Rough Terrain**: {veg}% (cross-pol volume scattering)")
         sections.append(f"• **Open Terrain / Other**: {other}%")
 
+        if any(w in q_lower for w in ["highlight", "segment", "isolate", "outline", "where is", "locate", "mask", "show on map", "visualize"]):
+            if "water" in q_lower:
+                sections.append(
+                    f"\n• **Water Highlighting Note**: Surface water accounts for approximately **{water}%** of the scene based on specular radar backscatter (VV < -17.5 dB, VH < -22 dB). "
+                    "However, calibrated scene-level SAR radiometric thresholding provides coverage proportions rather than vector segmentation boundaries; no artificial polygon mask is fabricated."
+                )
+            elif "built" in q_lower or "urban" in q_lower:
+                sections.append(
+                    f"\n• **Urban Highlighting Note**: Built-up infrastructure accounts for approximately **{urban}%** of the scene based on double-bounce radar backscatter."
+                )
+
     # Section 4: Geospatial Context
     if scene_statistics and scene_statistics.get("crs"):
         crs = scene_statistics.get("crs")

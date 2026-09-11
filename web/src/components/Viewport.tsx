@@ -5,9 +5,11 @@ import { downloadExport } from "@/lib/api";
 import { LAYER_LABELS } from "@/lib/constants";
 import { downloadGeoJSON, downloadSceneRasters } from "@/lib/exports";
 import { fitLatestMap } from "@/lib/map-registry";
-import type { AssistantTurn, LayerId } from "@/lib/types";
+import type { AssistantTurn, BBox, LayerId } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useConsole } from "@/state/console";
+
+const DEFAULT_BOUNDS: BBox = [72.5, 23.0, 72.7, 23.2];
 
 const MapEvidence = lazy(() => import("@/components/MapEvidence").then((m) => ({ default: m.MapEvidence })));
 
@@ -95,15 +97,15 @@ export function Viewport() {
 
   const opticalUrl =
     base.modality === "OPTICAL"
-      ? (base.previewUrl || (latest?.opticalUrl ?? null))
-      : null;
+      ? (base.previewUrl || latest?.opticalUrl || null)
+      : (layers.optical ? (base.previewUrl || latest?.opticalUrl || slots.find((s) => s.modality === "OPTICAL")?.previewUrl || null) : null);
 
   let sarUrl =
     base.modality === "SAR"
       ? (base.previewUrl || (latest?.sarUrl ?? null))
-      : (latest?.sarUrl ?? slots.find((s) => s.modality === "SAR")?.previewUrl ?? null);
+      : (layers.sar && hasSar ? (slots.find((s) => s.modality === "SAR")?.previewUrl ?? latest?.sarUrl ?? null) : null);
 
-  if (hasSar && latest) {
+  if (hasSar && latest && base.modality === "SAR") {
     if (sarMode === "vv" && latest.vvUrl) sarUrl = latest.vvUrl;
     else if (sarMode === "vh" && latest.vhUrl) sarUrl = latest.vhUrl;
     else if (sarMode === "overlay" && latest.overlayUrl) sarUrl = latest.overlayUrl;
@@ -133,11 +135,13 @@ export function Viewport() {
     toast("Upload a GeoTIFF to export the raster", "bad");
   };
 
+  const sceneBounds = base.bounds ?? completed?.bounds ?? DEFAULT_BOUNDS;
+
   return (
     <div className="relative h-full min-h-0">
       <Suspense fallback={<ViewportLoader />}>
         <MapEvidence
-          bounds={completed?.bounds ?? base.bounds}
+          bounds={sceneBounds}
           opticalUrl={opticalUrl}
           sarUrl={sarUrl}
           wipeUrl={wipeUrl}

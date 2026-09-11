@@ -67,8 +67,9 @@ async def ingest_job(
                 "height": a.get("height"),
                 "crs": a.get("crs"),
                 "bounds_wgs84": a.get("bounds_wgs84"),
+                "preview_url": f"/jobs/{session.job_id}/artifacts/assets/{idx}",
             }
-            for a in assets
+            for idx, a in enumerate(assets)
         ],
     }
 
@@ -150,7 +151,7 @@ async def get_composite(job_id: str, slot: str | None = None, index: int = 0):
     safe = safe_job_file(job_id, path) if path else None
     if safe is None:
         raise HTTPException(status_code=404, detail="Composite not ready")
-    return FileResponse(safe, media_type="image/png", filename=safe.name)
+    return FileResponse(safe, media_type="image/png")
 
 
 @router.api_route("/jobs/{job_id}/artifacts/assets/{asset_index}", methods=["GET", "HEAD"])
@@ -161,7 +162,7 @@ async def get_asset_preview(job_id: str, asset_index: int = 0):
     safe = safe_job_file(job_id, path) if path else None
     if safe is None:
         raise HTTPException(status_code=404, detail=f"Asset {asset_index} preview not ready")
-    return FileResponse(safe, media_type="image/png", filename=safe.name)
+    return FileResponse(safe, media_type="image/png")
 
 
 @router.get("/jobs/{job_id}/artifacts/vv")
@@ -172,7 +173,7 @@ async def get_vv_artifact(job_id: str):
     safe = safe_job_file(job_id, path) if path else None
     if safe is None:
         raise HTTPException(status_code=404, detail="VV visualization not ready")
-    return FileResponse(safe, media_type="image/png", filename=safe.name)
+    return FileResponse(safe, media_type="image/png")
 
 
 @router.get("/jobs/{job_id}/artifacts/vh")
@@ -183,7 +184,7 @@ async def get_vh_artifact(job_id: str):
     safe = safe_job_file(job_id, path) if path else None
     if safe is None:
         raise HTTPException(status_code=404, detail="VH visualization not ready")
-    return FileResponse(safe, media_type="image/png", filename=safe.name)
+    return FileResponse(safe, media_type="image/png")
 
 
 @router.get("/jobs/{job_id}/artifacts/overlay")
@@ -193,8 +194,8 @@ async def get_overlay_artifact(job_id: str):
     path = resolve_overlay_path(job_id)
     safe = safe_job_file(job_id, path) if path else None
     if safe is None:
-        raise HTTPException(status_code=404, detail="Overlay visualization not ready")
-    return FileResponse(safe, media_type="image/png", filename=safe.name)
+        raise HTTPException(status_code=404, detail="Overlay not ready")
+    return FileResponse(safe, media_type="image/png")
 
 
 @router.get("/jobs/{job_id}/artifacts/tiles/{index}")

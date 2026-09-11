@@ -31,6 +31,7 @@ from backend.agents.tools.utility_tools import (
 from backend.agents.tools.sar_map import SarMapTool
 from backend.agents.tools.bit_cd import BITChangeDetectionTool
 from backend.agents.tools.lulc import LulcMapTool
+from backend.agents.tools.yolo_detector import YOLODetectorTool
 
 # ---------------------------------------------------------------------------
 # Canonical mapping from tool_id → concrete implementation class.
@@ -39,6 +40,7 @@ from backend.agents.tools.lulc import LulcMapTool
 _TOOL_IMPLEMENTATIONS: dict[str, type[BaseTool]] = {
     "sar_map":          SarMapTool,
     "lulc_map":         LulcMapTool,
+    "yolo_detector":    YOLODetectorTool,
     "bit_cd":           BITChangeDetectionTool,
     "align":            AlignTool,
     "vectorize":        VectorizeTool,
@@ -76,7 +78,7 @@ def _load_tool(tool_id: str, db: Session | None) -> BaseTool:
     return impl_cls()
 
 
-def run_tool(tool_id: str, params: Mapping[str, Any], db: Session) -> ToolResult:
+def run_tool(tool_id: str, params: Mapping[str, Any], db: Session | None = None) -> ToolResult:
     """Execute a specialist tool and return a standardized ``ToolResult``.
 
     The function performs:

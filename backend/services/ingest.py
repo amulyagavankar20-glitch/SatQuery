@@ -46,57 +46,18 @@ def ingest_rasters(
         dest.write_bytes(upload.file.read())
         saved_paths.append(dest)
 
+    from backend.services.job_view import generate_raster_preview_png
     processed_dir = dirs["processed"]
     for path in saved_paths:
-        try:
-            import rasterio
-            import numpy as np
-            from PIL import Image
-
-            preview_png = processed_dir / f"composite_preview_{path.stem}.png"
-            with rasterio.open(path) as src:
-                count = src.count
-                dtypes = src.dtypes
-                is_float = any("float" in str(d).lower() for d in dtypes)
-                if count >= 9:
-                    data = src.read([3, 2, 1]).astype(np.float32)
-                    p2, p98 = np.percentile(data, 2), np.percentile(data, 98)
-                    norm = np.clip((data - p2) / (p98 - p2 + 1e-6) * 255.0, 0, 255).astype(np.uint8)
-                    rgb = np.transpose(norm, (1, 2, 0))
-                elif count >= 3:
-                    data = src.read([1, 2, 3]).astype(np.float32)
-                    p2, p98 = np.percentile(data, 2), np.percentile(data, 98)
-                    norm = np.clip((data - p2) / (p98 - p2 + 1e-6) * 255.0, 0, 255).astype(np.uint8)
-                    rgb = np.transpose(norm, (1, 2, 0))
-                elif count == 2:
-                    # Dual-polarization SAR (VV, VH)
-                    vv = src.read(1).astype(np.float32)
-                    vh = src.read(2).astype(np.float32)
-                    vv_db = 10.0 * np.log10(np.clip(vv, 1e-5, None))
-                    vh_db = 10.0 * np.log10(np.clip(vh, 1e-5, None))
-                    vv_min, vv_max = np.percentile(vv_db, 2), np.percentile(vv_db, 98)
-                    vh_min, vh_max = np.percentile(vh_db, 2), np.percentile(vh_db, 98)
-                    r = np.clip((vv_db - vv_min) / (vv_max - vv_min + 1e-6), 0, 1)
-                    g = np.clip((vh_db - vh_min) / (vh_max - vh_min + 1e-6), 0, 1)
-                    b = np.clip(r / (g + 0.1), 0, 1)
-                    rgb = (np.stack([r, g, b], axis=-1) * 255).astype(np.uint8)
-                else:
-                    b = src.read(1).astype(np.float32)
-                    if is_float:
-                        b_db = 10.0 * np.log10(np.clip(b, 1e-5, None))
-                        b_min, b_max = np.percentile(b_db, 2), np.percentile(b_db, 98)
-                        norm_b = np.clip((b_db - b_min) / (b_max - b_min + 1e-6) * 255.0, 0, 255).astype(np.uint8)
-                    else:
-                        p2, p98 = np.percentile(b, 2), np.percentile(b, 98)
-                        norm_b = np.clip((b - p2) / (p98 - p2 + 1e-6) * 255.0, 0, 255).astype(np.uint8)
-                    rgb = np.stack([norm_b, norm_b, norm_b], axis=-1)
-
-            Image.fromarray(rgb).save(preview_png)
-            default_composite = processed_dir / "composite.png"
-            if not default_composite.is_file():
-                Image.fromarray(rgb).save(default_composite)
-        except Exception:
-            pass
+        preview_png = processed_dir / f"composite_preview_{path.stem}.png"
+        generate_raster_preview_png(path, preview_png)
+        default_composite = processed_dir / "composite.png"
+        if not default_composite.is_file() and preview_png.is_file():
+            try:
+                from PIL import Image
+                Image.open(preview_png).save(default_composite)
+            except Exception:
+                pass
 
     classifier = InputClassifier()
     asset_inputs: list[dict[str, Any]] = []
