@@ -146,6 +146,14 @@ function mapLiveJob(job: JobView, slots: SceneSlot[], overlays?: OverlayCollecti
     overlayUrl: sar ? apiUrl(`/jobs/${job.job_id}/artifacts/overlay`) : null,
     compareUrl: slots.find((s) => s.slot === "T2" && s.modality === "OPTICAL")?.previewUrl ?? null,
     overlays: overlays ?? mockAssistantTurn(job.query, slots).overlays,
+    lulc: job.lulc
+      ? {
+          backend: job.lulc.backend,
+          focus: job.lulc.focus,
+          fractions: job.lulc.fractions,
+          sceneTags: (job.lulc.scene_tags ?? []).map((t) => ({ name: t.name, score: t.score })),
+        }
+      : mockAssistantTurn(job.query, slots).lulc,
     trace:
       job.traces.length > 0
         ? job.traces.map((t) => ({

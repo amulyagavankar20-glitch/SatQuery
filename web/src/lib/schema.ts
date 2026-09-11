@@ -29,6 +29,22 @@ export const jobTraceSchema = z.object({
   timestamp: z.string().nullable().optional(),
 });
 
+export const jobLulcSchema = z.object({
+  backend: z.string(),
+  focus: z.string(),
+  fractions: z.record(z.string(), z.number()),
+  scene_tags: z
+    .array(
+      z.object({
+        name: z.string(),
+        score: z.number(),
+        source: z.string().nullable().optional(),
+      }),
+    )
+    .optional()
+    .default([]),
+});
+
 export const jobViewSchema = z.object({
   job_id: z.string(),
   session_id: z.string(),
@@ -45,6 +61,7 @@ export const jobViewSchema = z.object({
   errors: z.array(z.string()).optional().default([]),
   refusal_reason: z.string().nullable().optional(),
   tile_count: z.number().optional().default(0),
+  lulc: jobLulcSchema.nullable().optional(),
 });
 
 export type JobView = z.infer<typeof jobViewSchema>;

@@ -378,9 +378,35 @@ def sarchat_vqa(state: GraphState) -> dict[str, Any]:
     return _execute_tool(state, "sarchat_vqa", params)
 
 
-def geochat_vqa(state: GraphState) -> dict[str, Any]:
+def _asset_bounds(state: GraphState) -> list[float] | None:
+    meta = state.get("asset_metadata") or {}
+    b = meta.get("bounds") if isinstance(meta, dict) else None
+    if isinstance(b, (list, tuple)) and len(b) == 4:
+        return [float(x) for x in b]
+    return None
+
+
+def lulc_map(state: GraphState) -> dict[str, Any]:
     params = {
         "question": state.get("user_query", ""),
+        "image_refs": _image_refs(state),
+        "input_refs": _image_refs(state),
+        "bounds": _asset_bounds(state),
+    }
+    return _execute_tool(state, "lulc_map", params)
+
+
+def geochat_vqa(state: GraphState) -> dict[str, Any]:
+    lulc_ctx = ""
+    for r in reversed(list(state.get("specialist_results") or [])):
+        if r.tool_id == "lulc_map" and r.status == "success" and isinstance(r.result, dict):
+            lulc_ctx = str(r.result.get("answer") or "")
+            break
+    question = state.get("user_query", "")
+    if lulc_ctx:
+        question = f"{question}\n\nLand-cover map: {lulc_ctx}"
+    params = {
+        "question": question,
         "image_refs": _image_refs(state),
         "input_refs": _image_refs(state),
     }
@@ -607,14 +633,25 @@ def report_generator(state: GraphState) -> dict[str, Any]:
                 "from another date over the same geographic bounding box is required."
             )
         else:
-            # Use last successful specialist result with a textual output
+            lulc_ans = None
+            for r in results:
+                if r.tool_id == "lulc_map" and r.status == "success" and isinstance(r.result, dict):
+                    lulc_ans = r.result.get("answer")
+                    break
             for r in reversed(results):
+                if r.tool_id == "lulc_map":
+                    continue
                 if r.status == "success" and isinstance(r.result, str):
                     final_answer = r.result
                     break
                 if r.status == "success" and isinstance(r.result, dict):
                     final_answer = str(r.result.get("answer") or r.result)
                     break
+            if lulc_ans:
+                if not final_answer or str(final_answer).startswith("MOCK_"):
+                    final_answer = str(lulc_ans)
+                else:
+                    final_answer = f"{final_answer}\n\n{lulc_ans}"
 
     report: dict[str, Any] = {
         "job_id": state.get("job_id"),
@@ -701,7 +738,7 @@ def after_preprocess(state: GraphState) -> str:
             return "sarchat_vqa"
 
     if task in (RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value):
-        return "geochat_vqa"
+        return "lulc_map"
     if task == RouterTask.CHANGE_DETECTION.value:
         return "align"
     if task == RouterTask.CHANGE_VQA.value:
@@ -709,6 +746,10 @@ def after_preprocess(state: GraphState) -> str:
     if task == RouterTask.OPTICAL_SAR_ANALYSIS.value:
         return "coregister"
     return "refusal"
+
+
+def after_lulc_map(state: GraphState) -> str:
+    return "geochat_vqa"
 
 
 def after_geochat_vqa(state: GraphState) -> str:
@@ -747,6 +788,7 @@ for name, fn in {
     "query_router":     query_router,
     "tool_selector":    tool_selector,
     "preprocess":       preprocess,
+    "lulc_map":         lulc_map,
     "sarchat_vqa":      sarchat_vqa,
     "geochat_vqa":      geochat_vqa,
     "grounding":        grounding,
@@ -789,7 +831,7 @@ workflow.add_conditional_edges(
     "preprocess", after_preprocess,
     {
         "sarchat_vqa":  "sarchat_vqa",
-        "geochat_vqa":  "geochat_vqa",
+        "lulc_map":     "lulc_map",
         "align":        "align",
         "coregister":   "coregister",
         "refusal":      "refusal",
@@ -800,6 +842,11 @@ workflow.add_conditional_edges(
 workflow.add_conditional_edges(
     "sarchat_vqa", after_sarchat_vqa,
     {"grounding": "grounding", "evidence_fusion": "evidence_fusion"},
+)
+
+workflow.add_conditional_edges(
+    "lulc_map", after_lulc_map,
+    {"geochat_vqa": "geochat_vqa"},
 )
 
 # GeoChat VQA path

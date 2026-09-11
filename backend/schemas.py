@@ -460,6 +460,21 @@ class JobTraceView(BaseModel):
     timestamp: str | None = None
 
 
+class JobLulcTag(BaseModel):
+    name: str
+    score: float
+    source: str | None = None
+
+
+class JobLulcView(BaseModel):
+    """Pixel fractions (Dynamic World 9-class) plus BigEarthNet-19 scene tags."""
+
+    backend: str
+    focus: str
+    fractions: dict[str, float] = Field(default_factory=dict)
+    scene_tags: list[JobLulcTag] = Field(default_factory=list)
+
+
 class JobView(BaseModel):
     """Canonical document for GET /jobs/{id}. UI Zod schema must match."""
 
@@ -478,3 +493,4 @@ class JobView(BaseModel):
     errors: list[str] = Field(default_factory=list)
     refusal_reason: str | None = None
     tile_count: int = 0
+    lulc: JobLulcView | None = None
