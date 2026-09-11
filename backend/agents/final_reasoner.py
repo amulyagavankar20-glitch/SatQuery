@@ -28,6 +28,50 @@ from backend.services.sar_analyzer import format_rich_sar_answer
 from src.logger import logging
 
 
+def format_rich_bit_change_answer(
+    query: str,
+    summary: str,
+    statistics: dict[str, Any] | None = None,
+    detections: list[dict[str, Any]] | None = None,
+) -> str:
+    """Formats a structured, human-readable change detection report."""
+    sections = [
+        "### Optical Bi-Temporal Change Detection Analysis (BIT-LEVIR)",
+        f"**Analysis Objective:** *\"{query}\"*\n",
+    ]
+    if summary:
+        sections.append(f"**Observation Summary:**\n{summary}\n")
+
+    if statistics:
+        pct = statistics.get("change_percentage", 0.0)
+        area_m2 = statistics.get("changed_area_m2", 0.0)
+        area_km2 = statistics.get("changed_area_km2", 0.0)
+        regions = statistics.get("region_count", len(detections or []))
+        total_px = statistics.get("total_pixels", 0)
+        changed_px = statistics.get("changed_pixels", 0)
+        crs = statistics.get("crs", "EPSG:4326")
+
+        sections.append("#### Quantitative Surface Alteration Metrics")
+        sections.append(
+            f"- **Surface Area Alteration:** {pct:.2f}% of AOI\n"
+            f"- **Estimated Changed Footprint:** {area_m2:,.1f} m² ({area_km2:.4f} km²)\n"
+            f"- **Identified Change Clusters:** {regions} distinct geographic region(s)\n"
+            f"- **Pixel Metric:** {changed_px:,} changed / {total_px:,} total valid pixels\n"
+            f"- **Coordinate Reference System:** {crs}"
+        )
+
+    if detections:
+        sections.append("\n#### Localized Change Clusters (WGS84 Coordinates)")
+        for i, det in enumerate(detections[:10], 1):
+            centroid = det.get("centroid")
+            area = det.get("area_m2", "N/A")
+            geo_str = f" [Lat: {centroid[1]:.5f}°N, Lon: {centroid[0]:.5f}°E]" if centroid and len(centroid) >= 2 else ""
+            sections.append(f"{i}. **Cluster #{i}:** Footprint ~{area} m²{geo_str}")
+
+    sections.append("\n*Evidence produced via Bitemporal Image Transformer (BIT) ONNX runtime.*")
+    return "\n".join(sections)
+
+
 class FinalReasoner:
     """
     Multimodal final reasoner powered by VLM via OpenRouter.
@@ -134,7 +178,20 @@ Response Format Guidelines:
             )
             return rich_answer
 
-        # 2. Check for single SAR temporal limitation
+        # 2. Check if BIT Change Detection result is present
+        bit_res = next((r for r in specialist_results if r.tool_id == "bit_cd" and r.status == "success"), None)
+        if bit_res and isinstance(bit_res.result, dict):
+            summary = str(bit_res.result.get("summary", "") or bit_res.result.get("answer", ""))
+            stats = bit_res.result.get("statistics")
+            dets = bit_res.result.get("detections")
+            return format_rich_bit_change_answer(
+                query=query,
+                summary=summary,
+                statistics=stats,
+                detections=dets,
+            )
+
+        # 3. Check for single SAR temporal limitation
         if input_class == "SINGLE_SAR" and any(w in query.lower() for w in ["change", "changed", "increase", "increased", "decrease", "decreased", "growth", "over time"]):
             return (
                 "### SAR Temporal Change Assessment\n\n"
@@ -143,7 +200,7 @@ Response Format Guidelines:
                 "from another date over the same geographic bounding box is required."
             )
 
-        # 3. Generic specialist results formatter
+        # 4. Generic specialist results formatter
         sections: list[str] = [
             "### Remote-Sensing Analysis Summary",
             f"Analysis completed for query: *\"{query}\"*",

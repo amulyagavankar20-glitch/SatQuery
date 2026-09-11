@@ -38,17 +38,27 @@ class Evidence(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
 
 
-def _required_tools_for_task(task: str) -> list[str]:
+def _required_tools_for_task(task: str, input_class: str = "") -> list[str]:
     """Return the list of tool identifiers that must have produced results for *task*.
 
-    The mapping mirrors the graph paths defined in ``backend.agents.graph``.
+    The mapping mirrors the graph paths defined in ``backend.agents.graph`` and
+    takes into account whether the modality is SAR or Optical.
     """
+    if input_class in ("SINGLE_SAR", "InputClass.SINGLE_SAR"):
+        sar_mapping: dict[str, list[str]] = {
+            "SINGLE_VQA":           ["sarchat_vqa"],
+            "CAPTIONING":           ["sarchat_vqa"],
+            "GROUNDING":            ["sarchat_vqa", "grounding"],
+        }
+        if task in sar_mapping:
+            return sar_mapping[task]
+
     mapping: dict[str, list[str]] = {
         "SINGLE_VQA":           ["geochat_vqa"],
         "CAPTIONING":           ["geochat_vqa"],
         "GROUNDING":            ["geochat_vqa", "grounding"],
-        "CHANGE_DETECTION":     ["align", "bit_cd", "vectorize"],
-        "CHANGE_VQA":           ["align", "bit_cd", "vectorize", "geochat_describe"],
+        "CHANGE_DETECTION":     ["bit_cd"],
+        "CHANGE_VQA":           ["bit_cd", "geochat_describe"],
         "OPTICAL_SAR_ANALYSIS": ["coregister", "fusion_s1s2", "agreement", "geochat_describe"],
     }
     return mapping.get(task, [])
@@ -58,7 +68,7 @@ def _collect_evidence(state: "GraphState") -> Evidence:
     ev = Evidence()
     for tr in state.get("specialist_results", []):  # type: ignore[union-attr]
         # Model evidence – tools that produce a textual or semantic answer
-        if tr.tool_id in {"geochat_vqa", "grounding", "geochat_describe"}:
+        if tr.tool_id in {"sarchat_vqa", "geochat_vqa", "grounding", "geochat_describe"}:
             ev.model_evidence.append(tr)
         # Temporal evidence – tools that operate on a time series
         if tr.tool_id in {"bit_cd", "vectorize", "align"}:
@@ -102,7 +112,9 @@ def _aggregate_signals(state: "GraphState", evidence: Evidence) -> list[str]:
 
     # Tool success – all required tools completed without error
     task = state.get("detected_task", "") or ""
-    required = _required_tools_for_task(task)
+    raw_input_class = state.get("input_class", "")
+    input_class_str = raw_input_class.value if hasattr(raw_input_class, "value") else str(raw_input_class or "")
+    required = _required_tools_for_task(task, input_class_str)
     tool_ids = {tr.tool_id for tr in state.get("specialist_results", [])  # type: ignore[union-attr]
                 if tr.status == "success"}
     if required and set(required).issubset(tool_ids):
@@ -116,8 +128,8 @@ def _aggregate_signals(state: "GraphState", evidence: Evidence) -> list[str]:
     if "fusion_s1s2" in tool_ids and "agreement" in tool_ids:
         signals.append("cross_modal_agreement")
 
-    # Evidence completeness – we have at least one model evidence item
-    if evidence.model_evidence:
+    # Evidence completeness – we have at least one specialist evidence item
+    if evidence.model_evidence or evidence.temporal_evidence or evidence.cross_modal_evidence:
         signals.append("evidence_completeness")
 
     return signals
@@ -194,7 +206,9 @@ def validate_output(state: "GraphState") -> ValidationResult:
                 )
 
     # 2. Required output existence
-    required_tools = _required_tools_for_task(task)
+    raw_input_class = state.get("input_class", "")
+    input_class_str = raw_input_class.value if hasattr(raw_input_class, "value") else str(raw_input_class or "")
+    required_tools = _required_tools_for_task(task, input_class_str)
     available_tools = {tr.tool_id for tr in state.get("specialist_results", [])}  # type: ignore[union-attr]
     missing = set(required_tools) - available_tools
     if missing:
@@ -214,8 +228,9 @@ def validate_output(state: "GraphState") -> ValidationResult:
             messages.append("Spatial evidence contains invalid geometry.")
 
     # 6. Evidence completeness
-    if not evidence.model_evidence and required_tools:
-        messages.append("No model evidence was generated.")
+    has_evidence = bool(evidence.model_evidence or evidence.temporal_evidence or evidence.cross_modal_evidence)
+    if not has_evidence and required_tools:
+        messages.append("No model or specialist evidence was generated.")
 
     # 7. Cross-modal agreement where applicable
     if task == "OPTICAL_SAR_ANALYSIS":

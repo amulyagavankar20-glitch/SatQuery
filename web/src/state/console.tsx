@@ -342,21 +342,51 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
                     const res = await fetch(apiUrl(geo));
                     if (res.ok) overlays = (await res.json()) as OverlayCollection;
                   } catch {
-                    /* mock overlays instead */
+                    /* overlay download failed */
                   }
                 }
                 result = mapLiveJob(job, snapshot, overlays);
                 break;
               }
             }
+          } else {
+            result = {
+              role: "assistant",
+              status: "failed",
+              jobId: ingest.job_id || `job-${Date.now()}`,
+              answer: ingest.refusal_reason || (ingest.validation_messages?.length ? ingest.validation_messages.join(". ") : "Input validation refused by server."),
+              confidence: "Low",
+              bounds: snapshot[0]?.bounds ?? DEFAULT_BOUNDS,
+              opticalUrl: snapshot.find((s) => s.modality === "OPTICAL")?.previewUrl ?? null,
+              sarUrl: snapshot.find((s) => s.modality === "SAR")?.previewUrl ?? null,
+              compareUrl: snapshot.find((s) => s.slot === "T2" && s.modality === "OPTICAL")?.previewUrl ?? null,
+              overlays: { type: "FeatureCollection", features: [] },
+              trace: [],
+              error: ingest.refusal_reason ?? "Validation failed",
+            };
           }
-        } catch {
-          result = null;
+        } catch (err: unknown) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          result = {
+            role: "assistant",
+            status: "failed",
+            jobId: `err-${Date.now()}`,
+            answer: `Analysis execution failed: ${errMsg}`,
+            confidence: "Low",
+            bounds: snapshot[0]?.bounds ?? DEFAULT_BOUNDS,
+            opticalUrl: snapshot.find((s) => s.modality === "OPTICAL")?.previewUrl ?? null,
+            sarUrl: snapshot.find((s) => s.modality === "SAR")?.previewUrl ?? null,
+            compareUrl: snapshot.find((s) => s.slot === "T2" && s.modality === "OPTICAL")?.previewUrl ?? null,
+            overlays: { type: "FeatureCollection", features: [] },
+            trace: [],
+            error: errMsg,
+          };
         }
       }
 
       if (!result) {
-        await sleep(3200);
+        // Only trigger mock turn for client-side demo exploration when no real files are uploaded or API is offline
+        await sleep(2000);
         result = mockAssistantTurn(query, snapshot);
       }
 

@@ -147,17 +147,39 @@ class SARChatService:
             start_time = time.time()
 
             try:
-                self.tokenizer = AutoTokenizer.from_pretrained(
-                    self.model_path,
-                    trust_remote_code=True,
-                )
+                vocab_file = os.path.join(self.model_path, "tokenizer.model")
+                if os.path.exists(vocab_file):
+                    self.tokenizer = AutoTokenizer.from_pretrained(
+                        self.model_path,
+                        vocab_file=vocab_file,
+                        trust_remote_code=True,
+                    )
+                else:
+                    self.tokenizer = AutoTokenizer.from_pretrained(
+                        self.model_path,
+                        trust_remote_code=True,
+                    )
                 
+                # Ensure dynamic class compatibility with transformers >= 4.49
+                try:
+                    from transformers.dynamic_module_utils import get_class_from_dynamic_module
+                    cls_model = get_class_from_dynamic_module("modeling_internvl_chat.InternVLChatModel", self.model_path)
+                    orig_init = cls_model.__init__
+                    def compat_init(model_self, *args, **kwargs):
+                        orig_init(model_self, *args, **kwargs)
+                        if not hasattr(model_self, "all_tied_weights_keys"):
+                            model_self.all_tied_weights_keys = {}
+                    cls_model.__init__ = compat_init
+                except Exception as patch_err:
+                    logging.debug(f"[SAR] Dynamic module patch skipped: {patch_err}")
+
                 # Load model weights (float32 for CPU/MPS stability, bfloat16 for CUDA)
                 dtype = torch.bfloat16 if self.device == "cuda" else torch.float32
                 self.model = AutoModel.from_pretrained(
                     self.model_path,
-                    torch_dtype=dtype,
+                    dtype=dtype,
                     trust_remote_code=True,
+                    low_cpu_mem_usage=False,
                 ).to(self.device)
                 
                 self.model.eval()
@@ -195,12 +217,55 @@ class SARChatService:
             gen_config = dict(max_new_tokens=max_new_tokens, do_sample=False)
 
             with torch.no_grad():
-                response = self.model.chat(
-                    tokenizer=self.tokenizer,
-                    pixel_values=pixel_values,
-                    question=formatted_question,
-                    generation_config=gen_config,
-                )
+                try:
+                    response = self.model.chat(
+                        tokenizer=self.tokenizer,
+                        pixel_values=pixel_values,
+                        question=formatted_question,
+                        generation_config=gen_config,
+                    )
+                except Exception as chat_err:
+                    logging.info(f"[SAR] Standard chat method fallback to direct autoregression: {chat_err}")
+                    # Direct autoregression forward pass
+                    IMG_START_TOKEN = "<img>"
+                    IMG_END_TOKEN = "</img>"
+                    IMG_CONTEXT_TOKEN = "<IMG_CONTEXT>"
+                    num_image_tokens = getattr(self.model, "num_image_token", 256)
+                    image_tokens = IMG_START_TOKEN + IMG_CONTEXT_TOKEN * num_image_tokens + IMG_END_TOKEN
+                    query = f"<|im_start|>user\n{image_tokens}\n{question.strip()}<|im_end|>\n<|im_start|>assistant\n"
+                    input_ids = self.tokenizer(query, return_tensors="pt").input_ids.to(self.device)
+                    vit_embeds = self.model.extract_feature(pixel_values)
+                    img_context_token_id = self.tokenizer.convert_tokens_to_ids(IMG_CONTEXT_TOKEN)
+                    
+                    tok_embed_fn = getattr(self.model.language_model, "get_input_embeddings", None)
+                    if tok_embed_fn is None or not callable(tok_embed_fn):
+                        tok_embed_fn = lambda: self.model.language_model.model.tok_embeddings
+                    
+                    input_embeds = tok_embed_fn()(input_ids)
+                    B, N, C = input_embeds.shape
+                    input_embeds = input_embeds.reshape(B * N, C)
+                    flat_ids = input_ids.reshape(B * N)
+                    selected = (flat_ids == img_context_token_id)
+                    input_embeds[selected] = vit_embeds.reshape(-1, C).to(input_embeds.device)
+                    input_embeds = input_embeds.reshape(B, N, C)
+
+                    generated_tokens = []
+                    curr_embeds = input_embeds
+                    im_end_id = self.tokenizer.convert_tokens_to_ids("<|im_end|>")
+                    stop_ids = {im_end_id, 92542, 92540}
+
+                    for _ in range(max_new_tokens):
+                        outputs = self.model.language_model.model(inputs_embeds=curr_embeds, use_cache=False)
+                        logits = self.model.language_model.output(outputs[0])
+                        next_token = torch.argmax(logits[:, -1, :], dim=-1)
+                        token_id = next_token.item()
+                        if token_id in stop_ids:
+                            break
+                        generated_tokens.append(token_id)
+                        next_embed = tok_embed_fn()(next_token.unsqueeze(0))
+                        curr_embeds = torch.cat([curr_embeds, next_embed], dim=1)
+
+                    response = self.tokenizer.decode(generated_tokens, skip_special_tokens=True).strip()
 
             latency_ms = (time.time() - start_time) * 1000.0
             logging.info(f"[SAR] Inference completed in {latency_ms:.1f}ms")

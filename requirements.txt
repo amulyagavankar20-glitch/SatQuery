@@ -27,7 +27,7 @@ tifffile>=2024.8.0
 affine>=2.4.0
 numpy>=1.26.0,<3.0.0
 
-# AI Models & Vision-Language Architecture (SARChat & GeoChat)
+# AI Models & Vision-Language Architecture (SARChat, GeoChat, & BIT ONNX)
 torch>=2.2.0
 torchvision>=0.17.0
 transformers>=4.44.0
@@ -36,6 +36,7 @@ modelscope>=1.18.0
 einops>=0.8.0
 sentencepiece>=0.2.0
 safetensors>=0.4.0
+onnxruntime>=1.19.0
 
 # Agentic Orchestration & LangGraph
 langgraph>=0.2.0

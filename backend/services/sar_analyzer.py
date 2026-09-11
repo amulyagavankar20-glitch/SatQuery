@@ -120,9 +120,15 @@ def parse_sarchat_detections(
     """
     detections: list[dict[str, Any]] = []
     
-    # Match patterns like {<61><170><75><182>}
-    pattern = r"\{<(\d+)><(\d+)><(\d+)><(\d+)>\}"
-    matches = list(re.finditer(pattern, model_output))
+    # Match patterns like {<61><170><75><182>} or [61, 170, 75, 182]
+    patterns = [
+        r"\{<(\d+)><(\d+)><(\d+)><(\d+)>\}",
+        r"\[(\d+),\s*(\d+),\s*(\d+),\s*(\d+)\]",
+    ]
+    raw_matches = []
+    for pat in patterns:
+        for m in re.finditer(pat, model_output):
+            raw_matches.append(tuple(map(int, m.groups())))
 
     transform = None
     width, height = 256, 256
@@ -135,8 +141,7 @@ def parse_sarchat_detections(
         except Exception as e:
             logging.warning(f"Could not read transform for detections: {e}")
 
-    for i, match in enumerate(matches):
-        ymin_raw, xmin_raw, ymax_raw, xmax_raw = map(int, match.groups())
+    for i, (ymin_raw, xmin_raw, ymax_raw, xmax_raw) in enumerate(raw_matches):
         
         # Normalized 0..1 coordinates
         ymin_norm = ymin_raw / 1000.0

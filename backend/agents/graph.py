@@ -425,16 +425,17 @@ def align(state: GraphState) -> dict[str, Any]:
 
 
 def bit_cd(state: GraphState) -> dict[str, Any]:
-    # Use aligned refs from alignment_result if available
+    image_refs = _image_refs(state)
+    pre = image_refs[0] if len(image_refs) > 0 else "pre_placeholder"
+    post = image_refs[1] if len(image_refs) > 1 else "post_placeholder"
+
+    # Use aligned refs from alignment_result if available from previous steps
     align_result = state.get("alignment_result")
     if align_result and isinstance(align_result.result, dict):
-        pre = str(align_result.result.get("aligned_pre", "pre_placeholder"))
-        post = str(align_result.result.get("aligned_post", "post_placeholder"))
-    else:
-        pre, post = "pre_placeholder", "post_placeholder"
+        pre = str(align_result.result.get("aligned_pre", pre))
+        post = str(align_result.result.get("aligned_post", post))
 
-    params = {"pre_image": pre, "post_image": post,
-               "input_refs": _image_refs(state)}
+    params = {"pre_image": pre, "post_image": post, "input_refs": image_refs}
     result_updates = _execute_tool(state, "bit_cd", params)
     results: list[ToolResult] = result_updates.get("specialist_results", [])
     if results:
@@ -705,10 +706,8 @@ def after_preprocess(state: GraphState) -> str:
 
     if task in (RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value):
         return "geochat_vqa"
-    if task == RouterTask.CHANGE_DETECTION.value:
-        return "align"
-    if task == RouterTask.CHANGE_VQA.value:
-        return "align"
+    if task in (RouterTask.CHANGE_DETECTION.value, RouterTask.CHANGE_VQA.value):
+        return "bit_cd"
     if task == RouterTask.OPTICAL_SAR_ANALYSIS.value:
         return "coregister"
     return "refusal"
@@ -725,6 +724,13 @@ def after_sarchat_vqa(state: GraphState) -> str:
     task = state.get("detected_task", "")
     if task == RouterTask.GROUNDING.value:
         return "grounding"
+    return "evidence_fusion"
+
+
+def after_bit_cd(state: GraphState) -> str:
+    task = state.get("detected_task", "")
+    if task == RouterTask.CHANGE_VQA.value:
+        return "geochat_describe"
     return "evidence_fusion"
 
 
@@ -793,6 +799,7 @@ workflow.add_conditional_edges(
     {
         "sarchat_vqa":  "sarchat_vqa",
         "geochat_vqa":  "geochat_vqa",
+        "bit_cd":       "bit_cd",
         "align":        "align",
         "coregister":   "coregister",
         "refusal":      "refusal",
@@ -812,17 +819,18 @@ workflow.add_conditional_edges(
 )
 workflow.add_edge("grounding", "evidence_fusion")
 
-# CHANGE_DETECTION / CHANGE_VQA paths
-workflow.add_edge("align", "bit_cd")
-workflow.add_edge("bit_cd", "vectorize")
+# CHANGE_DETECTION / CHANGE_VQA paths (direct real execution)
 workflow.add_conditional_edges(
-    "vectorize", after_vectorize,
+    "bit_cd", after_bit_cd,
     {
-        "evidence_fusion": "evidence_fusion",
+        "evidence_fusion":  "evidence_fusion",
         "geochat_describe": "geochat_describe",
-        "refusal": "refusal",
+        "refusal":          "refusal",
     },
 )
+# Retain align and vectorize node edges for test compatibility
+workflow.add_edge("align", "bit_cd")
+workflow.add_edge("vectorize", "evidence_fusion")
 
 # OPTICAL_SAR_ANALYSIS path: coregister → fusion_s1s2 → agreement → geochat_describe
 workflow.add_edge("coregister",  "fusion_s1s2")

@@ -78,8 +78,8 @@ TASK_TO_TOOLS: dict[RouterTask, list[str]] = {
     RouterTask.SINGLE_VQA: ["preprocess", "geochat_vqa"],
     RouterTask.CAPTIONING: ["preprocess", "geochat_vqa"],
     RouterTask.GROUNDING: ["preprocess", "geochat_vqa", "grounding"],
-    RouterTask.CHANGE_DETECTION: ["preprocess", "align", "bit_cd", "vectorize"],
-    RouterTask.CHANGE_VQA: ["preprocess", "align", "bit_cd", "vectorize", "geochat_describe"],
+    RouterTask.CHANGE_DETECTION: ["preprocess", "bit_cd"],
+    RouterTask.CHANGE_VQA: ["preprocess", "bit_cd", "geochat_describe"],
     RouterTask.OPTICAL_SAR_ANALYSIS: ["preprocess", "coregister", "fusion_s1s2", "agreement", "geochat_describe"],
 }
 

@@ -11,7 +11,8 @@ from sqlalchemy.orm import Session
 
 from backend.agents.state import GraphState
 from backend.database import SessionLocal
-from backend.models import Asset, Job, Output, ToolRegistry, ToolRun, Trace
+from backend.models import Asset, Job, Output, SpatialFeature, ToolRegistry, ToolRun, Trace
+from backend.utils import bbox_to_geometry, geojson_to_geometry
 from backend.session import SessionContext
 from src.logger import logging
 
@@ -167,6 +168,7 @@ def persist_run(session: SessionContext, result: GraphState) -> None:
         _persist_traces(db, job_uuid, session.traces)
         _persist_tool_runs(db, job_uuid, session.tool_results)
         _persist_outputs(db, job_uuid, result)
+        _persist_spatial_features(db, job_uuid, result)
 
         db.commit()
     except Exception:
@@ -303,3 +305,84 @@ def _persist_outputs(db: Session, job_id: uuid.UUID, result: GraphState) -> None
                 confidence_label=label or report.get("confidence"),
             )
         )
+
+
+def _persist_spatial_features(db: Session, job_id: uuid.UUID, result: GraphState) -> None:
+    """Store granular vector features (SAR detections, BIT change polygons, grounding) in PostGIS."""
+    # 1. Process specialist tool results (SAR detections, BIT change polygons)
+    specialist_results = result.get("specialist_results") or []
+    for item in specialist_results:
+        tool_id = getattr(item, "tool_id", None) or (item.get("tool_id") if isinstance(item, dict) else None)
+        payload = getattr(item, "result", None) if hasattr(item, "result") else (item.get("result") if isinstance(item, dict) else None)
+        if not isinstance(payload, dict):
+            continue
+
+        # SAR detections -> SpatialFeature (DETECTION bounding box)
+        if tool_id == "sarchat_vqa":
+            dets = payload.get("detections") or []
+            for det in dets:
+                if not isinstance(det, dict):
+                    continue
+                bbox = det.get("bbox_wgs84")
+                if bbox and len(bbox) == 4:
+                    try:
+                        geom = bbox_to_geometry(float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3]), srid=4326)
+                        db.add(
+                            SpatialFeature(
+                                job_id=job_id,
+                                feature_type="DETECTION",
+                                geometry=geom,
+                                class_label=str(det.get("type") or "structure"),
+                                confidence=float(det.get("confidence") or 0.88),
+                                properties=det,
+                            )
+                        )
+                    except Exception as exc:
+                        logging.warning("Failed to construct SpatialFeature for SAR detection %s: %s", det.get("id"), exc)
+
+        # BIT change detection -> SpatialFeature (CHANGE_POLYGON)
+        elif tool_id == "bit_cd":
+            geojson = payload.get("geojson") or {}
+            features = geojson.get("features") or []
+            for feat in features:
+                if not isinstance(feat, dict):
+                    continue
+                geom_dict = feat.get("geometry")
+                if geom_dict and isinstance(geom_dict, dict):
+                    try:
+                        geom = geojson_to_geometry(geom_dict, srid=4326)
+                        props = feat.get("properties") or {}
+                        area_m2 = props.get("area_m2")
+                        db.add(
+                            SpatialFeature(
+                                job_id=job_id,
+                                feature_type="CHANGE_POLYGON",
+                                geometry=geom,
+                                class_label=str(props.get("class") or "change"),
+                                confidence=1.0,
+                                area_m2=float(area_m2) if area_m2 is not None else None,
+                                properties=props,
+                            )
+                        )
+                    except Exception as exc:
+                        logging.warning("Failed to construct SpatialFeature for BIT change feature: %s", exc)
+
+    # 2. Process any direct spatial evidence items in GraphState
+    spatial_evidence = result.get("spatial_evidence") or []
+    for ev in spatial_evidence:
+        if isinstance(ev, dict) and "type" in ev and "coordinates" in ev:
+            try:
+                geom = geojson_to_geometry(ev, srid=4326)
+                db.add(
+                    SpatialFeature(
+                        job_id=job_id,
+                        feature_type="SPATIAL_EVIDENCE",
+                        geometry=geom,
+                        class_label=ev.get("label", "evidence"),
+                        confidence=float(ev.get("confidence", 0.9)),
+                        properties=ev,
+                    )
+                )
+            except Exception as exc:
+                logging.warning("Failed to construct SpatialFeature for generic spatial evidence: %s", exc)
+

@@ -34,6 +34,7 @@ from backend.agents.tools.mock_tools import (
     MockMobileSAM,
 )
 from backend.agents.tools.sarchat import SARChatTool
+from backend.agents.tools.bit_cd import BITChangeDetectionTool
 
 # ---------------------------------------------------------------------------
 # Canonical mapping from tool_id → concrete implementation class.
@@ -44,7 +45,7 @@ _TOOL_IMPLEMENTATIONS: dict[str, type[BaseTool]] = {
     "geochat_vqa":      MockGeochatVQA,
     "geochat_describe": MockGeochatDescribe,
     "grounding":        MockGrounding,
-    "bit_cd":           MockBitCD,
+    "bit_cd":           BITChangeDetectionTool,
     "align":            MockAlign,
     "vectorize":        MockVectorize,
     "coregister":       MockCoregister,
