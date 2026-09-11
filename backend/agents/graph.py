@@ -17,6 +17,7 @@ ARCHITECTURE RULES ENFORCED HERE:
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, cast
 from collections.abc import Mapping
 
@@ -383,14 +384,37 @@ def _asset_bounds(state: GraphState) -> list[float] | None:
     b = meta.get("bounds") if isinstance(meta, dict) else None
     if isinstance(b, (list, tuple)) and len(b) == 4:
         return [float(x) for x in b]
+    for a in state.get("assets") or []:
+        if not isinstance(a, dict):
+            continue
+        bb = a.get("bounds_wgs84") or a.get("bounds")
+        if isinstance(bb, (list, tuple)) and len(bb) == 4:
+            return [float(x) for x in bb]
     return None
 
 
+def _raw_raster_refs(state: GraphState) -> list[str]:
+    """Original GeoTIFFs. RGB tiles cannot honestly run Dynamic World."""
+    out: list[str] = []
+    for a in state.get("assets") or []:
+        if isinstance(a, dict):
+            p = a.get("file_path")
+        else:
+            p = a
+        if not p:
+            continue
+        path = Path(str(p))
+        if path.suffix.lower() in {".tif", ".tiff"} and path.is_file():
+            out.append(str(path))
+    return out
+
+
 def lulc_map(state: GraphState) -> dict[str, Any]:
+    refs = _raw_raster_refs(state) or _image_refs(state)
     params = {
         "question": state.get("user_query", ""),
-        "image_refs": _image_refs(state),
-        "input_refs": _image_refs(state),
+        "image_refs": refs,
+        "input_refs": refs,
         "bounds": _asset_bounds(state),
     }
     return _execute_tool(state, "lulc_map", params)
