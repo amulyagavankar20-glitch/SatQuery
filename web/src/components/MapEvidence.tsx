@@ -101,15 +101,21 @@ export function MapEvidence({
             id: "grounding-fill",
             type: "fill",
             source: "overlays",
-            filter: ["in", ["get", "kind"], ["literal", ["grounding", "sar_detection", "detection"]]],
-            paint: { "fill-color": "#00f0ff", "fill-opacity": 0.18 },
+            filter: ["in", ["get", "kind"], ["literal", ["grounding", "sar_detection", "detection", "mask", "water_mask", "lulc"]]],
+            paint: {
+              "fill-color": ["coalesce", ["get", "fill"], ["get", "color"], "#00f0ff"],
+              "fill-opacity": 0.28,
+            },
           },
           {
             id: "grounding-line",
             type: "line",
             source: "overlays",
-            filter: ["in", ["get", "kind"], ["literal", ["grounding", "sar_detection", "detection"]]],
-            paint: { "line-color": "#00f0ff", "line-width": 2.0 },
+            filter: ["in", ["get", "kind"], ["literal", ["grounding", "sar_detection", "detection", "mask", "water_mask", "lulc"]]],
+            paint: {
+              "line-color": ["coalesce", ["get", "stroke"], ["get", "color"], "#00f0ff"],
+              "line-width": 2.0,
+            },
           },
           {
             id: "uncertain-fill",
@@ -240,6 +246,7 @@ export function MapEvidence({
       if (map.getSource(id)) map.removeSource(id);
       if (!url) return;
       map.addSource(id, { type: "image", url, coordinates: imageCoords(bounds) });
+      const beforeLayer = map.getLayer("change-fill") ? "change-fill" : undefined;
       map.addLayer(
         {
           id,
@@ -247,7 +254,7 @@ export function MapEvidence({
           source: id,
           paint: { "raster-opacity": op, "raster-fade-duration": 0 },
         },
-        "change-fill",
+        beforeLayer,
       );
     };
     const apply = () => {

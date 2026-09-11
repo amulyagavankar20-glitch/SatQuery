@@ -67,18 +67,20 @@ def _required_tools_for_task(task: str, input_class: str = "") -> list[str]:
 def _collect_evidence(state: "GraphState") -> Evidence:
     ev = Evidence()
     for tr in state.get("specialist_results", []):  # type: ignore[union-attr]
+        tool_id = getattr(tr, "tool_id", None) or (tr.get("tool_id") if isinstance(tr, dict) else None)
+        spatial_refs = getattr(tr, "spatial_refs", None) or (tr.get("spatial_refs") if isinstance(tr, dict) else None)
         # Model evidence – tools that produce a textual or semantic answer
-        if tr.tool_id in {"sar_map", "lulc_map"}:
+        if tool_id in {"sar_map", "lulc_map"}:
             ev.model_evidence.append(tr)
         # Temporal evidence – tools that operate on a time series
-        if tr.tool_id in {"bit_cd", "vectorize", "align"}:
+        if tool_id in {"bit_cd", "vectorize", "align"}:
             ev.temporal_evidence.append(tr)
         # Cross-modal evidence – fusion and agreement tools
-        if tr.tool_id in {"fusion_s1s2", "agreement", "coregister"}:
+        if tool_id in {"fusion_s1s2", "agreement", "coregister"}:
             ev.cross_modal_evidence.append(tr)
         # Spatial evidence – any spatial_refs attached to the result
-        if tr.spatial_refs:
-            ev.spatial_evidence.extend(tr.spatial_refs)  # type: ignore[arg-type]
+        if spatial_refs:
+            ev.spatial_evidence.extend(spatial_refs)  # type: ignore[arg-type]
     return ev
 
 
@@ -115,8 +117,11 @@ def _aggregate_signals(state: "GraphState", evidence: Evidence) -> list[str]:
     raw_input_class = state.get("input_class", "")
     input_class_str = raw_input_class.value if hasattr(raw_input_class, "value") else str(raw_input_class or "")
     required = _required_tools_for_task(task, input_class_str)
-    tool_ids = {tr.tool_id for tr in state.get("specialist_results", [])  # type: ignore[union-attr]
-                if tr.status == "success"}
+    tool_ids = {
+        getattr(tr, "tool_id", None) or (tr.get("tool_id") if isinstance(tr, dict) else None)
+        for tr in state.get("specialist_results", [])
+        if (getattr(tr, "status", None) or (tr.get("status") if isinstance(tr, dict) else None)) == "success"
+    } - {None}
     if required and set(required).issubset(tool_ids):
         signals.append("tool_success")
 
@@ -205,21 +210,26 @@ def validate_output(state: "GraphState") -> ValidationResult:
                     messages=messages,
                 )
 
-    # 2. Required output existence
     raw_input_class = state.get("input_class", "")
     input_class_str = raw_input_class.value if hasattr(raw_input_class, "value") else str(raw_input_class or "")
     required_tools = _required_tools_for_task(task, input_class_str)
-    available_tools = {tr.tool_id for tr in state.get("specialist_results", [])}  # type: ignore[union-attr]
+    available_tools = {
+        getattr(tr, "tool_id", None) or (tr.get("tool_id") if isinstance(tr, dict) else None)
+        for tr in state.get("specialist_results", [])
+    } - {None}
     missing = set(required_tools) - available_tools
     if missing:
         messages.append(f"Missing required tool results: {', '.join(sorted(missing))}.")
 
     # 3. Tool result schema validation
     for tr in state.get("specialist_results", []):  # type: ignore[union-attr]
-        if tr.status != "success":
-            messages.append(f"Tool '{tr.tool_id}' reported status '{tr.status}'.")
-        if tr.result is None and tr.status == "success":
-            messages.append(f"Tool '{tr.tool_id}' produced no result despite status=success.")
+        status = getattr(tr, "status", None) or (tr.get("status") if isinstance(tr, dict) else None)
+        tool_id = getattr(tr, "tool_id", None) or (tr.get("tool_id") if isinstance(tr, dict) else None)
+        result_val = getattr(tr, "result", None) if hasattr(tr, "result") else (tr.get("result") if isinstance(tr, dict) else None)
+        if status != "success":
+            messages.append(f"Tool '{tool_id}' reported status '{status}'.")
+        if result_val is None and status == "success":
+            messages.append(f"Tool '{tool_id}' produced no result despite status=success.")
 
     # 4-5. Spatial evidence validation
     evidence = _collect_evidence(state)

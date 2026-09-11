@@ -15,12 +15,12 @@ const INTAKE = [
   {
     n: "02",
     title: "Router",
-    body: "Qwen2.5-3B reads the question and the input class, then picks one specialist.",
+    body: "Intent router reads the question and the input class, then picks one specialist.",
   },
   {
     n: "03",
     title: "Specialist",
-    body: "A frozen graph runs one path — 9-class pixels, GeoChat for talk, change and fusion as specialist tools. Nothing is invented at runtime.",
+    body: "A deterministic graph runs one path — 9-class pixels, SAR backscatter & classification, change and fusion as specialist tools. Nothing is invented at runtime.",
   },
 ] as const;
 
@@ -31,11 +31,11 @@ const RETURNS = [
 ] as const;
 
 const BENCH = [
-  ["Router", "Qwen2.5-3B-Instruct · text only · JSON schema"],
-  ["Talk", "GeoChat-7B · geochat_vqa / geochat_describe"],
+  ["Router", "Agent Intent Router · text only · JSON schema"],
+  ["Talk", "VLM Reasoning · multimodal synthesis"],
   ["Pixels", "Dynamic World 9-class on S2 · RGB demos use spectral fallback"],
   ["Tags", "BigEarthNet-19 names from those pixels — DW is not trained on BEN"],
-  ["Change", "align → bit_cd → vectorize"],
+  ["Change", "bit_cd → vectorize"],
   ["Fusion", "Optical + SAR, co-registered over the intersection"],
 ] as const;
 

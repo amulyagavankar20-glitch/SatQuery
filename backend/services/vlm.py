@@ -118,6 +118,7 @@ def _encode_image_to_data_uri(image_input: str | Path | bytes | Image.Image) -> 
             # Convert multi-band/geotiff to RGB PNG in-memory
             try:
                 import rasterio
+                import numpy as np
                 with rasterio.open(image_path) as src:
                     arr = src.read()
                     if arr.shape[0] >= 3:
@@ -127,7 +128,6 @@ def _encode_image_to_data_uri(image_input: str | Path | bytes | Image.Image) -> 
                     else:
                         rgb = np.stack([arr[0], arr[0], arr[0]])
                     # Normalize to 0-255 uint8
-                    import numpy as np
                     p2, p98 = np.percentile(rgb, (2, 98))
                     if p98 > p2:
                         stretched = np.clip((rgb - p2) / (p98 - p2) * 255.0, 0, 255).astype(np.uint8)

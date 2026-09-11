@@ -58,8 +58,8 @@ export function ModelSlotsDialog({ open, onOpenChange }: ModelSlotsDialogProps) 
             </Button>
           </div>
           <DialogDescription className="text-xs text-mute mt-1">
-            SatQuery orchestrates 3 distinct model families: Qwen Agent Router, Talking VLM, and Spatial Specialists.
-            Weights can be slotted directly into the designated local weights directory or connected via Ollama.
+            SatQuery orchestrates distinct model families: Agent Intent Router, Talking VLM, and Spatial Specialists.
+            Weights can be slotted directly into the designated local weights directory or connected via OpenRouter API.
           </DialogDescription>
         </div>
 
@@ -90,7 +90,7 @@ export function ModelSlotsDialog({ open, onOpenChange }: ModelSlotsDialogProps) 
                             : "bg-amber-950/80 text-amber-400 border border-amber-800/60"
                         }`}
                       >
-                        {isReady ? "Weights Slotted" : "Standby Mock"}
+                        {isReady ? "Weights Slotted" : "Standby"}
                       </span>
                     </div>
                     <p className="text-[11px] text-ink/80 mt-0.5">{slot.description}</p>

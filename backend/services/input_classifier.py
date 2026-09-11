@@ -119,29 +119,12 @@ class InputClassifier:
         elif asset_count == 2:
             m1, m2 = modalities[0], modalities[1]
 
-            # Validate spatial overlap first for all dual-input configurations
-            if spatial_rel is None or not spatial_rel.has_sufficient_overlap:
-                overlap_frac = spatial_rel.iou if spatial_rel else 0.0
-                return InputClassification(
-                    input_class=None,
-                    valid=False,
-                    asset_ids=asset_ids,
-                    modalities=modalities,
-                    acquisition_dates=acquisition_dates,
-                    spatial_relationship=spatial_rel,
-                    temporal_relationship=temporal_rel,
-                    refusal_reason="Insufficient spatial overlap between image pair.",
-                    validation_messages=[
-                        f"Footprints do not sufficiently intersect (IoU: {overlap_frac}, "
-                        f"threshold: {self.min_overlap_threshold}). Both images must cover the same AOI."
-                    ],
-                    details={"spatial_relationship": spatial_rel.model_dump() if spatial_rel else {}},
-                )
-
             # Case A: Cross-modal OPTICAL + SAR
             if (m1 == Modality.OPTICAL.value and m2 == Modality.SAR.value) or (
                 m1 == Modality.SAR.value and m2 == Modality.OPTICAL.value
             ):
+                has_overlap = bool(spatial_rel and spatial_rel.has_sufficient_overlap)
+                overlap_msg = "with verified geographic overlap." if has_overlap else "Note: footprints do not sufficiently overlap."
                 return InputClassification(
                     input_class=InputClass.OPTICAL_SAR,
                     valid=True,
@@ -151,47 +134,16 @@ class InputClassifier:
                     spatial_relationship=spatial_rel,
                     temporal_relationship=temporal_rel,
                     validation_messages=[
-                        "Classified as OPTICAL_SAR: Paired Optical and SAR imagery with sufficient spatial overlap."
+                        f"Classified as OPTICAL_SAR: Paired Optical and SAR imagery ({overlap_msg})"
                     ],
-                    details={"spatial_relationship": spatial_rel.model_dump()},
+                    details={"spatial_relationship": spatial_rel.model_dump() if spatial_rel else {}},
                 )
 
             # Case B: Homogeneous Pair (BI_TEMPORAL)
             elif m1 == m2 and m1 in (Modality.OPTICAL.value, Modality.SAR.value):
-                # Verify temporal relationship
-                if temporal_rel is None or temporal_rel.date_1 is None or temporal_rel.date_2 is None:
-                    return InputClassification(
-                        input_class=None,
-                        valid=False,
-                        asset_ids=asset_ids,
-                        modalities=modalities,
-                        acquisition_dates=acquisition_dates,
-                        spatial_relationship=spatial_rel,
-                        temporal_relationship=temporal_rel,
-                        refusal_reason="Missing acquisition date metadata for bitemporal pair verification.",
-                        validation_messages=[
-                            "Bitemporal comparison requires acquisition dates for both images to establish temporal difference."
-                        ],
-                        details={"temporal_relationship": temporal_rel.model_dump() if temporal_rel else {}},
-                    )
-
-                if not temporal_rel.is_distinct_time:
-                    return InputClassification(
-                        input_class=None,
-                        valid=False,
-                        asset_ids=asset_ids,
-                        modalities=modalities,
-                        acquisition_dates=acquisition_dates,
-                        spatial_relationship=spatial_rel,
-                        temporal_relationship=temporal_rel,
-                        refusal_reason="Images have identical or near-identical acquisition timestamps.",
-                        validation_messages=[
-                            f"Acquisition timestamps are not temporally distinct (Date 1: {temporal_rel.date_1}, "
-                            f"Date 2: {temporal_rel.date_2}). Bitemporal change detection requires different dates."
-                        ],
-                        details={"temporal_relationship": temporal_rel.model_dump()},
-                    )
-
+                has_overlap = bool(spatial_rel and spatial_rel.has_sufficient_overlap)
+                overlap_msg = "with verified geographic overlap" if has_overlap else "low/no spatial overlap"
+                days_str = f"({temporal_rel.days_difference} days apart)" if (temporal_rel and temporal_rel.days_difference is not None) else ""
                 return InputClassification(
                     input_class=InputClass.BI_TEMPORAL,
                     valid=True,
@@ -201,12 +153,11 @@ class InputClassifier:
                     spatial_relationship=spatial_rel,
                     temporal_relationship=temporal_rel,
                     validation_messages=[
-                        f"Classified as BI_TEMPORAL: Paired {m1} imagery acquired on distinct dates "
-                        f"({temporal_rel.days_difference} days apart) with verified geographic overlap."
+                        f"Classified as BI_TEMPORAL: Paired {m1} imagery {days_str} ({overlap_msg})."
                     ],
                     details={
-                        "spatial_relationship": spatial_rel.model_dump(),
-                        "temporal_relationship": temporal_rel.model_dump(),
+                        "spatial_relationship": spatial_rel.model_dump() if spatial_rel else {},
+                        "temporal_relationship": temporal_rel.model_dump() if temporal_rel else {},
                     },
                 )
 

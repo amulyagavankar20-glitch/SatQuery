@@ -21,17 +21,12 @@ from sqlalchemy.orm import Session
 
 from backend.models import ToolRegistry
 from backend.agents.tools.base import BaseTool, ToolResult
-from backend.agents.tools.mock_tools import (
-    MockGeochatVQA,
-    MockGeochatDescribe,
-    MockGrounding,
-    MockBitCD,
-    MockAlign,
-    MockVectorize,
-    MockCoregister,
-    MockFusion,
-    MockAgreement,
-    MockMobileSAM,
+from backend.agents.tools.utility_tools import (
+    AlignTool,
+    VectorizeTool,
+    CoregisterTool,
+    FusionTool,
+    AgreementTool,
 )
 from backend.agents.tools.sar_map import SarMapTool
 from backend.agents.tools.bit_cd import BITChangeDetectionTool
@@ -43,17 +38,13 @@ from backend.agents.tools.lulc import LulcMapTool
 # ---------------------------------------------------------------------------
 _TOOL_IMPLEMENTATIONS: dict[str, type[BaseTool]] = {
     "sar_map":          SarMapTool,
-    "geochat_vqa":      MockGeochatVQA,
-    "geochat_describe": MockGeochatDescribe,
-    "grounding":        MockGrounding,
-    "bit_cd":           BITChangeDetectionTool,
-    "align":            MockAlign,
-    "vectorize":        MockVectorize,
-    "coregister":       MockCoregister,
-    "fusion_s1s2":      MockFusion,
-    "agreement":        MockAgreement,
-    "mobile_sam":       MockMobileSAM,
     "lulc_map":         LulcMapTool,
+    "bit_cd":           BITChangeDetectionTool,
+    "align":            AlignTool,
+    "vectorize":        VectorizeTool,
+    "coregister":       CoregisterTool,
+    "fusion_s1s2":      FusionTool,
+    "agreement":        AgreementTool,
 }
 
 

@@ -44,13 +44,13 @@ BEN19: tuple[str, ...] = (
 # How each Dynamic World pixel class votes on BEN-19 scene tags.
 _DW_TO_BEN: dict[str, tuple[tuple[str, float], ...]] = {
     "water": (("Inland waters", 1.0),),
-    "trees": (("Broad-leaved forest", 0.4), ("Mixed forest", 0.35), ("Coniferous forest", 0.25)),
-    "grass": (("Pastures", 0.55), ("Natural grassland and sparsely vegetated areas", 0.45)),
+    "trees": (("Broad-leaved forest", 0.5), ("Mixed forest", 0.5)),
+    "grass": (("Pastures", 0.6), ("Natural grassland and sparsely vegetated areas", 0.4)),
     "flooded_vegetation": (("Inland wetlands", 0.7), ("Coastal wetlands", 0.3)),
-    "crops": (("Arable land", 0.55), ("Permanent crops", 0.2), ("Complex cultivation patterns", 0.25)),
-    "shrub_and_scrub": (("Transitional woodland, shrub", 0.55), ("Moors, heathland and sclerophyllous vegetation", 0.45)),
-    "built": (("Urban fabric", 0.55), ("Industrial or commercial units", 0.45)),
-    "bare": (("Beaches, dunes, sands", 0.45), ("Natural grassland and sparsely vegetated areas", 0.55)),
+    "crops": (("Arable land", 0.6), ("Complex cultivation patterns", 0.4)),
+    "shrub_and_scrub": (("Transitional woodland, shrub", 0.7), ("Moors, heathland and sclerophyllous vegetation", 0.3)),
+    "built": (("Urban fabric", 0.6), ("Industrial or commercial units", 0.4)),
+    "bare": (("Natural grassland and sparsely vegetated areas", 1.0),),
     "snow_and_ice": (("Natural grassland and sparsely vegetated areas", 1.0),),
 }
 

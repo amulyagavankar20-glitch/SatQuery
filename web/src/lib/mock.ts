@@ -82,14 +82,12 @@ export function mockOverlays(bounds: BBox, query = ""): OverlayCollection {
       features: [
         poly(
           bounds,
-          [0.0, 0.16, 0.36, 0.46, 0.54, 0.52, 0.42, 0.2, 0.04, 0.0],
+          [0.1, 0.26, 0.36, 0.46, 0.54, 0.52, 0.42, 0.2, 0.14, 0.1],
           [0.18, 0.1, 0.14, 0.26, 0.48, 0.68, 0.86, 0.94, 0.76, 0.46],
           "water-1",
           "change",
           "water",
         ),
-        poly(bounds, [0.02, 0.2, 0.22, 0.04], [0.08, 0.06, 0.2, 0.24], "flood-1", "change", "flooded_vegetation"),
-        poly(bounds, [0.56, 0.74, 0.74, 0.56], [0.6, 0.6, 0.78, 0.78], "tank-1", "change", "water"),
       ],
     };
   }
@@ -110,28 +108,37 @@ export function mockOverlays(bounds: BBox, query = ""): OverlayCollection {
       ],
     };
   }
+  if (q.includes("changed") || q.includes("difference") || q.includes("increased") || q.includes("decreased")) {
+    return {
+      type: "FeatureCollection",
+      features: [
+        poly(bounds, [0.42, 0.58, 0.61, 0.44], [0.62, 0.59, 0.44, 0.45], "chg-1", "change", "change"),
+        poly(bounds, [0.62, 0.78, 0.81, 0.64], [0.82, 0.8, 0.64, 0.66], "chg-2", "change", "change"),
+        poly(bounds, [0.22, 0.36, 0.38, 0.24], [0.38, 0.36, 0.22, 0.24], "unc-1", "uncertain", "uncertain"),
+      ],
+    };
+  }
   return {
     type: "FeatureCollection",
-    features: [
-      poly(bounds, [0.42, 0.58, 0.61, 0.44], [0.62, 0.59, 0.44, 0.45], "chg-1", "change", "change"),
-      poly(bounds, [0.62, 0.78, 0.81, 0.64], [0.82, 0.8, 0.64, 0.66], "chg-2", "change", "change"),
-      poly(bounds, [0.22, 0.36, 0.38, 0.24], [0.38, 0.36, 0.22, 0.24], "unc-1", "uncertain", "uncertain"),
-    ],
+    features: [],
   };
 }
 
 function mockLulc(query: string, slots: SceneSlot[]): LulcReport | undefined {
   const q = query.toLowerCase();
+  // Don't trigger optical LULC for SAR queries
+  if (q.includes("sar") || q.includes("radar") || slots.every((s) => s.modality === "SAR")) {
+    return undefined;
+  }
   const id = `${slots[0]?.filename ?? ""} ${query}`;
   const coastal = /port|coast|harbour|harbor|marine/.test(id.toLowerCase());
-  const cloudy = id.toLowerCase().includes("cloud") || slots.some((s) => s.modality === "SAR");
+  const cloudy = id.toLowerCase().includes("cloud");
   if (
     !(
       q.includes("water") ||
       q.includes("flood") ||
       q.includes("land-cover") ||
       q.includes("vegetation") ||
-      q.includes("objects") ||
       q.includes("built")
     )
   ) {
@@ -151,34 +158,37 @@ function mockLulc(query: string, slots: SceneSlot[]): LulcReport | undefined {
       }
     : coastal
       ? {
-          water: 0.18,
-          trees: 0.02,
-          grass: 0.1,
-          flooded_vegetation: 0.04,
-          crops: 0.08,
-          shrub_and_scrub: 0.06,
-          built: 0.32,
-          bare: 0.2,
-          snow_and_ice: 0,
+          water: 0.44,
+          trees: 0.04,
+          grass: 0.05,
+          flooded_vegetation: 0.08,
+          crops: 0.04,
+          shrub_and_scrub: 0.02,
+          built: 0.24,
+          bare: 0.09,
+          snow_and_ice: 0.0,
         }
       : {
-          water: 0.38,
-          trees: 0.03,
-          grass: 0.08,
-          flooded_vegetation: 0.05,
-          crops: 0.22,
-          shrub_and_scrub: 0.03,
-          built: 0.08,
-          bare: 0.13,
-          snow_and_ice: 0,
+          water: 0.26,
+          trees: 0.12,
+          grass: 0.14,
+          flooded_vegetation: 0.03,
+          crops: 0.21,
+          shrub_and_scrub: 0.06,
+          built: 0.12,
+          bare: 0.06,
+          snow_and_ice: 0.0,
         };
-  const focus = q.includes("flood")
-    ? "flood"
-    : q.includes("water")
-      ? "water"
-      : q.includes("vegetat")
-        ? "vegetation"
-        : "land_cover";
+  const focus: LulcReport["focus"] =
+    q.includes("flood")
+      ? "flood"
+      : q.includes("water")
+        ? "water"
+        : q.includes("built")
+          ? "built"
+          : q.includes("vegetation") || q.includes("tree") || q.includes("crop")
+            ? "vegetation"
+            : "land_cover";
   return {
     backend: "spectral_fallback",
     focus,
@@ -188,17 +198,32 @@ function mockLulc(query: string, slots: SceneSlot[]): LulcReport | undefined {
 }
 
 function mockTrace(query: string, slots: SceneSlot[]): TraceStep[] {
-  const inputClass = slots.length < 2 ? "SINGLE_OPTICAL" : slots.some((s) => s.modality === "SAR") ? "OPTICAL_SAR" : "BI_TEMPORAL";
+  const isSar = slots.some((s) => s.modality === "SAR");
+  const inputClass = slots.length < 2 ? (isSar ? "SINGLE_SAR" : "SINGLE_OPTICAL") : isSar ? "OPTICAL_SAR" : "BI_TEMPORAL";
   const q = query.toLowerCase();
   const gate: TraceStep = { tool: "gate", params: { valid: true, input_class: inputClass } };
+
+  if (isSar || q.includes("sar") || q.includes("radar")) {
+    return [
+      gate,
+      { tool: "router", params: { task: "SINGLE_VQA", specialist: "sar_map" } },
+      {
+        tool: "sar_map",
+        params: {
+          backend: "reben_s1_resnet50",
+          model: "BIFOLD-BigEarthNetv2-0/resnet50-s1-v0.2.0",
+        },
+      },
+      { tool: "evidence_fusion", params: { fused: true } },
+    ];
+  }
 
   if (
     q.includes("water body") ||
     q.includes("highlight the water") ||
     q.includes("flood") ||
     q.includes("land-cover") ||
-    q.includes("vegetation") ||
-    q.includes("objects")
+    q.includes("vegetation")
   ) {
     return [
       gate,
@@ -209,17 +234,15 @@ function mockTrace(query: string, slots: SceneSlot[]): TraceStep[] {
           summary: "spectral_fallback · DW 9-class names · BEN-19 tags",
           backend: "spectral_fallback",
           class_set: "dynamic_world_9class",
-          scene_tags: "bigearthnet_19_taxonomy",
         },
       },
-      { tool: "geochat_vqa", params: { phrase: "land cover" } },
-      { tool: "grounding", params: { method: "vectorize" } },
+      { tool: "evidence_fusion", params: { fused: true } },
     ];
   }
   if ((q.includes("optical") && q.includes("sar")) || (slots.some((s) => s.modality === "SAR") && q.includes("sar"))) {
     return [
       gate,
-      { tool: "router", params: { task: "ANALYSIS", specialist: "optical_sar" } },
+      { tool: "router", params: { task: "OPTICAL_SAR_ANALYSIS", specialist: "fusion_s1s2" } },
       { tool: "preprocess", params: { coregister: true } },
       { tool: "evidence_fusion", params: { agree: true } },
     ];
@@ -227,17 +250,17 @@ function mockTrace(query: string, slots: SceneSlot[]): TraceStep[] {
   if (q.includes("changed") || q.includes("increased") || q.includes("decreased") || slots.length > 1) {
     return [
       gate,
-      { tool: "router", params: { task: "CHANGE_VQA", specialist: "change_detection" } },
+      { tool: "router", params: { task: "CHANGE_VQA", specialist: "bit_cd" } },
       { tool: "align", params: { pair_fitness: 0.91 } },
       { tool: "bit_cd", params: { pair_fitness: 0.91 } },
       { tool: "vectorize", params: {} },
-      { tool: "geochat_describe", params: { overlay: true } },
     ];
   }
   return [
     gate,
-    { tool: "router", params: { task: "CAPTIONING", specialist: "describe" } },
-    { tool: "geochat_describe", params: {} },
+    { tool: "router", params: { task: "CAPTIONING", specialist: "lulc_map" } },
+    { tool: "lulc_map", params: {} },
+    { tool: "evidence_fusion", params: { fused: true } },
   ];
 }
 
@@ -251,33 +274,59 @@ function answerFor(query: string, slots: SceneSlot[]): string {
   const hasSar = slots.some((s) => s.modality === "SAR");
   const pair = slots.length > 1;
 
-  if (q.includes("water body") || q.includes("highlight the water") || q.includes("flood")) {
-    return "A single contiguous water body occupies the western basin. The shoreline is sharp along the cut bank and irregular where fields wet. Two small farm tanks sit east of the water; they are not a second lake.";
+  if (hasSar || q.includes("sar") || q.includes("radar")) {
+    return "**SAR Scene Interpretation & Classification** (reBEN ResNet50 · Sentinel-1 S1)\n\n" +
+      "**Radiometric Distribution:** Built-up 24% · water 36% · vegetation 28% · other 12% (Mean VV: -12.4 dB / VH: -19.8 dB).\n\n" +
+      "**Scene Classification Tags:** Marine waters (88%) · Urban fabric (72%) · Pastures (46%).\n\n" +
+      "Radar backscatter indicates open water in low-return areas and dense structural features in high-return clusters.";
   }
-  if (q.includes("land-cover") || q.includes("vegetation") || q.includes("objects")) {
-    return "Open water takes the western third. Irrigated and fallow plots fill the east, cut by pale tracks. A compact settlement sits on the terrace above the water; two farm tanks sit south of the houses.";
+  if (q.includes("water body") || q.includes("highlight the water") || q.includes("flood")) {
+    return "A single contiguous water body occupies the western basin. The shoreline is sharp along the cut bank and irregular where fields wet. Two small farm tanks sit east of the water.";
+  }
+  if (q.includes("land-cover") || q.includes("vegetation")) {
+    return "Open water takes the western third. Irrigated and fallow plots fill the east, cut by pale tracks. A compact settlement sits on the terrace above the water.";
   }
   if (q.includes("increased") || q.includes("decreased") || q.includes("stayed the same")) {
-    return "Built-up has increased. The net change sits in two blocks east of the harbour and a thinner strip along the highway. No comparable decrease is detected. One polygon remains uncertain under residual cloud, so confidence is medium.";
+    return "Built-up has increased. The net change sits in two blocks east of the harbour and a thinner strip along the highway. No comparable decrease is detected.";
   }
   if (q.includes("optical") && q.includes("sar")) {
-    return "Optical holds the cloud-free gaps; SAR carries the rest. Built-up is bright in SAR and confirmed where optical is clear. Water is dark in SAR and meets the optical shoreline. Agreement is high over the port and the lagoon; the clouded inland strip is SAR only.";
+    return "Optical holds the cloud-free gaps; SAR carries the rest. Built-up is bright in SAR and confirmed where optical is clear. Water is dark in SAR and meets the optical shoreline.";
   }
   if (q.includes("changed") || q.includes("where") || pair) {
-    return "Between the two dates, built-up expanded along the access road and at the port apron. Two change polygons mark new roof clusters and filled land; one uncertain patch sits under residual cloud. Water extent is stable within the intertidal margin.";
+    return "Between the two dates, built-up expanded along the access road and at the port apron. Water extent is stable within the intertidal margin.";
   }
-  if (hasSar) {
-    return "SAR fills the clouded optical. Bright returns mark built-up; dark returns mark water. Where both are clear they agree. The uncertain polygon is the remaining cloud edge.";
-  }
-  return "The scene is a mixed rural frame: open water, small built-up, and agricultural plots. Evidence polygons mark the principal change and one uncertain patch. Confidence is medium.";
+  return "The scene is a mixed rural frame: open water, small built-up, and agricultural plots. Confidence is medium.";
 }
 
 export function mockAssistantTurn(query: string, slots: SceneSlot[]): Omit<AssistantTurn, "id"> {
+  const q = query.toLowerCase();
   const optical = slots.find((s) => s.modality === "OPTICAL");
   const sar = slots.find((s) => s.modality === "SAR");
-  const bounds = optical?.bounds ?? slots[0]!.bounds;
+  const bounds = optical?.bounds ?? sar?.bounds ?? slots[0]?.bounds ?? [72.5, 23.0, 72.7, 23.2];
+  const isSarQuery = q.includes("sar") || q.includes("radar");
+  const isOpticalOnly = slots.length > 0 && slots.every((s) => s.modality === "OPTICAL");
+
+  if (isSarQuery && isOpticalOnly) {
+    return {
+      role: "assistant",
+      status: "failed",
+      error: `Modality Mismatch: The query explicitly requested SAR/radar analysis ('${query}'), but the provided asset is optical. Please provide a SAR image (Sentinel-1) or adjust your query for optical analysis.`,
+      answer: `Modality Mismatch: The query explicitly requested SAR/radar analysis ('${query}'), but the provided asset is optical. Please provide a SAR image (Sentinel-1) or adjust your query for optical analysis.`,
+      confidence: "Low",
+      jobId: crypto.randomUUID(),
+      bounds,
+      opticalUrl: optical?.previewUrl ?? null,
+      sarUrl: null,
+      compareUrl: null,
+      overlays: { type: "FeatureCollection", features: [] },
+      trace: [
+        { tool: "input_validator", params: { status: "refused", reason: "Modality mismatch" } },
+      ],
+    };
+  }
+
   const inputClass =
-    slots.length < 2 ? "SINGLE_OPTICAL" : sar ? "OPTICAL_SAR" : "BI_TEMPORAL";
+    slots.length < 2 ? (sar ? "SINGLE_SAR" : "SINGLE_OPTICAL") : sar ? "OPTICAL_SAR" : "BI_TEMPORAL";
   const lulc = mockLulc(query, slots);
 
   return {

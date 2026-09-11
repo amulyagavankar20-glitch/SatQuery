@@ -91,24 +91,24 @@ def _prose(question: str, stats: dict[str, Any], tags: list[dict[str, Any]], bac
     lines = [
         f"**Query:** {question}",
         "",
-        "**S1 specialist** ("
+        "**SAR Scene Interpretation & Classification** ("
         + (
-            "reBEN ResNet50 · Sentinel-1 · trained on BigEarthNet v2"
+            "reBEN ResNet50 · Sentinel-1 · trained on BigEarthNet v2 S1"
             if backend.startswith("reben")
-            else "VV/VH backscatter"
+            else "Sentinel-1 VV/VH dual-pol backscatter statistics"
         )
         + ")",
     ]
     if stats:
         lines.append(
-            f"Built-up {stats.get('urban_percent', 0)}% · water {stats.get('water_percent', 0)}% · "
+            f"**Radiometric Distribution:** Built-up {stats.get('urban_percent', 0)}% · water {stats.get('water_percent', 0)}% · "
             f"vegetation {stats.get('vegetation_percent', 0)}% · other {stats.get('other_percent', 0)}% "
-            f"(VV {stats.get('mean_vv_db')} dB / VH {stats.get('mean_vh_db')} dB)."
+            f"(Mean VV: {stats.get('mean_vv_db')} dB / VH: {stats.get('mean_vh_db')} dB)."
         )
     if tags:
         lines.append("")
-        lines.append("**Scene tags** (BigEarthNet-19 · S1-trained ResNet50)")
-        lines.append(" · ".join(f"{t['name']} {int(t['score'] * 100)}" for t in tags))
+        lines.append("**Scene Classification Tags** (BigEarthNet-19 · S1-trained ResNet50)")
+        lines.append(" · ".join(f"{t['name']} ({int(t['score'] * 100)}%)" for t in tags))
     return "\n\n".join(lines)
 
 

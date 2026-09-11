@@ -16,7 +16,7 @@ import { demoById } from "@/lib/demos";
 import { loadJobs, saveJobs } from "@/lib/jobs-store";
 import { mockAssistantTurn } from "@/lib/mock";
 import { TERMINAL_STATUSES, type JobView } from "@/lib/schema";
-import type { AssistantTurn, BBox, DemoId, JobRecord, LayerId, OverlayCollection, SceneSlot, Turn } from "@/lib/types";
+import type { AssistantTurn, BBox, DemoId, JobRecord, LayerId, OverlayCollection, SceneSlot, TraceStep, Turn } from "@/lib/types";
 import { copyText, sleep } from "@/lib/utils";
 
 export type Toast = { id: number; text: string; kind: "ok" | "bad" };
@@ -132,19 +132,46 @@ function mapLiveJob(job: JobView, slots: SceneSlot[], overlays?: OverlayCollecti
   const optical = job.assets.find((a) => a.modality === "OPTICAL") ?? job.assets[0];
   const sar = job.assets.find((a) => a.modality === "SAR");
   const failed = job.status === "failed" || job.status === "refused";
+
+  const opticalSlot = slots.find((s) => s.modality === "OPTICAL") ?? slots[0];
+  const sarSlot = slots.find((s) => s.modality === "SAR");
+
+  const rawTraces: TraceStep[] =
+    job.traces.length > 0
+      ? job.traces.map((t) => ({
+          tool: t.tool_id ?? t.node_name ?? t.event_type,
+          params: {
+            event: t.event_type,
+            ...(t.message ? { message: t.message } : {}),
+          },
+        }))
+      : (mockAssistantTurn(job.query, slots).trace ?? []);
+
+  const dedupedTrace: TraceStep[] = [];
+  for (const step of rawTraces) {
+    if (!dedupedTrace.length || dedupedTrace[dedupedTrace.length - 1].tool !== step.tool) {
+      dedupedTrace.push(step);
+    } else {
+      const prev = dedupedTrace[dedupedTrace.length - 1];
+      if (step.params.message && !prev.params.message) {
+        prev.params.message = step.params.message;
+      }
+    }
+  }
+
   return {
     role: "assistant",
     status: failed ? "failed" : "completed",
-    answer: job.answer?.text || undefined,
+    answer: job.answer?.text || (failed ? (job.refusal_reason ?? job.errors[0]) : undefined),
     confidence: prettyConfidence(job.answer?.confidence),
     jobId: job.job_id,
     bounds,
     opticalUrl: job.job_id
       ? apiUrl(`/jobs/${job.job_id}/artifacts/composite`)
-      : (optical?.preview_url ? apiUrl(optical.preview_url) : (slots.find((s) => s.modality === "OPTICAL")?.previewUrl ?? null)),
-    sarUrl: job.job_id && sar
+      : (optical?.preview_url ? apiUrl(optical.preview_url) : (opticalSlot?.previewUrl ?? null)),
+    sarUrl: job.job_id && (sar || sarSlot)
       ? apiUrl(`/jobs/${job.job_id}/artifacts/composite`)
-      : (sar?.preview_url ? apiUrl(sar.preview_url) : (slots.find((s) => s.modality === "SAR")?.previewUrl ?? null)),
+      : (sar?.preview_url ? apiUrl(sar.preview_url) : (sarSlot?.previewUrl ?? null)),
     vvUrl: sar ? apiUrl(`/jobs/${job.job_id}/artifacts/vv`) : null,
     vhUrl: sar ? apiUrl(`/jobs/${job.job_id}/artifacts/vh`) : null,
     overlayUrl: sar ? apiUrl(`/jobs/${job.job_id}/artifacts/overlay`) : null,
@@ -158,17 +185,8 @@ function mapLiveJob(job: JobView, slots: SceneSlot[], overlays?: OverlayCollecti
           sceneTags: (job.lulc.scene_tags ?? []).map((t) => ({ name: t.name, score: t.score })),
         }
       : undefined,
-    trace:
-      job.traces.length > 0
-        ? job.traces.map((t) => ({
-            tool: t.tool_id ?? t.node_name ?? t.event_type,
-            params: {
-              event: t.event_type,
-              ...(t.message ? { message: t.message } : {}),
-            },
-          }))
-        : mockAssistantTurn(job.query, slots).trace,
-    error: failed ? (job.refusal_reason ?? job.errors[0] ?? "Run failed") : undefined,
+    trace: dedupedTrace,
+    error: failed ? (job.refusal_reason ?? job.errors[0] ?? job.answer?.text ?? "Run failed") : undefined,
   };
 }
 
@@ -253,8 +271,36 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
         return next;
       });
       toast("Scene attached");
+
+      if (apiUp && files.length) {
+        void ingestRasters(files, "Cartosat-2S", "Preview uploaded imagery").then((ingest) => {
+          if (ingest.valid && ingest.assets.length) {
+            setSlots((current) =>
+              current.map((s, idx) => {
+                const a = ingest.assets[idx];
+                if (!a) return s;
+                const previewUrl = a.preview_url
+                  ? apiUrl(a.preview_url)
+                  : ingest.job_id
+                    ? apiUrl(`/jobs/${ingest.job_id}/artifacts/composite`)
+                    : s.previewUrl;
+                return {
+                  ...s,
+                  bounds: (a.bounds_wgs84 as BBox | undefined) ?? s.bounds,
+                  crs: a.crs ?? s.crs,
+                  modality: (a.modality as SceneSlot["modality"]) ?? s.modality,
+                  sensor: a.sensor ?? s.sensor,
+                  previewUrl,
+                };
+              }),
+            );
+          }
+        }).catch(() => {
+          /* background preview fetch error ignored */
+        });
+      }
     },
-    [toast],
+    [apiUp, toast],
   );
 
   const removeSlot = useCallback((slot: "T1" | "T2") => {
@@ -299,17 +345,21 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
     const query = (override ?? draft).trim();
     if (!query || slots.length === 0 || sending) return;
 
+    const isPairQuery = /change|compare|difference|between|t1 and t2|t1 vs t2|both images|increased|decreased|fuse|fusion/i.test(query);
+    const mode: "single_scene" | "pair" = isPairQuery && slots.length >= 2 ? "pair" : "single_scene";
+    const activeSlotObj = (activeSlot === "T2" && slots.find((s) => s.slot === "T2")) || slots.find((s) => s.slot === "T1") || slots[0];
+
     const userTurn: Turn = { id: crypto.randomUUID(), role: "user", query };
     const pendingId = crypto.randomUUID();
     const pending: AssistantTurn = {
       id: pendingId,
       role: "assistant",
       status: "pending",
-      pendingLabel: "Reading the pair…",
+      pendingLabel: mode === "pair" ? "Reading the pair…" : "Analyzing scene…",
       jobId: pendingId,
-      bounds: slots[0]!.bounds,
-      opticalUrl: slots.find((s) => s.modality === "OPTICAL")?.previewUrl ?? slots[0]!.previewUrl,
-      sarUrl: slots.find((s) => s.modality === "SAR")?.previewUrl ?? null,
+      bounds: activeSlotObj?.bounds ?? slots[0]!.bounds,
+      opticalUrl: activeSlotObj?.modality === "OPTICAL" ? activeSlotObj.previewUrl : (slots.find((s) => s.modality === "OPTICAL")?.previewUrl ?? null),
+      sarUrl: activeSlotObj?.modality === "SAR" ? activeSlotObj.previewUrl : (slots.find((s) => s.modality === "SAR")?.previewUrl ?? null),
       compareUrl: slots.find((s) => s.slot === "T2" && s.modality === "OPTICAL")?.previewUrl ?? null,
     };
 
@@ -317,6 +367,7 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
     setSending(true);
     setTurns((prev) => [...prev, userTurn, pending]);
 
+    // Send all uploaded slot files so backend knows about them, along with explicit active_slot and mode
     const files = slots.map((s) => s.file).filter((f): f is File => Boolean(f));
     const snapshot = slots;
 
@@ -325,7 +376,7 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
 
       if (apiUp && files.length) {
         try {
-          const ingest = await ingestRasters(files, snapshot[0]?.sensor ?? "Cartosat-2S", query);
+          const ingest = await ingestRasters(files, activeSlotObj?.sensor ?? "Cartosat-2S", query);
           if (ingest.valid) {
             applySlots(
               snapshot.map((s, i) => {
@@ -342,7 +393,7 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
                 };
               }),
             );
-            await runJob(ingest.job_id, query);
+            await runJob(ingest.job_id, query, activeSlot, mode);
             for (let i = 0; i < 48; i++) {
               await sleep(2500);
               const job = await fetchJob(ingest.job_id);

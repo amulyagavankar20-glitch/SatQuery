@@ -3,13 +3,13 @@
 **Project:** SIH26167 — SatQuery AI  
 **Audience:** FastAPI backend and the Analyze UI (React 19 / Vite / TanStack Query / Zod / MapLibre)  
 **Status:** Contract for frontend MVP — 2026-09-02  
-**Talking VLM (locked):** `OpenGVLab/InternVL3-1B` (replaces GeoChat-7B at the tool implementation; graph tool IDs stay `geochat_vqa` / `geochat_describe`)  
-**Router:** `qwen2.5:3b-instruct` via Ollama (text only, no pixels)
+**Talking VLM:** VLM via OpenRouter (e.g., `google/gemma-4-31b-it:free`) or local weights  
+**Router:** VLM Intent Router via OpenRouter with deterministic rules fallback
 
 The UI and the agent share one document: **`JobView`**.  
-Qwen fills `route`. InternVL (or the current mock) fills `answer`. GIS fills `overlays`. The graph never invents fields.
+Router fills `route`. Reasoner fills `answer`. GIS specialists (`sar_map`, `lulc_map`, `bit_cd`) fill `overlays` and evidence. The graph never invents fields.
 
-No Redis. No WebSocket. Client polls `GET /jobs/{id}`.
+No Redis. No Celery. No WebSocket. Client polls `GET /jobs/{id}`.
 
 Base URL (dev): `http://127.0.0.1:8000`
 
@@ -21,7 +21,7 @@ Base URL (dev): `http://127.0.0.1:8000`
 |---|---|
 | `ingested` | Rasters saved, classified, not run |
 | `running` | LangGraph in flight |
-| `completed` | Report produced (answer may still be mock text) |
+| `completed` | Report produced |
 | `failed` | Tool or infrastructure error |
 | `refused` | Gate / router / empty query refused; `refusal_reason` set |
 
@@ -36,28 +36,25 @@ Poll every 2–3 s while `running`. Stop on `completed` | `failed` | `refused`.
 ```json
 {
   "status": "ok",
-  "router_model": "qwen2.5:3b-instruct",
-  "talking_vlm": "OpenGVLab/InternVL3-1B",
-  "ollama": "ok",
+  "router_model": "google/gemma-4-31b-it:free",
+  "vlm_model": "google/gemma-4-31b-it:free",
+  "openrouter": "configured",
+  "talking_vlm": "google/gemma-4-31b-it:free",
   "postgres": { "status": "connected" }
 }
 ```
-
-UI OFFLINE badge: `ollama != "ok"` or `postgres.status != "connected"`.
 
 ### `GET /models`
 
 ```json
 {
-  "router_model": "qwen2.5:3b-instruct",
+  "router_model": "google/gemma-4-31b-it:free",
   "router_ready": true,
-  "talking_vlm": "OpenGVLab/InternVL3-1B",
-  "talking_vlm_backend": "mock",
-  "available": ["qwen2.5:3b-instruct"]
+  "talking_vlm": "google/gemma-4-31b-it:free",
+  "talking_vlm_backend": "auto",
+  "model_slots": [...]
 }
 ```
-
-`talking_vlm_backend` is `mock` until InternVL is loaded, then `internvl`.
 
 ### `POST /ingest` `multipart/form-data`
 

@@ -50,11 +50,14 @@ export async function ingestRasters(files: File[], sensor: string, query = ""): 
   return ingestResponseSchema.parse(await response.json());
 }
 
-export async function runJob(jobId: string, query: string) {
+export async function runJob(jobId: string, query: string, activeSlot?: string, mode?: string) {
+  const payload: Record<string, unknown> = { job_id: jobId, query };
+  if (activeSlot) payload.active_slot = activeSlot;
+  if (mode) payload.mode = mode;
   const response = await fetch(apiUrl("/run"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ job_id: jobId, query }),
+    body: JSON.stringify(payload),
   });
   if (!response.ok) throw new Error(await parseError(response));
   return (await response.json()) as { job_id: string; session_id: string; status: string };

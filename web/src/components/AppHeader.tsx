@@ -80,10 +80,10 @@ export function AppHeader() {
         </Button>
         <span
           className="ml-2 hidden items-center gap-2 text-[12px] text-mute sm:inline-flex"
-          title={apiUp ? "Local · API connected" : "Local · mock"}
+          title={apiUp ? "Local · API connected" : "Offline · Disconnected"}
         >
           <span className={cn("size-1.5 rounded-full", apiUp ? "sq-live bg-primary" : "bg-mute")} />
-          {apiUp ? "local" : "mock"}
+          {apiUp ? "connected" : "offline"}
         </span>
       </div>
       <ModelSlotsDialog open={modelsOpen} onOpenChange={setModelsOpen} />

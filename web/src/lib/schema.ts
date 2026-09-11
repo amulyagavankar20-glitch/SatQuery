@@ -74,6 +74,7 @@ export const ingestAssetSchema = z.object({
   height: z.number().nullable().optional(),
   crs: z.string().nullable().optional(),
   bounds_wgs84: z.array(z.number()).nullable().optional(),
+  preview_url: z.string().nullable().optional(),
 });
 
 export const ingestResponseSchema = z.object({
@@ -93,7 +94,6 @@ export const healthSchema = z.object({
   status: z.string(),
   router_model: z.string().optional(),
   talking_vlm: z.string().optional(),
-  ollama: z.string().optional(),
   postgres: z
     .object({
       status: z.string().optional(),

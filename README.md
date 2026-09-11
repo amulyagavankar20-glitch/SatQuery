@@ -75,15 +75,13 @@
 [![Read the Spec](https://img.shields.io/badge/Read-API_Spec-0F172A?style=for-the-badge)](./docs/api-spec.md)
 [![Contributing](https://img.shields.io/badge/Contributing-Guide-5E8F8A?style=for-the-badge)](./CONTRIBUTING.md)
 [![Security](https://img.shields.io/badge/Security-Policy-B4554A?style=for-the-badge)](./SECURITY.md)
-[![Code of Conduct](https://img.shields.io/badge/Code-of_Conduct-5E8F8A?style=for-the-badge)](./CODE_OF_CONDUCT.md)
-
 </div>
 
 ---
 
 > [!IMPORTANT]
 > **Architecture locks.** The agent decides WHAT to run. Specialists analyse. GIS says WHERE.
-> Router is **Qwen2.5-3B-Instruct** (text only, JSON schema, Ollama). Talking VLM is **InternVL3-1B** (replaces GeoChat-7B at implementation; graph tool IDs stay `geochat_vqa` / `geochat_describe`). Graph is a **frozen LangGraph StateGraph**. No Redis. No Kafka. No 30B orchestrator. Client polls `GET /jobs/{id}` — one document: **JobView**.
+> Router is **Agent Intent Router** (text only, JSON schema, OpenRouter / deterministic fallback). Specialists include **sar_map** (Sentinel-1 reBEN ResNet50 + backscatter), **lulc_map** (Dynamic World 9-class), and **bit_cd** (BIT-LEVIR ONNX). Graph is a **frozen LangGraph StateGraph**. No Redis. No Celery. No Kafka. Client polls `GET /jobs/{id}` — one document: **JobView**.
 
 ## What this is
 
@@ -91,10 +89,10 @@ SatQuery is an ISRO / DoS software problem statement agent for **SAC analysts**.
 
 | You bring | SatQuery returns |
 |---|---|
-| One optical scene + query | Caption / VQA (`geochat_describe` / `geochat_vqa`) |
-| Two dates, same AOI | Change path (`align` → `bit_cd` → vectorize / describe) |
-| Optical + SAR pair | Fusion path (`coregister` → `fusion_s1s2` → agreement) |
-| Phrase + scene | Grounding overlay (`geochat_vqa` → `grounding`) |
+| One optical scene + query | LULC pixel mapping & scene classification (`lulc_map`) |
+| One SAR scene + query | SAR backscatter & 19-class BigEarthNet tagging (`sar_map`) |
+| Two dates, same AOI | Change path (`bit_cd` → `vectorize`) |
+| Optical + SAR pair | Fusion path (`coregister` → `fusion_s1s2` → `agreement`) |
 
 Configs the gate accepts: **single optical**, **single SAR**, **bi-temporal pair**, **co-registered optical + SAR**. Formats: GeoTIFF / TIFF.
 
@@ -104,7 +102,7 @@ Configs the gate accepts: **single optical**, **single SAR**, **bi-temporal pair
 flowchart LR
   U["Analyst<br/>query + GeoTIFF"] --> I["POST /ingest<br/>classify + persist"]
   I --> R["POST /run<br/>LangGraph"]
-  R --> Q["Qwen 3B<br/>JSON route"]
+  R --> Q["Intent Router<br/>JSON route"]
   Q --> G["Frozen DAG<br/>specialists"]
   G --> F["Fusion + audit<br/>report"]
   F --> J["JobView"]
@@ -150,28 +148,26 @@ flowchart TD
   MP --> PF[pair_fitness_gate]
   PF -->|ok| QR[query_router]
   PF -->|unfit pair| RF
-  QR -->|Qwen JSON| TS[tool_selector]
+  QR -->|JSON route| TS[tool_selector]
   QR -->|route fail| RF
   TS --> PP[preprocess]
 
-  PP -->|SINGLE_VQA / CAPTIONING / GROUNDING| GV[geochat_vqa]
-  PP -->|CHANGE_*| AL[align]
+  PP -->|SINGLE_OPTICAL / LULC| LM[lulc_map]
+  PP -->|SINGLE_SAR| SM[sar_map]
+  PP -->|CHANGE_*| BIT[bit_cd]
   PP -->|OPTICAL_SAR| CR[coregister]
   PP -->|unknown| RF
 
-  GV -->|GROUNDING| GR[grounding]
-  GV -->|else| EF[evidence_fusion]
-  GR --> EF
+  LM --> EF[evidence_fusion]
+  SM --> EF
 
-  AL --> BIT[bit_cd]
-  BIT -->|CHANGE_VQA| GD[geochat_describe]
-  BIT -->|CHANGE_DETECTION| VZ[vectorize]
+  BIT -->|vectorize| VZ[vectorize]
+  BIT -->|else| EF
   VZ --> EF
 
   CR --> FU[fusion_s1s2]
   FU --> AG[agreement]
-  AG --> GD
-  GD --> EF
+  AG --> EF
 
   EF --> AU[audit_logger]
   RF --> AU
@@ -179,22 +175,19 @@ flowchart TD
   RG --> END([END])
 
   style QR fill:#1a1e22,stroke:#5e8f8a,color:#e8e4dc
-  style GV fill:#1a1e22,stroke:#5e8f8a,color:#e8e4dc
-  style GD fill:#1a1e22,stroke:#5e8f8a,color:#e8e4dc
+  style LM fill:#1a1e22,stroke:#5e8f8a,color:#e8e4dc
+  style SM fill:#1a1e22,stroke:#5e8f8a,color:#e8e4dc
   style RF fill:#1a1e22,stroke:#b4554a,color:#e8e4dc
   style EF fill:#1a1e22,stroke:#8b959e,color:#e8e4dc
 ```
 
-| Role | Runtime | Notes |
+| Role | Specialist / Model | Notes |
 |---|---|---|
-| Router | `qwen2.5:3b-instruct` via Ollama | Query + manifest → `{task, tools[], params}`. No pixels. |
-| Talking VLM | `OpenGVLab/InternVL3-1B` | VQA, caption, weak grounding, change-crop describe. **Mock until loaded.** |
-| Change mask | BIT | Silent pixel map. Language from the talking VLM on the crop. |
-| Grounding fallback | MobileSAM | Prompted by the VLM phrase — not a second 7B. |
-| Optical + SAR | Dual encoder + linear head | Not SkySense. |
-
-> [!WARNING]
-> BIT, SAM, and optical–SAR fusion still return **mock specialist results**. The talking VLM backend is `mock` until InternVL is loaded (`TALKING_VLM_BACKEND=internvl`). `GET /jobs/{id}/report.pdf` is **501**. The graph, JobView contract, ingest, router, and Analyze UI are live.
+| Router | OpenRouter VLM / Deterministic Rules | Query + manifest → structured task & tool sequence. |
+| SAR Specialist | `sar_map` (reBEN ResNet50 + S1 backscatter) | Calibrated dual-pol Sentinel-1 backscatter & 19-class BigEarthNet tagging. |
+| Optical Specialist | `lulc_map` (Dynamic World) | 9-class land-cover pixel segmentation on S2 / spectral fallback on RGB. |
+| Change Specialist | `bit_cd` (BIT-LEVIR ONNX) | Silent pixel change detection vectorized to GeoJSON polygons. |
+| Synthesis & Reasoning | `report_generator` (FinalReasoner) | Multi-modal grounded synthesis via OpenRouter VLM without hallucinations. |
 
 ## Console
 

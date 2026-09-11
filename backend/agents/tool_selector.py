@@ -17,14 +17,6 @@ CAPABILITY_MATRIX: dict[str, dict[str, Any]] = {
         "tasks": {RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value},
         "modalities": {InputClass.SINGLE_OPTICAL.value, InputClass.BI_TEMPORAL.value},
     },
-    "geochat_vqa": {
-        "tasks": {RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value},
-        "modalities": {InputClass.SINGLE_OPTICAL.value, InputClass.SINGLE_SAR.value},
-    },
-    "grounding": {
-        "tasks": {RouterTask.GROUNDING.value},
-        "modalities": {InputClass.SINGLE_OPTICAL.value, InputClass.SINGLE_SAR.value},
-    },
     "align": {
         "tasks": {RouterTask.CHANGE_DETECTION.value, RouterTask.CHANGE_VQA.value},
         "modalities": {InputClass.BI_TEMPORAL.value},
@@ -49,17 +41,9 @@ CAPABILITY_MATRIX: dict[str, dict[str, Any]] = {
         "tasks": {RouterTask.OPTICAL_SAR_ANALYSIS.value},
         "modalities": {InputClass.OPTICAL_SAR.value},
     },
-    "geochat_describe": {
-        "tasks": {RouterTask.CHANGE_VQA.value, RouterTask.OPTICAL_SAR_ANALYSIS.value},
-        "modalities": {InputClass.BI_TEMPORAL.value, InputClass.OPTICAL_SAR.value},
-    },
     "preprocess": {
         "tasks": {t.value for t in RouterTask},
         "modalities": {c.value for c in InputClass},
-    },
-    "mobile_sam": {
-        "tasks": {RouterTask.GROUNDING.value},
-        "modalities": {InputClass.SINGLE_OPTICAL.value, InputClass.SINGLE_SAR.value},
     },
     "geospatial_validator": {
         "tasks": {t.value for t in RouterTask},
@@ -113,7 +97,7 @@ class ToolSelector:
             elif task == RouterTask.CAPTIONING:
                 return ["preprocess", "sar_map"]
             elif task == RouterTask.GROUNDING:
-                return ["preprocess", "sar_map", "grounding"]
+                return ["preprocess", "sar_map"]
 
         return list(self.TASK_TO_TOOLS[task])
 

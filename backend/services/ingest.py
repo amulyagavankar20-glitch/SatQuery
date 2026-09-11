@@ -46,6 +46,37 @@ def ingest_rasters(
         dest.write_bytes(upload.file.read())
         saved_paths.append(dest)
 
+    processed_dir = dirs["processed"]
+    for path in saved_paths:
+        try:
+            import rasterio
+            import numpy as np
+            from PIL import Image
+
+            preview_png = processed_dir / f"composite_preview_{path.stem}.png"
+            with rasterio.open(path) as src:
+                count = src.count
+                if count >= 9:
+                    data = src.read([3, 2, 1])
+                elif count >= 3:
+                    data = src.read([1, 2, 3])
+                else:
+                    b = src.read(1)
+                    data = np.stack([b, b, b], axis=0)
+            data = data.astype(np.float32)
+            p2, p98 = np.percentile(data, 2), np.percentile(data, 98)
+            if p98 > p2:
+                data = np.clip((data - p2) / (p98 - p2) * 255.0, 0, 255).astype(np.uint8)
+            else:
+                data = np.clip(data, 0, 255).astype(np.uint8)
+            rgb = np.transpose(data, (1, 2, 0))
+            Image.fromarray(rgb).save(preview_png)
+            default_composite = processed_dir / "composite.png"
+            if not default_composite.is_file():
+                Image.fromarray(rgb).save(default_composite)
+        except Exception:
+            pass
+
     classifier = InputClassifier()
     asset_inputs: list[dict[str, Any]] = []
     for path in saved_paths:

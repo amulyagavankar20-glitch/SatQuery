@@ -95,6 +95,12 @@ async def run_job(job: JobCreate, background_tasks: BackgroundTasks):
             session.input_mode = job.input_mode
         if job.task and job.task != "UNROUTED":
             session.task = job.task
+        if job.active_slot:
+            session.metadata["active_slot"] = job.active_slot
+        if job.mode:
+            session.metadata["mode"] = job.mode
+        if job.active_filename:
+            session.metadata["active_filename"] = job.active_filename
         session.status = "running"
     else:
         if not job.input_mode:

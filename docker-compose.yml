@@ -7,7 +7,7 @@ services:
       POSTGRES_USER: satquery
       POSTGRES_PASSWORD: satquery
     ports:
-      - "5433:5432"
+      - "5432:5432"
     volumes:
       - satquery_pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -15,12 +15,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-
-  redis:
-    image: redis:7-alpine
-    container_name: satquery-redis
-    ports:
-      - "6379:6379"
 
   qdrant:
     image: qdrant/qdrant:v1.7.4
@@ -52,28 +46,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_started
       qdrant:
         condition: service_started
     environment:
       - DATABASE_URL=postgresql+psycopg://satquery:satquery@postgres:5432/satquery
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/1
-
-  celery_worker:
-    build: .
-    container_name: satquery-celery-worker
-    command: celery -A backend.worker.celery_app worker --loglevel=info
-    volumes:
-      - .:/app
-    depends_on:
-      - redis
-      - postgres
-    environment:
-      - DATABASE_URL=postgresql+psycopg://satquery:satquery@postgres:5432/satquery
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/1
 
 volumes:
   satquery_pgdata:

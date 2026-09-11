@@ -1,16 +1,14 @@
-
-"""SatQuery AI — LangGraph Stage 4 Orchestration Graph.
-
+"""SatQuery AI — LangGraph Orchestration Graph.
+ 
 ARCHITECTURE RULES ENFORCED HERE:
 - ONE canonical GraphState imported from backend.agents.state (TypedDict).
   This file does NOT define a second GraphState.
 - query_router invokes QwenRouter via OpenRouter (with deterministic fallback).
-- report_generator synthesizes final answers via FinalReasoner (Qwen-VL via OpenRouter).
+- report_generator synthesizes final answers via FinalReasoner.
 - tool_selector MUST validate against the PostgreSQL ToolRegistry.
   db_session must never be None.
 - run_tool must receive a real database session.
-- preprocess calls the Stage 3 preprocessing wrapper (run_preprocessing).
-- geochat_describe has its own separate tool interface.
+- preprocess calls the preprocessing wrapper (run_preprocessing).
 - Confidence is computed from evidence signals, NOT fabricated.
 - evidence_fusion consumes validated tool outputs.
 - Failed/refused executions are never marked COMPLETED.
@@ -101,8 +99,65 @@ def _visited_nodes(state: GraphState) -> list[str]:
 # Node implementations
 # ---------------------------------------------------------------------------
 
+def _check_modality_intent_mismatch(
+    query: str,
+    input_class: str,
+    assets: list[Any] | None = None,
+) -> str | None:
+    """Detect clear modality contradictions between query demands and input assets."""
+    ql = query.lower()
+    sar_terms = ("sar", "radar", "sentinel-1", "s1", "backscatter", "dual-pol", "polarimetric", "amplitude", "speckle", "vv", "vh")
+    optical_terms = ("optical", "rgb", "true color", "true-color", "multispectral", "ndvi", "sentinel-2", "s2", "cartosat", "land cover", "lulc", "vegetation")
+    fusion_terms = ("optical and sar", "sar and optical", "fuse", "fusion")
+
+    is_fusion_query = any(term in ql for term in fusion_terms)
+
+    # Determine asset modalities
+    asset_modalities = set()
+    normalized_input_class = (input_class or "").upper()
+    if normalized_input_class in ("SINGLE_OPTICAL", "BI_TEMPORAL", "BI_TEMPORAL_OPTICAL", "OPTICAL"):
+        asset_modalities.add("OPTICAL")
+    elif normalized_input_class in ("SINGLE_SAR", "BI_TEMPORAL_SAR", "SAR"):
+        asset_modalities.add("SAR")
+    elif normalized_input_class in ("OPTICAL_SAR_PAIR", "OPTICAL_SAR"):
+        asset_modalities.add("OPTICAL")
+        asset_modalities.add("SAR")
+
+    if assets:
+        for a in assets:
+            if isinstance(a, dict):
+                m = str(a.get("modality") or "").upper()
+                fn = str(a.get("filename") or a.get("file_path") or "").lower()
+                if m:
+                    asset_modalities.add(m)
+                if "s2_" in fn or "sentinel-2" in fn:
+                    asset_modalities.add("OPTICAL")
+                elif "s1_" in fn or "sentinel-1" in fn:
+                    asset_modalities.add("SAR")
+            elif isinstance(a, str):
+                fn = a.lower()
+                if "s2_" in fn or "sentinel-2" in fn:
+                    asset_modalities.add("OPTICAL")
+                elif "s1_" in fn or "sentinel-1" in fn:
+                    asset_modalities.add("SAR")
+
+    is_optical_asset = "OPTICAL" in asset_modalities and "SAR" not in asset_modalities
+    is_sar_asset = "SAR" in asset_modalities and "OPTICAL" not in asset_modalities
+
+    # Check if query specifically requests SAR on an optical-only asset
+    if not is_fusion_query and any(term in ql for term in sar_terms):
+        if is_optical_asset or normalized_input_class in ("SINGLE_OPTICAL", "BI_TEMPORAL", "BI_TEMPORAL_OPTICAL", "OPTICAL"):
+            return "Selected asset is optical imagery, but this query requires SAR imagery."
+
+    # Check if query specifically requests optical on a SAR-only asset
+    if not is_fusion_query and any(term in ql for term in optical_terms):
+        if is_sar_asset or normalized_input_class in ("SINGLE_SAR", "BI_TEMPORAL_SAR", "SAR"):
+            return "Selected asset is SAR/radar imagery, but this query requires optical imagery."
+
+    return None
+
+
 def input_validator(state: GraphState) -> dict[str, Any]:
-    _record_event(state, "INPUT_VALIDATED", "input_validator")
     updates = _visit(state, "input_validator")
 
     query = state.get("user_query", "")
@@ -116,6 +171,21 @@ def input_validator(state: GraphState) -> dict[str, Any]:
         _record_event(state, "REFUSED", "input_validator", message="Empty query")
         return updates
 
+    input_class_val = state.get("input_class") or ""
+    if not input_class_val and state.get("asset_metadata"):
+        input_class_val = str(state["asset_metadata"].get("input_class", ""))
+
+    assets = state.get("assets", [])
+    mismatch = _check_modality_intent_mismatch(query, input_class_val, assets)
+    if mismatch:
+        warnings.append(mismatch)
+        updates["warnings"] = warnings
+        updates["status"] = "refused"
+        updates["refusal_reason"] = mismatch
+        _record_event(state, "REFUSED", "input_validator", message=mismatch)
+        return updates
+
+    _record_event(state, "INPUT_VALIDATED", "input_validator")
     updates["status"] = "running"
     updates["warnings"] = warnings
     return updates
@@ -130,15 +200,82 @@ def metadata_parser(state: GraphState) -> dict[str, Any]:
     return updates
 
 
+def _is_pair_query(query: str) -> bool:
+    q = query.lower()
+    pair_keywords = [
+        "change", "changed", "difference", "compare", "between",
+        "increased", "decreased", "construction increased",
+        "fuse", "fusion", "optical and sar", "sar and optical",
+        "t1 and t2", "t1 vs t2", "both images", "pair"
+    ]
+    return any(k in q for k in pair_keywords)
+
+
+def _is_single_scene_query(query: str) -> bool:
+    q = query.lower()
+    single_keywords = [
+        "explain", "describe", "water", "highlight", "what is",
+        "how much", "identify", "classify", "land-cover", "land cover",
+        "what objects", "objects", "caption", "overview"
+    ]
+    return any(k in q for k in single_keywords)
+
+
+def _requires_pair_evaluation(state: GraphState) -> bool:
+    query = state.get("user_query", "")
+    mode = state.get("mode") or (state.get("asset_metadata") or {}).get("mode")
+    input_class = state.get("input_class") or ""
+
+    if mode == "single_scene":
+        return False
+    if mode == "pair":
+        return True
+
+    if _is_pair_query(query):
+        return True
+
+    if _is_single_scene_query(query) and not _is_pair_query(query):
+        return False
+
+    return input_class in (InputClass.BI_TEMPORAL.value, InputClass.OPTICAL_SAR.value, "BI_TEMPORAL_OPTICAL")
+
+
 def pair_fitness_gate(state: GraphState) -> dict[str, Any]:
-    _record_event(state, "PAIR_FITNESS_CHECKED", "pair_fitness_gate")
     updates = _visit(state, "pair_fitness_gate")
-    # pair_fitness signals are recorded in state; warnings propagated downstream
+    query = state.get("user_query", "")
+    input_class_val = state.get("input_class") or ""
+    assets = state.get("assets", [])
+    warnings: list[str] = list(state.get("warnings", []))  # type: ignore[arg-type]
+
+    # Enforce modality intent compatibility
+    mismatch = _check_modality_intent_mismatch(query, input_class_val, assets)
+    if mismatch:
+        warnings.append(mismatch)
+        updates["warnings"] = warnings
+        updates["status"] = "refused"
+        updates["refusal_reason"] = mismatch
+        _record_event(state, "REFUSED", "pair_fitness_gate", message=mismatch)
+        return updates
+
+    # Check pair fitness metadata if present
+    pair_fitness = state.get("pair_fitness")
+    if pair_fitness and isinstance(pair_fitness, dict):
+        has_overlap = pair_fitness.get("has_sufficient_overlap")
+        if has_overlap is False or pair_fitness.get("compatible") is False:
+            reason = pair_fitness.get("reason") or "Insufficient spatial overlap between image pair."
+            warnings.append(reason)
+            updates["warnings"] = warnings
+            updates["status"] = "refused"
+            updates["refusal_reason"] = reason
+            _record_event(state, "REFUSED", "pair_fitness_gate", message=reason)
+            return updates
+
+    _record_event(state, "PAIR_FITNESS_CHECKED", "pair_fitness_gate")
     return updates
 
 
 def query_router(state: GraphState) -> dict[str, Any]:
-    """Route the query by invoking QwenRouter via Ollama.
+    """Route the query by invoking QwenRouter.
 
     MUST NOT read metadata["task"] as a routing shortcut.
     MUST NOT default unknown/failed routing to SINGLE_VQA.
@@ -147,8 +284,7 @@ def query_router(state: GraphState) -> dict[str, Any]:
     updates = _visit(state, "query_router")
 
     # Allow test injection: if state carries a pre-resolved task directly in
-    # a field called "injected_task", use it (set only by tests that need to
-    # bypass Qwen without a live Ollama server). Never use metadata["task"].
+    # a field called "injected_task", use it. Never use metadata["task"].
     injected_task: str | None = state.get("injected_task")  # type: ignore[attr-defined]
     if injected_task is not None:
         if injected_task in RouterTask.__members__:
@@ -224,6 +360,16 @@ def tool_selector(state: GraphState) -> dict[str, Any]:
     input_class_value = state.get("input_class", "SINGLE_OPTICAL")
     warnings: list[str] = list(state.get("warnings", []))  # type: ignore[arg-type]
 
+    # If single-scene task is routed on a multi-asset session, normalize input_class to single scene modality
+    if task_value in (RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value):
+        if input_class_value in (InputClass.BI_TEMPORAL.value, InputClass.OPTICAL_SAR.value, "BI_TEMPORAL_OPTICAL"):
+            active_slot = state.get("active_slot") or (state.get("asset_metadata") or {}).get("active_slot")
+            assets = state.get("assets") or []
+            target_asset = assets[1] if active_slot == "T2" and len(assets) > 1 else (assets[0] if assets else None)
+            target_mod = (target_asset.get("modality") if isinstance(target_asset, dict) else None) or "OPTICAL"
+            input_class_value = InputClass.SINGLE_SAR.value if target_mod == "SAR" else InputClass.SINGLE_OPTICAL.value
+            updates["input_class"] = input_class_value
+
     try:
         task_enum = RouterTask(task_value)
     except ValueError:
@@ -264,15 +410,11 @@ def tool_selector(state: GraphState) -> dict[str, Any]:
 # Results are stored in state; tile references are passed downstream.
 # ---------------------------------------------------------------------------
 def preprocess(state: GraphState) -> dict[str, Any]:
-    _record_event(state, "PREPROCESS_STARTED", "preprocess", tool_id="preprocess",
-                  parameters={"input_class": state.get("input_class"),
-                               "asset_count": len(state.get("assets", []))})  # type: ignore[arg-type]
     updates = _visit(state, "preprocess")
 
     input_class_value = state.get("input_class", "SINGLE_OPTICAL")
     assets_raw: list[Any] = list(state.get("assets", []))  # type: ignore[arg-type]
     job_id = state.get("job_id", "unknown")
-    session_ctx: SessionContext | None = get_session(state.get("session_id", ""))
 
     try:
         input_class_enum = InputClass(input_class_value)
@@ -293,7 +435,7 @@ def preprocess(state: GraphState) -> dict[str, Any]:
             input_class=input_class_enum,
             assets=asset_dicts,
             job_id=job_id,
-            session_context=session_ctx,
+            session_context=None,
         )
         updates["preprocessing_result"] = preprocess_result
 
@@ -318,7 +460,6 @@ def preprocess(state: GraphState) -> dict[str, Any]:
 # Execution helper — runs a specialist tool via run_tool with a real DB session.
 # ---------------------------------------------------------------------------
 def _execute_tool(state: GraphState, tool_id: str, params: Mapping[str, Any]) -> dict[str, Any]:
-    _record_event(state, "TOOL_STARTED", tool_id, tool_id=tool_id, parameters=dict(params))
     updates = _visit(state, tool_id)
 
     existing_results: list[ToolResult] = list(state.get("specialist_results", []))  # type: ignore[arg-type]
@@ -346,8 +487,14 @@ def _execute_tool(state: GraphState, tool_id: str, params: Mapping[str, Any]) ->
 
     existing_results.append(result)
     updates["specialist_results"] = existing_results
-    _record_event(state, "TOOL_COMPLETED", tool_id, tool_id=tool_id,
-                  message=result.status)
+    _record_event(
+        state,
+        "TOOL_COMPLETED",
+        tool_id,
+        tool_id=tool_id,
+        parameters={"status": result.status, "confidence": result.confidence},
+        message=result.explanation or result.status,
+    )
     return updates
 
 
@@ -408,6 +555,14 @@ def _raw_raster_refs(state: GraphState) -> list[str]:
         path = Path(str(p))
         if path.suffix.lower() in {".tif", ".tiff"} and path.is_file():
             out.append(str(path))
+
+    # If single-scene query with multiple assets, isolate active slot
+    if len(out) > 1 and not _requires_pair_evaluation(state):
+        active_slot = state.get("active_slot") or (state.get("asset_metadata") or {}).get("active_slot")
+        if active_slot == "T2":
+            return [out[1]]
+        return [out[0]]
+
     return out
 
 
@@ -418,34 +573,11 @@ def lulc_map(state: GraphState) -> dict[str, Any]:
         "image_refs": refs,
         "input_refs": refs,
         "bounds": _asset_bounds(state),
+        "job_id": state.get("job_id"),
     }
     return _execute_tool(state, "lulc_map", params)
 
 
-def geochat_vqa(state: GraphState) -> dict[str, Any]:
-    lulc_ctx = ""
-    for r in reversed(list(state.get("specialist_results") or [])):
-        if r.tool_id == "lulc_map" and r.status == "success" and isinstance(r.result, dict):
-            lulc_ctx = str(r.result.get("answer") or "")
-            break
-    question = state.get("user_query", "")
-    if lulc_ctx:
-        question = f"{question}\n\nLand-cover map: {lulc_ctx}"
-    params = {
-        "question": question,
-        "image_refs": _image_refs(state),
-        "input_refs": _image_refs(state),
-    }
-    return _execute_tool(state, "geochat_vqa", params)
-
-
-def grounding(state: GraphState) -> dict[str, Any]:
-    params = {
-        "text": state.get("user_query", ""),
-        "image_refs": _image_refs(state),
-        "input_refs": _image_refs(state),
-    }
-    return _execute_tool(state, "grounding", params)
 
 
 def align(state: GraphState) -> dict[str, Any]:
@@ -509,23 +641,6 @@ def vectorize(state: GraphState) -> dict[str, Any]:
     return _execute_tool(state, "vectorize", params)
 
 
-def geochat_describe(state: GraphState) -> dict[str, Any]:
-    """Invoke geochat_describe — its own separate tool interface."""
-    # Gather the most relevant output refs for description context
-    results: list[ToolResult] = list(state.get("specialist_results", []))  # type: ignore[arg-type]
-    output_refs = [r for res in results for r in res.output_refs]
-    context_parts = []
-    for res in results:
-        if res.result:
-            context_parts.append(str(res.result))
-    context = "; ".join(context_parts[:3])  # limit context length
-
-    params = {
-        "image_refs": _image_refs(state) or output_refs,
-        "context": context,
-        "input_refs": _image_refs(state),
-    }
-    return _execute_tool(state, "geochat_describe", params)
 
 
 def coregister(state: GraphState) -> dict[str, Any]:
@@ -572,7 +687,6 @@ def agreement(state: GraphState) -> dict[str, Any]:
 # Evidence fusion — consumes validated tool outputs.
 # ---------------------------------------------------------------------------
 def evidence_fusion(state: GraphState) -> dict[str, Any]:
-    _record_event(state, "EVIDENCE_FUSED", "evidence_fusion")
     updates = _visit(state, "evidence_fusion")
 
     results: list[ToolResult] = list(state.get("specialist_results", []))  # type: ignore[arg-type]
@@ -584,8 +698,13 @@ def evidence_fusion(state: GraphState) -> dict[str, Any]:
 
     # Run output validation (before final reporting)
     validation = validate_output(state)
-    _record_event(state, "CONFIDENCE_COMPUTED", "evidence_fusion",
-                  message=f"confidence={validation.confidence.value}")
+    _record_event(
+        state,
+        "EVIDENCE_FUSED",
+        "evidence_fusion",
+        parameters={"confidence": validation.confidence.value},
+        message=f"confidence={validation.confidence.value}",
+    )
 
     # Aggregate evidence items for the report
     evidence_items = []
@@ -628,7 +747,6 @@ def audit_logger(state: GraphState) -> dict[str, Any]:
 
 
 def report_generator(state: GraphState) -> dict[str, Any]:
-    _record_event(state, "REPORT_GENERATED", "report_generator")
     updates = _visit(state, "report_generator")
 
     is_refused = state.get("status") == "refused"
@@ -668,21 +786,17 @@ def report_generator(state: GraphState) -> dict[str, Any]:
             image_refs=image_refs,
             input_class=input_class_val,
         )
+    elif is_refused:
+        final_answer = state.get("refusal_reason") or "Request refused due to modality or input mismatch."
+        reasoning_provenance = "modality_validation_gate"
 
-        if final_answer and "MOCK_" in str(final_answer):
-            final_answer = str(lulc_ans) if lulc_ans else None
-        if lulc_ans and (not final_answer or str(final_answer).startswith("MOCK_")):
-            final_answer = str(lulc_ans)
-        elif lulc_ans and str(lulc_ans) not in str(final_answer or ""):
-            final_answer = f"{final_answer}\n\n{lulc_ans}"
-
-        _record_event(
-            state,
-            "FINAL_REASONING_COMPLETED",
-            "report_generator",
-            parameters={"provenance": reasoning_provenance},
-            message=f"Synthesized final answer via {reasoning_provenance}",
-        )
+    _record_event(
+        state,
+        "REPORT_GENERATED",
+        "report_generator",
+        parameters={"provenance": reasoning_provenance, "status": state.get("status")},
+        message=f"Report generated (provenance: {reasoning_provenance})",
+    )
 
     report: dict[str, Any] = {
         "job_id": state.get("job_id"),
@@ -693,7 +807,7 @@ def report_generator(state: GraphState) -> dict[str, Any]:
         "execution_summary": _visited_nodes(state),
         "final_answer": final_answer,
         "reasoning_provenance": reasoning_provenance,
-        "confidence": confidence_obj.level if confidence_obj else None,
+        "confidence": confidence_obj.level if confidence_obj else ("LOW" if is_refused else None),
         "confidence_signals": confidence_obj.signals if confidence_obj else [],
         "evidence_summary": state.get("evidence_items", []),
         "spatial_evidence_references": [
@@ -702,15 +816,13 @@ def report_generator(state: GraphState) -> dict[str, Any]:
         ],
         "warnings": state.get("warnings", []),
         "refusal_reason": state.get("refusal_reason"),
-        "failure_reason": None,
+        "failure_reason": state.get("refusal_reason") if is_refused else ("One or more tools failed." if is_failed else None),
     }
 
     if is_refused:
         updates["status"] = "refused"   # preserve refused status
-        report["failure_reason"] = state.get("refusal_reason")
     elif is_failed:
         updates["status"] = "failed"    # preserve failed status
-        report["failure_reason"] = "One or more tools failed."
     else:
         updates["status"] = "completed"
 
@@ -720,14 +832,16 @@ def report_generator(state: GraphState) -> dict[str, Any]:
 
 
 def refusal(state: GraphState) -> dict[str, Any]:
-    _record_event(state, "REFUSED", "refusal")
+    _record_event(state, "REFUSED", "refusal", message=state.get("refusal_reason"))
     updates = _visit(state, "refusal")
     warnings: list[str] = list(state.get("warnings", []))  # type: ignore[arg-type]
-    warnings.append("Request refused.")
+    refusal_reason = state.get("refusal_reason") or "Request could not be processed."
+    if refusal_reason not in warnings:
+        warnings.append(refusal_reason)
     updates["warnings"] = warnings
     updates["status"] = "refused"
-    if not state.get("refusal_reason"):
-        updates["refusal_reason"] = "Request could not be processed."
+    updates["refusal_reason"] = refusal_reason
+    updates["final_answer"] = refusal_reason
     return updates
 
 
@@ -739,6 +853,14 @@ def _after_input_validator(state: GraphState) -> str:
     if state.get("status") == "refused":
         return "refusal"
     return "metadata_parser"
+
+
+def _after_metadata_parser(state: GraphState) -> str:
+    if state.get("status") == "refused":
+        return "refusal"
+    if _requires_pair_evaluation(state):
+        return "pair_fitness_gate"
+    return "query_router"
 
 
 def _after_pair_fitness_gate(state: GraphState) -> str:
@@ -771,8 +893,8 @@ def after_preprocess(state: GraphState) -> str:
 
     if task in (RouterTask.SINGLE_VQA.value, RouterTask.CAPTIONING.value, RouterTask.GROUNDING.value):
         return "lulc_map"
-    if task in (RouterTask.CHANGE_DETECTION.value, RouterTask.CHANGE_VQA.value):
-        return "align"
+    if "bit_cd" in selected_tools or task in (RouterTask.CHANGE_DETECTION.value, RouterTask.CHANGE_VQA.value):
+        return "bit_cd"
     if task == RouterTask.OPTICAL_SAR_ANALYSIS.value:
         return "coregister"
     return "refusal"
@@ -787,7 +909,10 @@ def after_sar_map(state: GraphState) -> str:
 
 
 def after_bit_cd(state: GraphState) -> str:
-    return "vectorize"
+    selected_tools = state.get("selected_tools", [])
+    if "vectorize" in selected_tools:
+        return "vectorize"
+    return "evidence_fusion"
 
 
 def after_vectorize(state: GraphState) -> str:
@@ -827,7 +952,10 @@ workflow.add_conditional_edges(
     "input_validator", _after_input_validator,
     {"metadata_parser": "metadata_parser", "refusal": "refusal"},
 )
-workflow.add_edge("metadata_parser", "pair_fitness_gate")
+workflow.add_conditional_edges(
+    "metadata_parser", _after_metadata_parser,
+    {"pair_fitness_gate": "pair_fitness_gate", "query_router": "query_router", "refusal": "refusal"},
+)
 workflow.add_conditional_edges(
     "pair_fitness_gate", _after_pair_fitness_gate,
     {"query_router": "query_router", "refusal": "refusal"},
@@ -917,8 +1045,13 @@ def run_graph(session_id: str) -> GraphState:
         "specialist_results": [],
         "execution_trace": [],
     }
+    if session.metadata.get("active_slot"):
+        initial_state["active_slot"] = session.metadata["active_slot"]  # type: ignore[typeddict-unknown-key]
+    if session.metadata.get("mode"):
+        initial_state["mode"] = session.metadata["mode"]  # type: ignore[typeddict-unknown-key]
     if session.task and session.task != "UNROUTED":
         initial_state["injected_task"] = session.task  # type: ignore[typeddict-unknown-key]
+    session.traces = []
     session.status = "running"
 
     result = cast(GraphState, app.invoke(initial_state))
@@ -931,14 +1064,12 @@ def run_graph(session_id: str) -> GraphState:
     pre = result.get("preprocessing_result")
     if pre is not None:
         session.preprocessing_result = _serialize(pre)
-    for tool_result in result.get("specialist_results") or []:
-        session.tool_results.append(_serialize(tool_result))
+    session.tool_results = [_serialize(tool_result) for tool_result in (result.get("specialist_results") or [])]
     report = result.get("report")
     if report:
         session.artifacts.append({"type": "report", "payload": report})
     refusal = result.get("refusal_reason")
-    if refusal:
-        session.errors.append(refusal)
+    session.errors = [refusal] if refusal else []
 
     persist_run(session, result)
     return result

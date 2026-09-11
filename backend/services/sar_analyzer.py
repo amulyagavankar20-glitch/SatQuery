@@ -110,12 +110,12 @@ def compute_sar_scene_statistics(tif_path: str | Path) -> dict[str, Any]:
     }
 
 
-def parse_sarchat_detections(
+def parse_sar_detections(
     model_output: str,
     tif_path: str | Path | None = None,
 ) -> list[dict[str, Any]]:
     """
-    Parses SARChat bounding box tokens from model output (format: {<ymin><xmin><ymax><xmax>}
+    Parses SAR bounding box tokens from model output (format: {<ymin><xmin><ymax><xmax>}
     scaled on 0..1000 coordinate grid) and derives geographic and image-space coordinates.
     """
     detections: list[dict[str, Any]] = []

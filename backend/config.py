@@ -40,14 +40,6 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int
 
-    # Redis & Celery
-    REDIS_URL: str
-    CELERY_BROKER_URL: str
-
-    # Vector DB (Qdrant)
-    QDRANT_HOST: str
-    QDRANT_PORT: int
-
     # Environment & Logging
     ENVIRONMENT: str
     LOG_LEVEL: str
@@ -71,25 +63,17 @@ class Settings(BaseSettings):
     OPENROUTER_BASE_URL: str
     OPENROUTER_TIMEOUT_SECONDS: float
 
-    # Legacy/Fallback Qwen Router via Ollama (retained for backward compatibility)
-    OLLAMA_BASE_URL: str
-    OLLAMA_ROUTER_MODEL: str | None = None
-    OLLAMA_TIMEOUT_SECONDS: float
-
-    # Model Slotting & Weights Architecture (3 Slots: Router, Talking VLM, Specialists)
+    # Model Slotting & Weights Architecture
     ROUTER_BACKEND: str
     ROUTER_WEIGHTS_PATH: str | None = None
     TALKING_VLM_MODEL: str | None = None
     TALKING_VLM_BACKEND: str
     TALKING_VLM_WEIGHTS_PATH: str | None = None
     BIT_WEIGHTS_PATH: str | None = None
-    SAM_WEIGHTS_PATH: str | None = None
     FUSION_WEIGHTS_PATH: str | None = None
-    # Optional flood head (Prithvi-EO Sen1Floods11). Leave unset to keep the
-    # default land-cover path at Dynamic World / spectral (~no extra RAM).
+    # Optional flood head (Prithvi-EO Sen1Floods11).
     PRITHVI_FLOOD_WEIGHTS_PATH: str | None = None
-    # Optional reBEN ResNet50 (12-band S2). Leave unset: BEN-19 tags come from
-    # the Dynamic World / spectral fractions (taxonomy only, no extra download).
+    # Optional reBEN ResNet50 (12-band S2).
     BIGEARTHNET_WEIGHTS_PATH: str | None = None
 
     # Sentinel-1 reBEN ResNet50 (BigEarthNet v2)

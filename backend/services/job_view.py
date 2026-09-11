@@ -37,13 +37,50 @@ def list_tile_paths(job_id: str) -> list[Path]:
 
 def resolve_composite_path(job_id: str) -> Path | None:
     processed = _job_dir(job_id) / "processed"
-    if not processed.is_dir():
-        return None
-    named = sorted(processed.glob("composite*.png"))
-    if named:
-        return named[0]
-    pngs = sorted(processed.glob("*.png"))
-    return pngs[0] if pngs else None
+    if processed.is_dir():
+        named = sorted(processed.glob("composite*.png"))
+        if named:
+            return named[0]
+        pngs = sorted(processed.glob("*.png"))
+        if pngs:
+            return pngs[0]
+
+    # If processed composite is not ready, generate preview from raw GeoTIFF
+    raw_dir = _job_dir(job_id) / "raw"
+    if raw_dir.is_dir():
+        tifs = sorted(raw_dir.glob("*.tif*"))
+        if tifs:
+            processed.mkdir(parents=True, exist_ok=True)
+            preview_png = processed / f"composite_preview_{tifs[0].stem}.png"
+            if preview_png.is_file():
+                return preview_png
+            try:
+                import numpy as np
+                import rasterio
+                from PIL import Image
+
+                with rasterio.open(tifs[0]) as src:
+                    count = src.count
+                    if count >= 3:
+                        data = src.read([1, 2, 3])
+                    else:
+                        b = src.read(1)
+                        data = np.stack([b, b, b], axis=0)
+
+                data = data.astype(np.float32)
+                p2, p98 = np.percentile(data, 2), np.percentile(data, 98)
+                if p98 > p2:
+                    data = np.clip((data - p2) / (p98 - p2) * 255.0, 0, 255).astype(np.uint8)
+                else:
+                    data = np.clip(data, 0, 255).astype(np.uint8)
+
+                rgb = np.transpose(data, (1, 2, 0))
+                Image.fromarray(rgb).save(preview_png)
+                return preview_png
+            except Exception:
+                pass
+
+    return None
 
 
 def resolve_vv_path(job_id: str) -> Path | None:
@@ -151,8 +188,20 @@ def _answer_from_session(session: SessionContext) -> JobAnswer | None:
         last = session.tool_results[-1]
         if isinstance(last, dict) and last.get("result"):
             text = str(last["result"])
-    if text is None and session.status not in ("completed", "failed", "refused"):
-        return None
+    if text is None:
+        if session.status == "refused":
+            text = session.errors[0] if session.errors else "Request was refused due to modality mismatch."
+            confidence = "LOW"
+        elif session.status not in ("completed", "failed"):
+            return None
+
+    if session.status == "refused":
+        return JobAnswer(
+            text=text,
+            model="SystemValidator",
+            backend="modality_gate",
+            confidence=str(confidence) if confidence is not None else "LOW",
+        )
 
     is_sar = (
         session.input_mode == "SINGLE_SAR"
@@ -294,18 +343,26 @@ def build_job_view_from_db(job_id: str) -> JobView | None:
         text_out = next((o for o in outputs if o.output_type == "TEXT" and o.text_result), None)
         answer = None
         if text_out is not None or job.status in ("completed", "failed", "refused"):
-            is_sar = (
-                job.input_mode == "SINGLE_SAR"
-                or any(t.tool_id == "sar_map" for t in traces)
-            )
-            model_name = "reBEN-ResNet50-S1" if is_sar else settings.TALKING_VLM_MODEL
-            backend_name = "reben_s1" if is_sar else settings.TALKING_VLM_BACKEND
-            answer = JobAnswer(
-                text=text_out.text_result if text_out else None,
-                model=model_name,
-                backend=backend_name,
-                confidence=text_out.confidence_label if text_out else None,
-            )
+            if job.status == "refused":
+                answer = JobAnswer(
+                    text=text_out.text_result if (text_out and text_out.text_result) else (job.error_message or "Request was refused."),
+                    model="SystemValidator",
+                    backend="modality_gate",
+                    confidence="LOW",
+                )
+            else:
+                is_sar = (
+                    job.input_mode == "SINGLE_SAR"
+                    or any(t.tool_id == "sar_map" for t in traces)
+                )
+                model_name = "reBEN-ResNet50-S1" if is_sar else settings.TALKING_VLM_MODEL
+                backend_name = "reben_s1" if is_sar else settings.TALKING_VLM_BACKEND
+                answer = JobAnswer(
+                    text=text_out.text_result if text_out else None,
+                    model=model_name,
+                    backend=backend_name,
+                    confidence=text_out.confidence_label if text_out else None,
+                )
         assets = _db_asset_views(job.id)
         overlays: list[JobOverlay] = []
         if any(a.bounds_wgs84 for a in assets):

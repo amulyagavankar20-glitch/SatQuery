@@ -71,19 +71,19 @@ export function Viewport() {
 
   const opticalUrl =
     base.modality === "OPTICAL"
-      ? (activeSlot === "T1" ? (completed?.opticalUrl ?? base.previewUrl) : base.previewUrl)
+      ? (latest?.opticalUrl ?? base.previewUrl)
       : null;
 
   let sarUrl =
     base.modality === "SAR"
-      ? base.previewUrl
-      : (completed?.sarUrl ?? slots.find((s) => s.modality === "SAR")?.previewUrl ?? null);
+      ? (latest?.sarUrl ?? base.previewUrl)
+      : (latest?.sarUrl ?? slots.find((s) => s.modality === "SAR")?.previewUrl ?? null);
 
-  if (hasSar && completed) {
-    if (sarMode === "vv" && completed.vvUrl) sarUrl = completed.vvUrl;
-    else if (sarMode === "vh" && completed.vhUrl) sarUrl = completed.vhUrl;
-    else if (sarMode === "overlay" && completed.overlayUrl) sarUrl = completed.overlayUrl;
-    else if (sarMode === "composite" && completed.sarUrl) sarUrl = completed.sarUrl;
+  if (hasSar && latest) {
+    if (sarMode === "vv" && latest.vvUrl) sarUrl = latest.vvUrl;
+    else if (sarMode === "vh" && latest.vhUrl) sarUrl = latest.vhUrl;
+    else if (sarMode === "overlay" && latest.overlayUrl) sarUrl = latest.overlayUrl;
+    else if (sarMode === "composite" && latest.sarUrl) sarUrl = latest.sarUrl;
   }
 
   const wipeUrl = wipe && t2 ? t2.previewUrl : null;

@@ -27,7 +27,7 @@ tifffile>=2024.8.0
 affine>=2.4.0
 numpy>=1.26.0,<3.0.0
 
-# AI Models & Vision-Language Architecture (SARChat, GeoChat, & BIT ONNX)
+# AI Models & Vision-Language Architecture (reBEN ResNet50, BIT-LEVIR ONNX)
 torch>=2.2.0
 torchvision>=0.17.0
 transformers>=4.44.0

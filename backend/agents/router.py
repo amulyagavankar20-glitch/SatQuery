@@ -157,34 +157,11 @@ Input Class / Normalized Metadata: {json.dumps(request.manifest, default=str)}""
         parsed = RouteResponse.model_validate(dict_data)
         return self.validate_intent(parsed)
 
-    def _route_via_qwen_ollama(self, request: RouteRequest) -> RouteResponse:
-        """Second-hop router: local Qwen2.5-3B via Ollama (from .env NEW section)."""
-        import httpx
-
-        model = settings.OLLAMA_ROUTER_MODEL
-        if not model:
-            raise RouterError("OLLAMA_ROUTER_MODEL is not configured")
-        base = (settings.OLLAMA_BASE_URL or "http://localhost:11434").rstrip("/")
-        payload = {
-            "model": model,
-            "prompt": f"{self.build_system_prompt()}\n\n{self.build_user_prompt(request)}",
-            "stream": False,
-            "format": "json",
-            "options": {"temperature": 0},
-        }
-        with httpx.Client(timeout=settings.OLLAMA_TIMEOUT_SECONDS) as client:
-            resp = client.post(f"{base}/api/generate", json=payload)
-            resp.raise_for_status()
-            raw = resp.json().get("response") or ""
-        parsed = self._parse_raw_response(raw)
-        parsed.reasoning = f"Qwen Ollama intent classifier ({model})"
-        return parsed
-
     async def route(self, request: RouteRequest) -> RouteResponse:
-        """Gemma (OpenRouter) then Qwen (Ollama) then deterministic rules."""
+        """VLM (OpenRouter) with deterministic fallback."""
         system_prompt = self.build_system_prompt()
         user_prompt = self.build_user_prompt(request)
-        gemma_error: str | None = None
+        vlm_error: str | None = None
 
         try:
             raw_response = await self.client.generate_text_async(
@@ -194,28 +171,23 @@ Input Class / Normalized Metadata: {json.dumps(request.manifest, default=str)}""
                 temperature=0.0,
             )
             parsed = self._parse_raw_response(raw_response)
-            parsed.reasoning = f"Gemma OpenRouter intent classifier ({self.client.model})"
+            parsed.reasoning = f"VLM OpenRouter intent classifier ({self.client.model})"
             return parsed
         except (VLMError, ValidationError, json.JSONDecodeError, Exception) as exc:
-            gemma_error = str(exc)
-            logging.warning(f"[Router] Gemma OpenRouter hop failed ({exc}). Trying Qwen Ollama.")
-
-        try:
-            return self._route_via_qwen_ollama(request)
-        except Exception as exc:
+            vlm_error = str(exc)
             logging.warning(
-                f"[Router] Qwen Ollama hop failed ({exc}). Falling back to deterministic rules."
+                f"[Router] VLM OpenRouter classification failed ({exc}). Falling back to deterministic rules."
             )
             return self._fallback_route(
                 request,
-                error_reason=f"gemma: {gemma_error}; qwen: {exc}",
+                error_reason=f"vlm: {vlm_error}",
             )
 
     def route_sync(self, request: RouteRequest) -> RouteResponse:
-        """Synchronous two-hop router used by LangGraph nodes."""
+        """Synchronous VLM router used by LangGraph nodes."""
         system_prompt = self.build_system_prompt()
         user_prompt = self.build_user_prompt(request)
-        gemma_error: str | None = None
+        vlm_error: str | None = None
 
         try:
             raw_response = self.client.generate_text_sync(
@@ -225,21 +197,16 @@ Input Class / Normalized Metadata: {json.dumps(request.manifest, default=str)}""
                 temperature=0.0,
             )
             parsed = self._parse_raw_response(raw_response)
-            parsed.reasoning = f"Gemma OpenRouter intent classifier ({self.client.model})"
+            parsed.reasoning = f"VLM OpenRouter intent classifier ({self.client.model})"
             return parsed
         except (VLMError, ValidationError, json.JSONDecodeError, Exception) as exc:
-            gemma_error = str(exc)
-            logging.warning(f"[Router] Gemma OpenRouter hop failed ({exc}). Trying Qwen Ollama.")
-
-        try:
-            return self._route_via_qwen_ollama(request)
-        except Exception as exc:
+            vlm_error = str(exc)
             logging.warning(
-                f"[Router] Qwen Ollama hop failed ({exc}). Falling back to deterministic rules."
+                f"[Router] VLM OpenRouter classification failed ({exc}). Falling back to deterministic rules."
             )
             return self._fallback_route(
                 request,
-                error_reason=f"gemma: {gemma_error}; qwen: {exc}",
+                error_reason=f"vlm: {vlm_error}",
             )
 
     def _fallback_route(self, request: RouteRequest, error_reason: str = "") -> RouteResponse:
@@ -263,7 +230,7 @@ Input Class / Normalized Metadata: {json.dumps(request.manifest, default=str)}""
             return RouteResponse(
                 task=RouterTask.GROUNDING,
                 requires_grounding=True,
-                tools=[RouterTool.GEOSPATIAL_VALIDATOR, RouterTool.GEOCHAT_VQA],
+                tools=[RouterTool.GEOSPATIAL_VALIDATOR, RouterTool.LULC_MAP],
                 reasoning=reason,
             )
 
@@ -278,14 +245,14 @@ Input Class / Normalized Metadata: {json.dumps(request.manifest, default=str)}""
         if any(w in q for w in ["describe", "caption", "overview"]):
             return RouteResponse(
                 task=RouterTask.CAPTIONING,
-                tools=[RouterTool.GEOSPATIAL_VALIDATOR, RouterTool.GEOCHAT_DESCRIBE],
+                tools=[RouterTool.GEOSPATIAL_VALIDATOR, RouterTool.LULC_MAP],
                 reasoning=reason,
             )
 
         # Default single-image visual question answering
         return RouteResponse(
             task=RouterTask.SINGLE_VQA,
-            tools=[RouterTool.GEOSPATIAL_VALIDATOR, RouterTool.GEOCHAT_VQA],
+            tools=[RouterTool.GEOSPATIAL_VALIDATOR, RouterTool.LULC_MAP],
             reasoning=reason,
         )
 

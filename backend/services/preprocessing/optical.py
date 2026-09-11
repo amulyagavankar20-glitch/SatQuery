@@ -19,7 +19,7 @@ class OpticalPreprocessor(BasePreprocessor):
     Dedicated preprocessor for SINGLE_OPTICAL imagery.
     
     Generates normalized 3-channel (RGB) composites, handles nodata/clouds,
-    and produces georeferenced model-ready tiles for VLM / GeoChat ingestion.
+    and produces georeferenced model-ready tiles for specialist ingestion.
     """
 
     def __init__(

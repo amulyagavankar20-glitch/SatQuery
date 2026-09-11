@@ -1,19 +1,19 @@
 from typing import Any
 
-import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend.api import jobs
-from backend.api.v1 import auth, query, assets
+from backend.api.v1 import auth
 from backend.config import settings
 from backend.middleware.request_tracking import RequestTrackingMiddleware
 from backend.services.model_slotting import model_slot_registry
+from src.logger import logging
 
 app = FastAPI(
     title="SatQuery AI API",
-    description="SIH26167 SatQuery backend for Agentic Orchestration",
+    description="SatQuery AI Backend for Agentic Orchestration",
     version="1.0.0",
 )
 
@@ -24,19 +24,12 @@ async def startup():
         from backend.services.tool_catalog import seed_tool_registry
         db = SessionLocal()
         try:
-            seed_tool_registry(db)
+            changed = seed_tool_registry(db)
+            logging.info("[Startup] Seeded tool registry (updated: %s)", changed or "none")
         finally:
             db.close()
-    except Exception:
-        pass
-
-    try:
-        import redis.asyncio as redis
-        from fastapi_limiter import FastAPILimiter
-        redis_client = redis.from_url(settings.REDIS_URL, encoding="utf-8", decode_responses=True)
-        await FastAPILimiter.init(redis_client)
-    except Exception:
-        pass
+    except Exception as exc:
+        logging.error("[Startup] Failed to seed tool registry: %s", exc, exc_info=True)
 
 app.add_middleware(RequestTrackingMiddleware)
 
@@ -50,20 +43,10 @@ app.add_middleware(
 
 app.include_router(jobs.router)
 app.include_router(auth.router)
-app.include_router(query.router)
-app.include_router(assets.router)
 
 
 @app.get("/health")
 def health_check() -> dict[str, Any]:
-    ollama_status = "unreachable"
-    try:
-        response = httpx.get(f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/tags", timeout=1.0)
-        if response.status_code == 200:
-            ollama_status = "ok"
-    except Exception:
-        ollama_status = "unreachable"
-
     openrouter_status = "configured" if settings.OPENROUTER_API_KEY else "missing_key"
 
     postgres: dict[str, Any] = {"status": "unreachable"}
@@ -83,7 +66,6 @@ def health_check() -> dict[str, Any]:
         "vlm_provider": settings.VLM_PROVIDER,
         "openrouter": openrouter_status,
         "talking_vlm": settings.TALKING_VLM_MODEL,
-        "ollama": ollama_status,
         "postgres": postgres,
         "model_slots_count": len(slots),
         "slotted_ready": all_ready,
@@ -92,16 +74,6 @@ def health_check() -> dict[str, Any]:
 
 @app.get("/models")
 def list_models() -> dict[str, Any]:
-    available: list[str] = []
-    ollama_status = "unreachable"
-    try:
-        response = httpx.get(f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/tags", timeout=1.0)
-        if response.status_code == 200:
-            available = [m.get("name", "") for m in response.json().get("models", [])]
-            ollama_status = "ok"
-    except Exception as exc:
-        ollama_status = str(exc)
-
     slots = model_slot_registry.get_slot_statuses()
     router_ready = bool(settings.OPENROUTER_API_KEY) or any(
         s.slot_id == "router" and s.status == "ready" for s in slots
@@ -115,7 +87,5 @@ def list_models() -> dict[str, Any]:
         "openrouter_configured": bool(settings.OPENROUTER_API_KEY),
         "talking_vlm": settings.TALKING_VLM_MODEL,
         "talking_vlm_backend": settings.TALKING_VLM_BACKEND,
-        "available": available,
-        "ollama": ollama_status,
         "model_slots": [s.model_dump() for s in slots],
     }

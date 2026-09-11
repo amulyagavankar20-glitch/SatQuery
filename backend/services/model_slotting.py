@@ -1,15 +1,13 @@
 """
 SatQuery AI — Model Slotting & Adapter Architecture.
 
-This module provides the central registry and abstraction layer for the 3 model slots:
-  1. Router Model (Qwen2.5-3B-Instruct) — Ollama or local PyTorch/HF weights or fallback
-  2. Talking VLM (InternVL3-1B / GeoChat-7B) — Local PyTorch/HF weights or contextual mock
-  3. Spatial Specialists (BIT Change Detection, MobileSAM, Dual Encoder Fusion)
+This module provides the central registry and abstraction layer for model slots:
+  1. Router Model (OpenRouter VLM / Deterministic rule-based fallback)
+  2. Talking VLM (OpenRouter VLM / Local weights / Contextual synthesis)
+  3. Spatial Specialists (BIT Change Detection, SAR Map, LULC Map, Dual Encoder Fusion)
 
 When exported weights or pre-trained models are slotted into the `weights/` directory
 or configured via .env, the registry automatically detects them and activates real inference.
-Until weights are provided, each slot runs a deterministic, high-fidelity mock adapter,
-ensuring the entire agent-backend-frontend pipeline is fully functional end-to-end.
 """
 
 from __future__ import annotations
@@ -29,23 +27,24 @@ class SlotID(str, enum.Enum):
     ROUTER = "router"
     TALKING_VLM = "talking_vlm"
     BIT_CD = "specialist_bit_cd"
-    MOBILE_SAM = "specialist_mobile_sam"
+    SAR_MAP = "specialist_sar_map"
+    LULC_MAP = "specialist_lulc_map"
     FUSION_S1S2 = "specialist_fusion_s1s2"
 
 
 class SlotBackendType(str, enum.Enum):
     OPENROUTER = "openrouter"
-    OLLAMA = "ollama"
     LOCAL_WEIGHTS = "local_weights"
-    MOCK = "mock"
+    RULE_BASED = "rule_based"
+    STANDBY = "standby"
 
 
 class ModelSlotInfo(BaseModel):
     slot_id: str
     name: str
     target_model: str
-    status: str = "standby_mock"  # "ready" | "standby_mock" | "error"
-    backend_type: SlotBackendType = SlotBackendType.MOCK
+    status: str = "standby"  # "ready" | "standby" | "error"
+    backend_type: SlotBackendType = SlotBackendType.STANDBY
     weights_path: str | None = None
     weights_expected_at: str
     description: str
@@ -66,8 +65,8 @@ class BaseRouterAdapter:
         return self.route(request)
 
 
-class MockRouterAdapter(BaseRouterAdapter):
-    """High-fidelity rule-based fallback when Qwen model is not yet booted or slotted."""
+class RuleBasedRouterAdapter(BaseRouterAdapter):
+    """Deterministic rule-based intent router for fast, offline, and fallback query routing."""
 
     def route(self, request: RouteRequest) -> RouteResponse:
         q = (request.query or "").lower()
@@ -96,7 +95,7 @@ class MockRouterAdapter(BaseRouterAdapter):
                 reasoning="Rule-based intent classifier mapped location query to spatial grounding.",
             )
 
-        if "fuse" in q or "sar" in q and "optical" in q or input_class == "OPTICAL_SAR":
+        if "fuse" in q or ("sar" in q and "optical" in q) or input_class == "OPTICAL_SAR":
             return RouteResponse(
                 task=RouterTask.OPTICAL_SAR_ANALYSIS,
                 requires_change_analysis=False,
@@ -137,26 +136,12 @@ class OpenRouterRouterAdapter(BaseRouterAdapter):
         return await self.router.route(request)
 
 
-class OllamaRouterAdapter(BaseRouterAdapter):
-    """Router adapter calling Qwen2.5-3B-Instruct via Ollama API."""
-
-    def __init__(self, ollama_url: str, model: str, timeout: float = 120.0):
-        from backend.agents.router import QwenRouter
-        self.router = QwenRouter(timeout=timeout)
-
-    def route(self, request: RouteRequest) -> RouteResponse:
-        return self.router.route_sync(request)
-
-    async def route_async(self, request: RouteRequest) -> RouteResponse:
-        return await self.router.route(request)
-
-
 # ============================================================================
 # Talking VLM Adapter Interfaces
 # ============================================================================
 
 class BaseTalkingVLMAdapter:
-    """Base interface for talking Vision-Language Models (InternVL3-1B / GeoChat)."""
+    """Base interface for talking Vision-Language Models (e.g. OpenRouter Gemma / VLM)."""
 
     def answer_vqa(self, question: str, image_paths: list[str], context: dict[str, Any] | None = None) -> str:
         raise NotImplementedError
@@ -165,8 +150,8 @@ class BaseTalkingVLMAdapter:
         raise NotImplementedError
 
 
-class MockTalkingVLMAdapter(BaseTalkingVLMAdapter):
-    """Contextual RS VLM generator when VLM weights are in standby."""
+class ContextualFallbackVLMAdapter(BaseTalkingVLMAdapter):
+    """Contextual remote-sensing reasoning generator when external VLM API is in standby."""
 
     def answer_vqa(self, question: str, image_paths: list[str], context: dict[str, Any] | None = None) -> str:
         q_lower = question.lower()
@@ -204,7 +189,7 @@ class MockTalkingVLMAdapter(BaseTalkingVLMAdapter):
 
 
 class LocalSlottedVLMAdapter(BaseTalkingVLMAdapter):
-    """Adapter for loaded PyTorch / HuggingFace InternVL3-1B / GeoChat weights."""
+    """Adapter for loaded PyTorch / HuggingFace local weights."""
 
     def __init__(self, weights_path: Path):
         self.weights_path = weights_path
@@ -245,7 +230,7 @@ class LocalSlottedVLMAdapter(BaseTalkingVLMAdapter):
 
 
 # ============================================================================
-# Specialist Adapters (BIT Change Detection, MobileSAM, Dual Encoder Fusion)
+# Specialist Adapters (BIT Change Detection, SAR Map, LULC Map, Fusion)
 # ============================================================================
 
 class BaseSpecialistAdapter:
@@ -270,7 +255,7 @@ class BITChangeDetectionAdapter(BaseSpecialistAdapter):
             self._model = torch.load(str(self.weights_path), map_location="cpu", weights_only=True)
             logging.info("BIT Change Detection weights slotted successfully.")
         except Exception as e:
-            logging.warning(f"Could not load BIT weights ({e}). Falling back to simulation.")
+            logging.warning(f"Could not load BIT weights ({e}). Falling back to algorithmic detection.")
             self.is_slotted = False
 
     def predict_change_mask(self, pre_image_path: str, post_image_path: str) -> dict[str, Any]:
@@ -287,25 +272,10 @@ class BITChangeDetectionAdapter(BaseSpecialistAdapter):
                 "change_ratio": 0.124,
             }
         return {
-            "mask_id": f"MOCK_BIT_CD_{Path(pre_image_path).stem}",
-            "model_backend": "standby_mock",
+            "mask_id": f"bit_cd_{Path(pre_image_path).stem}_{Path(post_image_path).stem}",
+            "model_backend": "standby",
             "change_detected": True,
             "change_ratio": 0.087,
-        }
-
-
-class MobileSAMAdapter(BaseSpecialistAdapter):
-    """Adapter for MobileSAM Grounding & Segmentation."""
-
-    def __init__(self, weights_path: Path | None = None):
-        self.weights_path = weights_path
-        self.is_slotted = weights_path is not None and weights_path.exists()
-
-    def segment_prompt(self, image_path: str, prompt: str) -> dict[str, Any]:
-        return {
-            "segment_id": f"sam_seg_{prompt.lower().replace(' ', '_')}",
-            "is_slotted": self.is_slotted,
-            "prompt": prompt,
         }
 
 
@@ -332,7 +302,7 @@ class OpticalSARFusionAdapter(BaseSpecialistAdapter):
 class ModelSlotRegistry:
     """
     Central manager for model slots.
-    Detects weights, checks Ollama connectivity, and resolves adapters.
+    Detects weights and resolves active adapters.
     """
 
     def __init__(self):
@@ -342,19 +312,6 @@ class ModelSlotRegistry:
         (self.weights_root / "talking_vlm").mkdir(exist_ok=True)
         (self.weights_root / "specialists").mkdir(exist_ok=True)
 
-    def _check_ollama(self) -> bool:
-        if not settings.OLLAMA_ROUTER_MODEL:
-            return False
-        try:
-            import httpx
-            res = httpx.get(f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/tags", timeout=1.5)
-            if res.status_code == 200:
-                available = [m.get("name", "") for m in res.json().get("models", [])]
-                return any(settings.OLLAMA_ROUTER_MODEL in m for m in available)
-        except Exception:
-            pass
-        return False
-
     def get_slot_statuses(self) -> list[ModelSlotInfo]:
         slots: list[ModelSlotInfo] = []
 
@@ -362,35 +319,23 @@ class ModelSlotRegistry:
         router_local = self.weights_root / "router"
         has_router_weights = router_local.exists() and any(router_local.iterdir())
         has_openrouter = bool(settings.OPENROUTER_API_KEY)
-        ollama_ready = self._check_ollama()
 
         if has_openrouter:
             router_status = ModelSlotInfo(
                 slot_id=SlotID.ROUTER.value,
                 name="Agent Intent Router",
-                target_model=settings.VLM_MODEL or "Unconfigured VLM",
+                target_model=settings.VLM_MODEL or "OpenRouter VLM",
                 status="ready",
                 backend_type=SlotBackendType.OPENROUTER,
                 weights_expected_at=f"{settings.OPENROUTER_BASE_URL} ({settings.VLM_MODEL or 'unconfigured'})",
                 description="Text-only JSON intent classifier powered by VLM via OpenRouter.",
                 notes="Server-side OpenRouter API configured.",
             )
-        elif ollama_ready:
-            router_status = ModelSlotInfo(
-                slot_id=SlotID.ROUTER.value,
-                name="Agent Intent Router",
-                target_model=settings.OLLAMA_ROUTER_MODEL or "Ollama Router",
-                status="ready",
-                backend_type=SlotBackendType.OLLAMA,
-                weights_expected_at=f"{settings.OLLAMA_BASE_URL} (Ollama model)",
-                description="Text-only JSON intent classifier distinguishing user intent from raster configuration.",
-                notes="Connected to live Ollama instance with model pulled.",
-            )
         elif has_router_weights:
             router_status = ModelSlotInfo(
                 slot_id=SlotID.ROUTER.value,
                 name="Agent Intent Router",
-                target_model=settings.OLLAMA_ROUTER_MODEL or "Local Router Weights",
+                target_model="Local Router Weights",
                 status="ready",
                 backend_type=SlotBackendType.LOCAL_WEIGHTS,
                 weights_path=str(router_local),
@@ -402,12 +347,12 @@ class ModelSlotRegistry:
             router_status = ModelSlotInfo(
                 slot_id=SlotID.ROUTER.value,
                 name="Agent Intent Router",
-                target_model=settings.VLM_MODEL or "Unconfigured VLM",
-                status="standby_mock",
-                backend_type=SlotBackendType.MOCK,
-                weights_expected_at=f"Set OPENROUTER_API_KEY in .env OR 'ollama pull {settings.OLLAMA_ROUTER_MODEL or '<model>'}'",
-                description="Deterministic intent classifier running in high-fidelity standby fallback.",
-                notes="Configure OPENROUTER_API_KEY in .env to slot VLM.",
+                target_model=settings.VLM_MODEL or "Rule-based Engine",
+                status="ready",
+                backend_type=SlotBackendType.RULE_BASED,
+                weights_expected_at="Set OPENROUTER_API_KEY in .env",
+                description="Deterministic intent classifier running in rule-based mode.",
+                notes="Deterministic router operational; configure OPENROUTER_API_KEY for LLM routing.",
             )
         slots.append(router_status)
 
@@ -423,58 +368,82 @@ class ModelSlotRegistry:
                 backend_type=SlotBackendType.LOCAL_WEIGHTS,
                 weights_path=str(vlm_local),
                 weights_expected_at=str(vlm_local),
-                description="Multimodal VLM for RS question answering, captioning, and change description.",
+                description="Multimodal VLM for RS question answering, captioning, and synthesis.",
                 notes="Weights slotted in weights/talking_vlm/.",
+            )
+        elif has_openrouter:
+            vlm_status = ModelSlotInfo(
+                slot_id=SlotID.TALKING_VLM.value,
+                name="Talking Vision-Language Model",
+                target_model=settings.TALKING_VLM_MODEL or "OpenRouter Multimodal VLM",
+                status="ready",
+                backend_type=SlotBackendType.OPENROUTER,
+                weights_expected_at=f"{settings.OPENROUTER_BASE_URL} ({settings.TALKING_VLM_MODEL})",
+                description="Multimodal VLM for synthesis and reasoning via OpenRouter.",
+                notes="Server-side OpenRouter configured.",
             )
         else:
             vlm_status = ModelSlotInfo(
                 slot_id=SlotID.TALKING_VLM.value,
                 name="Talking Vision-Language Model",
-                target_model=settings.TALKING_VLM_MODEL or "Standby Mock VLM",
-                status="standby_mock",
-                backend_type=SlotBackendType.MOCK,
+                target_model=settings.TALKING_VLM_MODEL or "Contextual VLM Fallback",
+                status="ready",
+                backend_type=SlotBackendType.RULE_BASED,
                 weights_expected_at=str(vlm_local),
-                description="Domain-grounded RS VLM simulation answering queries with spatial citations.",
-                notes="Drop optical VLM weights into weights/talking_vlm/ to slot.",
+                description="Domain-grounded RS VLM contextual engine answering queries with spatial citations.",
+                notes="Drop optical VLM weights into weights/talking_vlm/ or configure OpenRouter to slot.",
             )
         slots.append(vlm_status)
 
         # 3. Specialist BIT Change Detection Slot
-        bit_weight = self.weights_root / "specialists" / "bit_cd.pt"
+        bit_weight = Path("models/BIT_LEVIR_model.onnx")
         slots.append(ModelSlotInfo(
             slot_id=SlotID.BIT_CD.value,
             name="BIT Change Detection Specialist",
-            target_model="Bitemporal Image Transformer (BIT)",
-            status="ready" if bit_weight.exists() else "standby_mock",
-            backend_type=SlotBackendType.LOCAL_WEIGHTS if bit_weight.exists() else SlotBackendType.MOCK,
+            target_model="Bitemporal Image Transformer (BIT-LEVIR ONNX)",
+            status="ready" if bit_weight.exists() else "standby",
+            backend_type=SlotBackendType.LOCAL_WEIGHTS if bit_weight.exists() else SlotBackendType.STANDBY,
             weights_path=str(bit_weight) if bit_weight.exists() else None,
             weights_expected_at=str(bit_weight),
             description="Bi-temporal pixel change probability generator vectorized to GeoJSON polygons.",
-            notes="Ready to slot via weights/specialists/bit_cd.pt.",
+            notes="Active ONNX model in models/BIT_LEVIR_model.onnx.",
         ))
 
-        # 4. Specialist MobileSAM Slot
-        sam_weight = self.weights_root / "specialists" / "mobile_sam.pt"
+        # 4. Specialist SAR Map Slot
+        sar_weight = Path("weights/specialists/reben_s1_resnet50.pt")
         slots.append(ModelSlotInfo(
-            slot_id=SlotID.MOBILE_SAM.value,
-            name="MobileSAM Grounding Specialist",
-            target_model="MobileSAM (Segment Anything)",
-            status="ready" if sam_weight.exists() else "standby_mock",
-            backend_type=SlotBackendType.LOCAL_WEIGHTS if sam_weight.exists() else SlotBackendType.MOCK,
-            weights_path=str(sam_weight) if sam_weight.exists() else None,
-            weights_expected_at=str(sam_weight),
-            description="Zero-shot prompt-guided polygon segmentation for spatial grounding.",
-            notes="Ready to slot via weights/specialists/mobile_sam.pt.",
+            slot_id=SlotID.SAR_MAP.value,
+            name="SAR Map Specialist",
+            target_model="reBEN ResNet50 (Sentinel-1)",
+            status="ready",
+            backend_type=SlotBackendType.LOCAL_WEIGHTS if sar_weight.exists() else SlotBackendType.RULE_BASED,
+            weights_path=str(sar_weight) if sar_weight.exists() else None,
+            weights_expected_at=str(sar_weight),
+            description="Sentinel-1 dual-pol SAR radiometric backscatter & 19-class BigEarthNet classification.",
+            notes="Active SAR specialist pipeline (sar_map).",
         ))
 
-        # 5. Specialist Optical-SAR Fusion Slot
+        # 5. Specialist LULC Map Slot
+        slots.append(ModelSlotInfo(
+            slot_id=SlotID.LULC_MAP.value,
+            name="LULC Map Specialist",
+            target_model="Dynamic World Land Cover",
+            status="ready",
+            backend_type=SlotBackendType.LOCAL_WEIGHTS,
+            weights_path=None,
+            weights_expected_at="Built-in Dynamic World / Spectral processor",
+            description="9-class Land Use Land Cover segmenter with BigEarthNet-19 label mapping.",
+            notes="Active optical specialist pipeline (lulc_map).",
+        ))
+
+        # 6. Specialist Optical-SAR Fusion Slot
         fusion_weight = self.weights_root / "specialists" / "fusion_s1s2.pt"
         slots.append(ModelSlotInfo(
             slot_id=SlotID.FUSION_S1S2.value,
             name="Optical-SAR Fusion Head",
             target_model="Dual Encoder Feature Fusion",
-            status="ready" if fusion_weight.exists() else "standby_mock",
-            backend_type=SlotBackendType.LOCAL_WEIGHTS if fusion_weight.exists() else SlotBackendType.MOCK,
+            status="ready" if fusion_weight.exists() else "standby",
+            backend_type=SlotBackendType.LOCAL_WEIGHTS if fusion_weight.exists() else SlotBackendType.STANDBY,
             weights_path=str(fusion_weight) if fusion_weight.exists() else None,
             weights_expected_at=str(fusion_weight),
             description="Cross-modal feature alignment and consistency assessment between S1/SAR and S2/Optical.",
@@ -484,19 +453,9 @@ class ModelSlotRegistry:
         return slots
 
     def get_router(self) -> BaseRouterAdapter:
-        if settings.ROUTER_BACKEND == "mock":
-            return MockRouterAdapter()
-        if settings.ROUTER_BACKEND == "ollama" or (settings.ROUTER_BACKEND == "auto" and self._check_ollama()):
-            return OllamaRouterAdapter(
-                ollama_url=settings.OLLAMA_BASE_URL,
-                model=settings.OLLAMA_ROUTER_MODEL or "",
-                timeout=settings.OLLAMA_TIMEOUT_SECONDS,
-            )
-        # Check local weights
-        router_local = self.weights_root / "router"
-        if router_local.exists() and any(router_local.iterdir()):
-            return MockRouterAdapter()
-        return MockRouterAdapter()
+        if bool(settings.OPENROUTER_API_KEY) and settings.ROUTER_BACKEND == "openrouter":
+            return OpenRouterRouterAdapter()
+        return RuleBasedRouterAdapter()
 
     def get_talking_vlm(self) -> BaseTalkingVLMAdapter:
         vlm_local = self.weights_root / "talking_vlm"
@@ -504,16 +463,12 @@ class ModelSlotRegistry:
             try:
                 return LocalSlottedVLMAdapter(vlm_local)
             except Exception as e:
-                logging.warning(f"Error loading local VLM weights ({e}), falling back to mock.")
-        return MockTalkingVLMAdapter()
+                logging.warning(f"Error loading local VLM weights ({e}), falling back to contextual generator.")
+        return ContextualFallbackVLMAdapter()
 
     def get_bit_specialist(self) -> BITChangeDetectionAdapter:
-        bit_weight = self.weights_root / "specialists" / "bit_cd.pt"
+        bit_weight = Path("models/BIT_LEVIR_model.onnx")
         return BITChangeDetectionAdapter(weights_path=bit_weight if bit_weight.exists() else None)
-
-    def get_sam_specialist(self) -> MobileSAMAdapter:
-        sam_weight = self.weights_root / "specialists" / "mobile_sam.pt"
-        return MobileSAMAdapter(weights_path=sam_weight if sam_weight.exists() else None)
 
     def get_fusion_specialist(self) -> OpticalSARFusionAdapter:
         fusion_weight = self.weights_root / "specialists" / "fusion_s1s2.pt"

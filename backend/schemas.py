@@ -40,12 +40,12 @@ class RouterInputMode(str, Enum):
 
 class RouterTool(str, Enum):
     GEOSPATIAL_VALIDATOR = "geospatial_validator"
-    GEOCHAT_VQA = "geochat_vqa"
-    GEOCHAT_DESCRIBE = "geochat_describe"
+    SAR_MAP = "sar_map"
+    LULC_MAP = "lulc_map"
     BIT_CD = "bit_cd"
     FUSION_S1S2 = "fusion_s1s2"
-    MOBILESAM = "mobilesam"
     VECTORIZER = "vectorizer"
+    PREPROCESS = "preprocess"
 
 
 # ---------------------------------------------------------------------------
@@ -213,7 +213,7 @@ class AssetResponse(BaseModel):
 # Tool Registry & Tool Run Schemas
 # ---------------------------------------------------------------------------
 class ToolRegistryBase(BaseModel):
-    tool_id: str = Field(..., max_length=64, description="Unique identifier (e.g., geochat_vqa, bit_cd)")
+    tool_id: str = Field(..., max_length=64, description="Unique identifier (e.g., sar_map, lulc_map, bit_cd)")
     name: str = Field(..., max_length=255)
     tool_type: str = Field(..., max_length=64, description="VLM, CHANGE_DETECTOR, SEGMENTATION, FUSION, UTILITY")
     model_name: str | None = Field(None, max_length=128)
@@ -394,6 +394,9 @@ class JobCreate(BaseModel):
     query: str = Field(..., min_length=1, description="Natural language satellite query")
     input_mode: str | None = Field(None, description="SINGLE_OPTICAL, BI_TEMPORAL_OPTICAL, OPTICAL_SAR. Inferred from ingest when job_id is set.")
     task: str = Field(default="UNROUTED", description="SINGLE_VQA, CHANGE_VQA, GROUNDING, OPTICAL_SAR_FUSION. Qwen overwrites this during /run.")
+    active_slot: str | None = Field(None, description="'T1' or 'T2' active scene slot")
+    mode: str | None = Field(None, description="'single_scene' or 'pair'")
+    active_filename: str | None = Field(None, description="Filename of the active asset")
     route_json: dict[str, Any] | None = None
 
 

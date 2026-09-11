@@ -29,7 +29,7 @@ class BitemporalPreprocessor(BasePreprocessor):
     
     Performs spatial alignment, co-registration / resampling to a shared intersection grid,
     consistent radiometric normalization across timestamps, and produces strictly
-    geographically-aligned paired tiles for change detection (BIT) and change VQA (GeoChat).
+    geographically-aligned paired tiles for change detection (BIT) and bitemporal analysis.
     """
 
     def __init__(
