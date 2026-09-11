@@ -297,7 +297,7 @@ export function ExplorePage() {
           className={cn(
             "sq-glass absolute top-3 left-3 z-10 flex items-center gap-2 rounded-lg px-3 py-1.5 font-mono text-[11px] tracking-wide transition-all duration-200 active:scale-95",
             selectMode
-              ? "border-primary/50 text-primary shadow-[0_0_12px_-2px_rgba(94,143,138,0.4)]"
+              ? "border-primary/50 text-primary"
               : "text-mute hover:text-ink hover:border-white/20",
           )}
         >
@@ -324,7 +324,7 @@ export function ExplorePage() {
                     scene.id === selected ? "bg-raised shadow-sm ring-1 ring-white/5" : "hover:bg-raised/60 hover:translate-x-0.5",
                   )}
                 >
-                  <DemoThumb demo={scene} className="size-9 shrink-0 rounded-md transition-transform duration-200 group-hover:scale-105" />
+                  <DemoThumb demo={scene} className="size-9 shrink-0 rounded-md" />
                   <span className="min-w-0">
                     <span className={cn("block truncate text-[13px] transition-colors duration-150", scene.id === selected ? "text-primary font-medium" : "text-ink group-hover:text-primary")}>{scene.title}</span>
                     <span className="block truncate font-mono text-[11px] text-mute">{scene.place}</span>
@@ -372,7 +372,7 @@ function SceneCard({ demo, onAsk }: { demo: DemoScene; onAsk: () => void }) {
       <p className="mt-2 font-mono text-[10px] text-mute">{slot.bounds.map((n) => n.toFixed(3)).join(", ")}</p>
       <Button type="button" className="group mt-4 w-full transition-all duration-200 active:scale-[0.98]" onClick={onAsk}>
         Open in console
-        <ArrowRight className="size-4 transition-transform duration-200 group-hover:translate-x-1" />
+        <ArrowRight className="size-4" />
       </Button>
     </div>
   );

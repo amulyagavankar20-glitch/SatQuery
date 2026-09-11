@@ -27,18 +27,18 @@ export function EntryPage() {
             </p>
             <Link
               to="/console"
-              className="sq-hero-in sq-glass sq-cta sq-glow-border group mt-12 inline-flex h-12 items-center gap-2 rounded-xl px-7 text-[15px] font-medium text-ink transition-all duration-200 active:scale-[0.98]"
+              className="sq-hero-in sq-glass sq-cta group mt-12 inline-flex h-12 items-center gap-2 rounded-xl px-7 text-[15px] font-medium text-ink transition-all duration-200 active:scale-[0.98]"
               style={{ borderColor: "rgba(94,143,138,0.5)", animationDelay: "0.55s" }}
             >
               Open console
-              <ArrowRight className="size-4 text-primary transition-transform duration-200 group-hover:translate-x-1" />
+              <ArrowRight className="size-4 text-primary" />
             </Link>
           </div>
         </section>
 
         <section className="px-6 py-12 sm:px-10 lg:px-16">
           <div className="sq-gradient-divider mx-auto mb-10 max-w-5xl" />
-          <p className="sq-hero-in mx-auto mb-5 max-w-5xl text-[12px] tracking-[0.14em] text-mute" style={{ animationDelay: "0.6s" }}>
+          <p className="mx-auto mb-5 max-w-5xl text-[12px] tracking-[0.14em] text-mute">
             Scenes
           </p>
           <div className="mx-auto grid max-w-5xl gap-3 sm:grid-cols-3">
@@ -48,11 +48,10 @@ export function EntryPage() {
                 to="/console"
                 search={{ scene: demo.id }}
                 aria-label={`Load demo: ${demo.title}`}
-                className="sq-hero-in sq-glass group overflow-hidden rounded-xl text-left transition-all duration-300 hover:-translate-y-1 hover:border-primary/50 hover:shadow-[0_8px_24px_-8px_rgba(94,143,138,0.25)] active:scale-[0.98]"
-                style={{ animationDelay: `${0.65 + i * 0.08}s` }}
+                className="sq-glass group overflow-hidden rounded-xl text-left"
               >
                 <div className="aspect-[4/3] overflow-hidden">
-                  <DemoThumb demo={demo} className="h-full w-full transition-transform duration-300 group-hover:scale-[1.04]" />
+                  <DemoThumb demo={demo} className="h-full w-full" />
                 </div>
                 <div className="p-3">
                   <div className="font-mono text-[11px] tracking-wide text-mute transition-colors duration-200 group-hover:text-primary">

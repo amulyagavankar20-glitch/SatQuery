@@ -6,8 +6,6 @@ export function ScenePlate() {
 
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
-      {/* Atmospheric ambient glow buffer */}
-      <div className="sq-plate-bloom transition-opacity duration-500" />
       <img
         src="/about-plate.jpg"
         alt=""

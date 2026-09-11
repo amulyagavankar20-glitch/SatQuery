@@ -19,7 +19,7 @@ export function Composer() {
   };
 
   return (
-    <div className="sq-glow-border shrink-0 border-t border-hairline bg-background/80 px-4 py-3 backdrop-blur-md md:px-6" style={{ background: "linear-gradient(180deg, rgb(22 26 31 / 0.85), rgb(18 20 23 / 0.95))" }}>
+    <div className="shrink-0 border-t border-hairline px-4 py-3 backdrop-blur-md md:px-6" style={{ background: "linear-gradient(180deg, rgb(22 26 31 / 0.85), rgb(18 20 23 / 0.95))" }}>
       <div className="mx-auto w-full max-w-4xl">
         <div className="sq-chips flex gap-2 overflow-x-auto pb-1">
           {OFFICIAL_CHIPS.map((chip, i) => {

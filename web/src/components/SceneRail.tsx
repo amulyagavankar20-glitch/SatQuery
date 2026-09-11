@@ -44,7 +44,7 @@ function SlotCard({
             <img
               src={slot.previewUrl}
               alt=""
-              className="size-10 rounded-lg object-cover transition-transform duration-300 group-hover:scale-110"
+              className="size-10 rounded-lg object-cover"
               style={slot.objectPos ? { objectPosition: slot.objectPos } : undefined}
             />
           </button>

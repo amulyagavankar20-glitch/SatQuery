@@ -48,9 +48,7 @@ body,
 
 body {
   background:
-    radial-gradient(ellipse 70% 45% at 100% -10%, rgb(94 143 138 / 0.18), transparent 58%),
-    radial-gradient(ellipse 40% 40% at 50% 50%, rgb(94 143 138 / 0.04), transparent 70%),
-    radial-gradient(ellipse 50% 35% at 0% 110%, rgb(26 30 34 / 0.85), transparent 52%),
+    radial-gradient(ellipse 50% 40% at 0% 110%, rgb(26 30 34 / 0.8), transparent 52%),
     var(--color-background);
   color: var(--color-foreground);
   font-family: var(--font-sans);
@@ -269,26 +267,7 @@ kbd,
 }
 
 .sq-send-ready {
-  box-shadow: 0 0 12px -2px rgb(94 143 138 / 0.45);
-  transition: box-shadow 0.2s ease, transform 0.15s ease;
-}
-.sq-send-ready:hover {
-  box-shadow: 0 0 16px 0 rgb(94 143 138 / 0.65);
-}
-
-.sq-spec-row {
-  transition: background-color 0.15s ease, padding-left 0.15s ease;
-  border-radius: 6px;
-  padding-left: 4px;
-  padding-right: 4px;
-}
-.sq-spec-row:hover {
-  background-color: rgb(255 255 255 / 0.025);
-  padding-left: 8px;
-}
-.sq-spec-row:hover dt {
-  color: var(--color-primary);
-  text-shadow: 0 0 8px rgb(94 143 138 / 0.3);
+  box-shadow: 0 8px 18px -12px rgb(94 143 138 / 0.55);
 }
 
 .sq-enter {
@@ -298,7 +277,7 @@ kbd,
 .sq-kicker {
   font-weight: 500;
   letter-spacing: 0.06em;
-  background: linear-gradient(100deg, #f4f0e8 0%, #d5e8e5 30%, #a2d2cc 65%, #6ea49f 100%);
+  background: linear-gradient(100deg, #f4f0e8 0%, #e8e4dc 55%, #c4bfb4 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -307,7 +286,7 @@ kbd,
 }
 
 .sq-kicker-soft {
-  background: linear-gradient(180deg, #f0ebe1 0%, #cbdcd9 45%, #9bc5bf 100%);
+  background: linear-gradient(180deg, #e8e4dc 0%, #8b959e 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -316,7 +295,7 @@ kbd,
 }
 
 .sq-title {
-  background: linear-gradient(165deg, #f2eee6 0%, #e8e4dc 35%, #aed5d0 70%, #6da19c 100%);
+  background: linear-gradient(165deg, #f2eee6 0%, #e8e4dc 58%, #9aa3ab 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -355,10 +334,9 @@ button.sq-glass:hover {
     rgb(26 30 34 / 0.82),
     rgb(34 40 46 / 0.7)
   );
-  transform: translateY(-2px);
+  transform: translateY(-1px);
   box-shadow:
-    0 14px 34px -10px rgb(8 10 12 / 0.7),
-    0 0 18px -6px rgb(94 143 138 / 0.15),
+    0 10px 28px -12px rgb(8 10 12 / 0.7),
     inset 0 1px 0 0 rgb(255 255 255 / 0.06);
 }
 
@@ -381,14 +359,20 @@ button.sq-glass:hover {
   mask-image: radial-gradient(ellipse 68% 78% at 86% 48%, #000 22%, transparent 72%);
 }
 
-.sq-plate-bloom {
+.sq-earth-limb {
   position: absolute;
-  top: 18%;
-  right: -10%;
-  width: min(58vw, 520px);
-  height: min(58vw, 520px);
-  border-radius: 50%;
-  background: radial-gradient(circle, rgb(94 143 138 / 0.1), transparent 70%);
+  top: 50%;
+  right: 0;
+  z-index: 0;
+  width: min(72vh, 680px);
+  height: min(92vh, 860px);
+  transform: translateY(-50%);
+  background: radial-gradient(
+    ellipse 52% 58% at 62% 46%,
+    rgb(214 204 190 / 0.11) 0%,
+    rgb(18 20 23 / 0) 62%
+  );
+  pointer-events: none;
 }
 
 .sq-sky {
@@ -457,16 +441,12 @@ button.sq-glass:hover {
 }
 
 .sq-cta:hover {
-  box-shadow:
-    0 0 24px -8px rgb(94 143 138 / 0.35),
-    0 8px 20px -8px rgb(0 0 0 / 0.4);
+  box-shadow: 0 10px 22px -14px rgb(0 0 0 / 0.7);
 }
 
 .sq-console-wash {
   background:
-    radial-gradient(ellipse 70% 45% at 100% -10%, rgb(94 143 138 / 0.16), transparent 58%),
-    radial-gradient(ellipse 35% 25% at 80% 60%, rgb(94 143 138 / 0.05), transparent 60%),
-    radial-gradient(ellipse 50% 35% at 0% 110%, rgb(26 30 34 / 0.85), transparent 52%),
+    radial-gradient(ellipse 50% 35% at 0% 110%, rgb(26 30 34 / 0.75), transparent 52%),
     var(--color-background);
 }
 
@@ -525,7 +505,6 @@ button.sq-glass:hover {
   border-color: color-mix(in srgb, var(--color-primary) 70%, transparent);
   background: color-mix(in srgb, var(--color-primary) 12%, transparent);
   color: var(--color-primary);
-  box-shadow: 0 0 12px -4px rgb(94 143 138 / 0.2);
 }
 
 @keyframes sq-palette {
@@ -547,51 +526,12 @@ button,
 a,
 [role="button"] {
   transition:
-    color 0.18s ease,
-    background-color 0.18s ease,
-    border-color 0.18s ease,
-    opacity 0.18s ease,
-    transform 0.18s ease,
-    box-shadow 0.18s ease;
+    color 0.15s ease,
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    opacity 0.15s ease;
 }
 
-/* ── Floating ambient glow ─────────────────────── */
-@keyframes sq-float-glow {
-  0%, 100% {
-    opacity: 0.5;
-    transform: translateY(0) scale(1);
-  }
-  50% {
-    opacity: 0.8;
-    transform: translateY(-8px) scale(1.02);
-  }
-}
-
-.sq-float-glow {
-  animation: sq-float-glow 6s ease-in-out infinite;
-}
-
-/* ── Gradient border glow on focus-within ──────── */
-.sq-glow-border {
-  position: relative;
-}
-.sq-glow-border::before {
-  content: "";
-  position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  background: linear-gradient(135deg, rgb(94 143 138 / 0.3), transparent 50%, rgb(94 143 138 / 0.15));
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  pointer-events: none;
-  z-index: -1;
-}
-.sq-glow-border:hover::before,
-.sq-glow-border:focus-within::before {
-  opacity: 1;
-}
-
-/* ── Subtle glass card overlay for depth ───────── */
 .sq-glass-card {
   background: linear-gradient(
     145deg,
@@ -602,20 +542,8 @@ a,
   box-shadow:
     0 8px 32px -4px rgb(0 0 0 / 0.45),
     inset 0 1px 0 0 rgb(255 255 255 / 0.04);
-  backdrop-filter: blur(14px) saturate(1.15);
-  -webkit-backdrop-filter: blur(14px) saturate(1.15);
-  transition:
-    border-color 0.25s ease,
-    box-shadow 0.25s ease,
-    transform 0.25s ease;
-}
-.sq-glass-card:hover {
-  border-color: rgb(94 143 138 / 0.3);
-  box-shadow:
-    0 12px 36px -8px rgb(0 0 0 / 0.55),
-    0 0 20px -8px rgb(94 143 138 / 0.12),
-    inset 0 1px 0 0 rgb(255 255 255 / 0.06);
-  transform: translateY(-1px);
+  backdrop-filter: blur(14px) saturate(1.1);
+  -webkit-backdrop-filter: blur(14px) saturate(1.1);
 }
 
 /* ── Gradient divider ──────────────────────────── */
@@ -645,45 +573,23 @@ a,
 @keyframes sq-hero-in {
   from {
     opacity: 0;
-    transform: translateY(18px);
-    filter: blur(4px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
     transform: none;
-    filter: blur(0);
   }
 }
 
 .sq-hero-in {
   opacity: 0;
-  animation: sq-hero-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: sq-hero-in 0.45s ease-out forwards;
 }
 
-/* ── Earth photographic shadow mask ───────────── */
+/* Dissolve the JPEG frame into ground. Leave the globe's own limb. */
 .sq-earth-img {
-  -webkit-mask-image: radial-gradient(circle at 58% 49%, #000 40%, transparent 73%);
-  mask-image: radial-gradient(circle at 58% 49%, #000 40%, transparent 73%);
-}
-
-/* ── NightSky subtle shimmer ──────────────────── */
-.sq-sky::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    135deg,
-    transparent 30%,
-    rgb(94 143 138 / 0.03) 45%,
-    transparent 60%
-  );
-  animation: sq-sky-shimmer 12s ease-in-out infinite;
-  pointer-events: none;
-}
-
-@keyframes sq-sky-shimmer {
-  0%, 100% { opacity: 0; }
-  50% { opacity: 1; }
+  -webkit-mask-image: radial-gradient(ellipse 88% 94% at 70% 50%, #000 50%, transparent 80%);
+  mask-image: radial-gradient(ellipse 88% 94% at 70% 50%, #000 50%, transparent 80%);
 }
 
 /* ── Explore map pin hover ────────────────────── */
@@ -695,8 +601,7 @@ a,
     background-color 0.18s ease;
 }
 .sq-explore-pin:hover {
-  transform: translateY(-2px) scale(1.05);
-  box-shadow: 0 6px 16px -4px rgb(94 143 138 / 0.35);
+  transform: translateY(-1px);
   background: var(--color-raised);
 }
 
@@ -716,23 +621,7 @@ a,
   animation: sq-toast-in 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-/* ── Send button glow pulse when active ───────── */
-@keyframes sq-send-glow {
-  0%, 100% {
-    box-shadow:
-      0 0 0 0 rgb(94 143 138 / 0),
-      0 2px 8px -2px rgb(0 0 0 / 0.3);
-  }
-  50% {
-    box-shadow:
-      0 0 16px -2px rgb(94 143 138 / 0.3),
-      0 2px 8px -2px rgb(0 0 0 / 0.3);
-  }
-}
 
-.sq-send-ready {
-  animation: sq-send-glow 2.4s ease-in-out infinite;
-}
 
 /* ── Drag-and-drop overlay ────────────────────── */
 @keyframes sq-drop-pulse {
@@ -763,23 +652,7 @@ a,
   padding-right: 0.5rem;
 }
 .sq-spec-row:hover {
-  background: rgb(94 143 138 / 0.04);
-}
-
-/* ── Header entrance ──────────────────────────── */
-@keyframes sq-header-in {
-  from {
-    opacity: 0;
-    transform: translateY(-100%);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-.sq-header-entrance {
-  animation: sq-header-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  background: rgb(255 255 255 / 0.025);
 }
 
 /* ── Chip pressed micro-feedback ──────────────── */
@@ -790,13 +663,10 @@ a,
 
 /* ── Jobs list row hover ──────────────────────── */
 .sq-job-row {
-  transition:
-    background-color 0.15s ease,
-    transform 0.15s ease;
+  transition: background-color 0.15s ease;
 }
 .sq-job-row:hover {
   background: var(--color-raised);
-  transform: translateX(2px);
 }
 
 /* ── Pair fitness bar animated fill ───────────── */
@@ -825,17 +695,13 @@ a,
   .sq-live,
   .sq-hero-in,
   .sq-earth-img,
-  .sq-sky::after,
   .sq-toast,
-  .sq-send-ready,
   .sq-drop-zone,
-  .sq-header-entrance,
   .sq-bar-fill {
     animation: none !important;
   }
   .sq-hero-in {
     opacity: 1 !important;
-    filter: none !important;
   }
   .sq-toast {
     opacity: 1 !important;

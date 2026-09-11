@@ -351,13 +351,8 @@ export function MapEvidence({
               if (e.key === "ArrowRight") setSplit((s) => Math.min(96, s + 2));
             }}
           >
-            <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-primary/70 shadow-[0_0_8px_rgba(94,143,138,0.5)]" />
-            <div className="sq-glass absolute top-1/2 left-1/2 flex h-7 w-4 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-primary/40 bg-surface/90 shadow-[0_2px_10px_rgba(0,0,0,0.5),0_0_8px_rgba(94,143,138,0.3)] transition-transform duration-150 hover:scale-110">
-              <div className="flex gap-0.5">
-                <span className="h-2.5 w-0.5 rounded-full bg-primary/80" />
-                <span className="h-2.5 w-0.5 rounded-full bg-primary/80" />
-              </div>
-            </div>
+            <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-primary" />
+            <div className="sq-glass absolute top-1/2 left-1/2 h-[8px] w-[24px] -translate-x-1/2 -translate-y-1/2 rounded-sm border border-white/10" />
           </div>
         </>
       ) : null}

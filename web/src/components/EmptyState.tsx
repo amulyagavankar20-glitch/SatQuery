@@ -13,8 +13,8 @@ export function EmptyState() {
       <p className="sq-title text-[17px] leading-relaxed">Attach a GeoTIFF — or load a demo scene.</p>
       <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-mute">
         <span>Official questions sit in the composer.</span>
-        <Link to="/explore" className="group text-primary inline-flex items-center gap-1.5 hover:underline transition-transform active:scale-95">
-          <Map className="size-3.5 transition-transform duration-200 group-hover:rotate-12 group-hover:scale-110" />
+        <Link to="/explore" className="text-primary inline-flex items-center gap-1.5 hover:underline">
+          <Map className="size-3.5" />
           Explore scenes
         </Link>
       </p>
@@ -27,11 +27,10 @@ export function EmptyState() {
             type="button"
             onClick={() => loadDemo(demo.id)}
             aria-label={`Load demo: ${demo.title}`}
-            className="sq-glass sq-enter group overflow-hidden rounded-xl text-left transition-all duration-300 hover:-translate-y-1 hover:border-primary/50 hover:shadow-[0_8px_24px_-8px_rgba(94,143,138,0.25)] active:scale-[0.98]"
-            style={{ animationDelay: `${i * 40}ms` }}
+            className="sq-glass group overflow-hidden rounded-xl text-left"
           >
             <div className="aspect-[4/3] overflow-hidden">
-              <DemoThumb demo={demo} className="h-full w-full transition-transform duration-300 group-hover:scale-[1.04]" />
+              <DemoThumb demo={demo} className="h-full w-full" />
             </div>
             <div className="p-3">
               <div className="font-mono text-[11px] tracking-wide text-mute transition-colors duration-150 group-hover:text-primary">
