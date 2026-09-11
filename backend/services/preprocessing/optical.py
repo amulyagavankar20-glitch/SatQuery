@@ -68,8 +68,10 @@ class OpticalPreprocessor(BasePreprocessor):
                 nodata = src.nodatavals[0] if src.nodatavals else None
 
                 # Read raster bands
-                if count >= 3:
-                    # Multi-band / RGB optical
+                if count >= 9:
+                    # S2 L1C-style stack in DW order (B2,B3,B4,...): true-color RGB is B4,B3,B2
+                    data = src.read([3, 2, 1])
+                elif count >= 3:
                     data = src.read([1, 2, 3])
                 else:
                     # Single band / Panchromatic optical -> duplicate to 3-channel for VLM
