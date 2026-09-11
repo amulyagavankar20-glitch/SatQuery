@@ -36,14 +36,29 @@ def list_tile_paths(job_id: str) -> list[Path]:
 
 
 def resolve_composite_path(job_id: str) -> Path | None:
-    processed = _job_dir(job_id) / "processed"
-    if not processed.is_dir():
-        return None
-    named = sorted(processed.glob("composite*.png"))
-    if named:
-        return named[0]
-    pngs = sorted(processed.glob("*.png"))
-    return pngs[0] if pngs else None
+    job_dir = _job_dir(job_id)
+    processed = job_dir / "processed"
+    if processed.is_dir():
+        named = sorted(processed.glob("composite*.png"))
+        if named:
+            return named[0]
+        pngs = sorted(processed.glob("*.png"))
+        if pngs:
+            return pngs[0]
+
+    raw = job_dir / "raw"
+    if raw.is_dir():
+        raw_imgs = (
+            sorted(raw.glob("*.png"))
+            + sorted(raw.glob("*.jpg"))
+            + sorted(raw.glob("*.jpeg"))
+            + sorted(raw.glob("*.tif"))
+            + sorted(raw.glob("*.tiff"))
+        )
+        if raw_imgs:
+            return raw_imgs[0]
+
+    return None
 
 
 def resolve_vv_path(job_id: str) -> Path | None:
@@ -276,8 +291,8 @@ def build_job_view_from_session(session: SessionContext) -> JobView:
 
 
 def build_job_view_from_db(job_id: str) -> JobView | None:
-    db = SessionLocal()
     try:
+        db = SessionLocal()
         try:
             job_uuid = uuid.UUID(str(job_id))
         except ValueError:

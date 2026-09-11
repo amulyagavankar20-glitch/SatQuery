@@ -41,7 +41,13 @@ def extract_raster_metadata(file_path: str | Path) -> dict[str, Any]:
                         bounds_wgs84 = list(transform_bounds(src.crs, "EPSG:4326", *bounds))
                 except Exception as e:
                     logging.warning(f"Could not transform bounds to WGS84: {e}")
-                    bounds_wgs84 = bounds
+                    bounds_wgs84 = None
+
+            if bounds_wgs84 and len(bounds_wgs84) == 4:
+                minx, miny, maxx, maxy = bounds_wgs84
+                if not (-180 <= minx <= 180 and -90 <= miny <= 90 and -180 <= maxx <= 180 and -90 <= maxy <= 90):
+                    logging.warning(f"Calculated bounds_wgs84 is out of WGS84 range: {bounds_wgs84}")
+                    bounds_wgs84 = None
 
             # Extract tags and metadata
             tags = src.tags()

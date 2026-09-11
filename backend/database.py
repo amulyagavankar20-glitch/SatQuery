@@ -17,6 +17,7 @@ engine = create_engine(
     max_overflow=settings.DB_MAX_OVERFLOW,
     pool_timeout=settings.DB_POOL_TIMEOUT,
     echo=settings.DB_ECHO,
+    connect_args={"connect_timeout": 2},
 )
 
 # Replica Engine (Reads)
@@ -26,6 +27,7 @@ replica_engine = create_engine(
     max_overflow=settings.DB_MAX_OVERFLOW,
     pool_timeout=settings.DB_POOL_TIMEOUT,
     echo=settings.DB_ECHO,
+    connect_args={"connect_timeout": 2},
 )
 
 class RoutingSession(Session):
@@ -64,6 +66,13 @@ def get_db() -> Generator[Session, None, None]:
 
 def check_db_connection() -> dict:
     """Utility function to verify connectivity and PostGIS extension status."""
+    import socket
+    try:
+        with socket.create_connection((settings.POSTGRES_HOST, settings.POSTGRES_PORT), timeout=0.3):
+            pass
+    except Exception as e:
+        return {"status": "unreachable", "error": f"Database port unreachable: {e}"}
+
     try:
         with engine.connect() as conn:
             db_version = conn.execute(text("SELECT version();")).scalar()
@@ -74,5 +83,5 @@ def check_db_connection() -> dict:
                 "postgis_version": postgis_version,
             }
     except Exception as e:
-        logging.error(f"Database connection failed: {e}")
-        raise CustomException(e, sys)
+        logging.warning(f"Database connection failed or offline: {e}")
+        return {"status": "unreachable", "error": str(e)}

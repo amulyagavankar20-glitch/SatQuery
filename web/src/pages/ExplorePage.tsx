@@ -54,25 +54,50 @@ export function ExplorePage() {
 
   const sendCrop = async (box: ReturnType<typeof bboxFromCorners>) => {
     const match = bestSceneForBox(DEMOS, box);
-    if (!match) {
-      toast("No scene in that box", "bad");
-      return;
-    }
     setSelectMode(false);
-    if (match.coverage >= 0.8) {
-      openFull(match.demo.id);
-      return;
-    }
-    try {
-      const file = await cropScenePng(match.demo, match.hit);
-      if (!file) {
+
+    if (match) {
+      if (match.coverage >= 0.8) {
+        openFull(match.demo.id);
+        return;
+      }
+      try {
+        const file = await cropScenePng(match.demo, match.hit);
+        if (!file) {
+          toast("Could not crop that portion", "bad");
+          return;
+        }
+        attachFiles([file], match.hit);
+        void navigate({ to: "/console" });
+        return;
+      } catch {
         toast("Could not crop that portion", "bad");
         return;
       }
-      attachFiles([file], match.hit);
+    }
+
+    try {
+      toast("Fetching Sentinel-2 satellite imagery for selected area...", "ok");
+      const res = await fetch("http://127.0.0.1:8000/ingest/bbox", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bbox: box, sensor: "Sentinel-2" }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to fetch imagery for selected area");
+      }
+      const data = await res.json();
+      const compRes = await fetch(`http://127.0.0.1:8000/jobs/${data.job_id}/artifacts/composite`);
+      if (compRes.ok) {
+        const blob = await compRes.blob();
+        const file = new File([blob], `sentinel2_${String(data.job_id).slice(0, 8)}.png`, { type: "image/png" });
+        attachFiles([file], box);
+      }
+      toast("Satellite imagery fetched and attached!", "ok");
       void navigate({ to: "/console" });
-    } catch {
-      toast("Could not crop that portion", "bad");
+    } catch (err: any) {
+      toast(err.message || "Could not fetch satellite imagery for that area", "bad");
     }
   };
 
@@ -198,7 +223,6 @@ export function ExplorePage() {
     map.on("mousedown", (e) => {
       if (!selectModeRef.current || e.originalEvent.button !== 0) return;
       e.preventDefault();
-      map.dragPan.disable();
       dragStartRef.current = { lng: e.lngLat.lng, lat: e.lngLat.lat };
     });
 
@@ -213,7 +237,6 @@ export function ExplorePage() {
     const finishDrag = (e: maplibregl.MapMouseEvent) => {
       const start = dragStartRef.current;
       dragStartRef.current = null;
-      map.dragPan.enable();
       const src = map.getSource("box") as maplibregl.GeoJSONSource | undefined;
       src?.setData(EMPTY_BOX);
       if (!selectModeRef.current || !start) return;
@@ -231,7 +254,6 @@ export function ExplorePage() {
     map.on("mouseleave", () => {
       if (!dragStartRef.current) return;
       dragStartRef.current = null;
-      map.dragPan.enable();
       const src = map.getSource("box") as maplibregl.GeoJSONSource | undefined;
       src?.setData(EMPTY_BOX);
     });
@@ -249,9 +271,13 @@ export function ExplorePage() {
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    map.dragPan.enable();
-    if (selectMode) map.doubleClickZoom.disable();
-    else map.doubleClickZoom.enable();
+    if (selectMode) {
+      map.dragPan.disable();
+      map.doubleClickZoom.disable();
+    } else {
+      map.dragPan.enable();
+      map.doubleClickZoom.enable();
+    }
     map.getCanvas().style.cursor = selectMode ? "crosshair" : "";
     if (!selectMode) {
       dragStartRef.current = null;

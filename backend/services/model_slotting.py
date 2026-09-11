@@ -345,9 +345,15 @@ class ModelSlotRegistry:
     def _check_ollama(self) -> bool:
         if not settings.OLLAMA_ROUTER_MODEL:
             return False
+        import socket
+        try:
+            with socket.create_connection(("127.0.0.1", 11434), timeout=0.1):
+                pass
+        except Exception:
+            return False
         try:
             import httpx
-            res = httpx.get(f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/tags", timeout=1.5)
+            res = httpx.get(f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/tags", timeout=0.5)
             if res.status_code == 200:
                 available = [m.get("name", "") for m in res.json().get("models", [])]
                 return any(settings.OLLAMA_ROUTER_MODEL in m for m in available)

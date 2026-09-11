@@ -1,5 +1,6 @@
-from typing import Any
+import asyncio
 import logging
+from typing import Any
 
 import httpx
 from fastapi import FastAPI
@@ -20,16 +21,19 @@ app = FastAPI(
 
 @app.on_event("startup")
 async def startup():
-    try:
-        from backend.database import SessionLocal
-        from backend.services.tool_catalog import seed_tool_registry
-        db = SessionLocal()
+    def _seed_sync():
         try:
-            seed_tool_registry(db)
-        finally:
-            db.close()
-    except Exception as exc:
-        logging.getLogger(__name__).warning("Tool registry was not seeded at startup: %s", exc)
+            from backend.database import SessionLocal
+            from backend.services.tool_catalog import seed_tool_registry
+            db = SessionLocal()
+            try:
+                seed_tool_registry(db)
+            finally:
+                db.close()
+        except Exception as exc:
+            logging.getLogger(__name__).warning("Tool registry was not seeded at startup: %s", exc)
+
+    asyncio.create_task(asyncio.to_thread(_seed_sync))
 
 app.add_middleware(RequestTrackingMiddleware)
 

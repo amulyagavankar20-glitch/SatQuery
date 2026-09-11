@@ -6,8 +6,11 @@ from fastapi.responses import FileResponse, Response
 
 from backend.agents.graph import run_graph
 from backend.exceptions import UnsupportedFormatError
-from backend.schemas import JobCreate, JobView, RouteRequest, RouteResponse
+from backend.schemas import BBoxIngestRequest, JobCreate, JobView, RouteRequest, RouteResponse
 from backend.services.ingest import ingest_rasters
+from backend.services.input_classifier import InputClassifier
+from backend.services.stac_service import search_and_crop_sentinel2
+from backend.utils import create_job_directory
 from backend.services.job_view import (
     footprint_geojson,
     footprint_kml,
@@ -68,6 +71,91 @@ async def ingest_job(
                 "bounds_wgs84": a.get("bounds_wgs84"),
             }
             for a in assets
+        ],
+    }
+
+
+@router.post("/ingest/bbox")
+def ingest_bbox_job(request: BBoxIngestRequest):
+    """Fetch Sentinel-2 imagery for bbox via STAC, classify input, and persist job."""
+    job_id = uuid.uuid4()
+    session_id = uuid.uuid4()
+    dirs = create_job_directory(job_id)
+    raw_dir = dirs["raw"]
+    output_tif = raw_dir / "stac_sentinel2.tif"
+
+    try:
+        stac_info = search_and_crop_sentinel2(
+            request.bbox,
+            output_tif,
+            max_cloud_cover=request.max_cloud_cover,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"STAC fetch failed: {exc}") from exc
+
+    classifier = InputClassifier()
+    asset_inputs = [{
+        "file_path": str(output_tif.resolve()),
+        "filename": output_tif.name,
+        "sensor": request.sensor,
+    }]
+    analysis = classifier.analyzer.analyze_inputs(asset_inputs)
+    classification = classifier.classify(asset_inputs, analysis_metadata=analysis)
+    analyzed = list(analysis.get("assets") or [])
+
+    for asset in analyzed:
+        asset["sensor"] = request.sensor
+        if stac_info.get("acquired_at"):
+            asset["acquired_at"] = stac_info["acquired_at"]
+
+    input_class = classification.input_class.value if classification.input_class else "SINGLE_OPTICAL"
+    session = create_session(
+        session_id=session_id,
+        job_id=job_id,
+        query=request.query,
+        input_mode=input_class,
+        task="UNROUTED",
+    )
+    session.status = "ingested" if classification.valid else "refused"
+    session.classification = classification.model_dump(mode="json")
+    session.metadata = {
+        "assets": analyzed,
+        "input_class": input_class,
+        "classification": session.classification,
+        "sensor": request.sensor,
+        "stac_info": stac_info,
+    }
+
+    create_job_record(
+        job_id=session.job_id,
+        session_id=session.session_id,
+        query=session.query or "INGESTED",
+        input_mode=session.input_mode or "SINGLE_OPTICAL",
+        task=session.task,
+        status=session.status,
+    )
+    persist_assets(session.job_id, analyzed)
+
+    return {
+        "job_id": session.job_id,
+        "session_id": session.session_id,
+        "status": session.status,
+        "input_class": session.input_mode,
+        "valid": classification.valid,
+        "validation_messages": classification.validation_messages,
+        "refusal_reason": classification.refusal_reason,
+        "stac_info": stac_info,
+        "assets": [
+            {
+                "filename": a.get("filename"),
+                "modality": a.get("modality"),
+                "sensor": a.get("sensor"),
+                "width": a.get("width"),
+                "height": a.get("height"),
+                "crs": a.get("crs"),
+                "bounds_wgs84": a.get("bounds_wgs84"),
+            }
+            for a in analyzed
         ],
     }
 

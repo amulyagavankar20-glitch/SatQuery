@@ -480,6 +480,13 @@ class JobLulcView(BaseModel):
     scene_tags: list[JobLulcTag] = Field(default_factory=list)
 
 
+class BBoxIngestRequest(BaseModel):
+    bbox: list[float] = Field(..., description="[west, south, east, north] in EPSG:4326")
+    query: str = Field(default="", description="Optional query text")
+    sensor: str = Field(default="Sentinel-2", description="Sensor name")
+    max_cloud_cover: float = Field(default=30.0, description="Max cloud cover percentage filter")
+
+
 class JobView(BaseModel):
     """Canonical document for GET /jobs/{id}. UI Zod schema must match."""
 

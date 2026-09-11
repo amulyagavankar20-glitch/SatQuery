@@ -20,6 +20,17 @@ type Props = {
 };
 
 const EMPTY: OverlayCollection = { type: "FeatureCollection", features: [] };
+const FALLBACK_BOUNDS: BBox = [72.5, 23.0, 72.7, 23.2];
+
+function sanitizeBounds(raw?: BBox): BBox {
+  if (!raw || raw.length !== 4) return FALLBACK_BOUNDS;
+  const [w, s, e, n] = raw;
+  if (isNaN(w) || isNaN(s) || isNaN(e) || isNaN(n)) return FALLBACK_BOUNDS;
+  if (s < -90 || s > 90 || n < -90 || n > 90 || w < -180 || w > 180 || e < -180 || e > 180) {
+    return FALLBACK_BOUNDS;
+  }
+  return [w, s, e, n];
+}
 
 function imageCoords(bounds: BBox): [[number, number], [number, number], [number, number], [number, number]] {
   const [west, south, east, north] = bounds;
@@ -36,7 +47,7 @@ function setVis(map: maplibregl.Map, id: string, on: boolean) {
 }
 
 export function MapEvidence({
-  bounds,
+  bounds: rawBounds,
   opticalUrl,
   sarUrl,
   wipeUrl,
@@ -47,6 +58,7 @@ export function MapEvidence({
   t2Date,
   fill,
 }: Props) {
+  const bounds = sanitizeBounds(rawBounds);
   const { evidencePulse, setAnswerFocus } = useConsole();
   const boxRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
