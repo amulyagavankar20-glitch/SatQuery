@@ -23,64 +23,64 @@ class Settings(BaseSettings):
     )
 
     # Database Configuration
-    POSTGRES_USER: str
-    POSTGRES_PASSWORD: str
-    POSTGRES_HOST: str
-    POSTGRES_PORT: int
-    POSTGRES_DB: str
+    POSTGRES_USER: str = "satquery"
+    POSTGRES_PASSWORD: str = "satquery"
+    POSTGRES_HOST: str = "127.0.0.1"
+    POSTGRES_PORT: int = 5432
+    POSTGRES_DB: str = "satquery"
     DATABASE_URL: str | None = None
     DATABASE_REPLICA_URL: str | None = None
-    DB_POOL_SIZE: int
-    DB_MAX_OVERFLOW: int
-    DB_POOL_TIMEOUT: int
-    DB_ECHO: bool
+    DB_POOL_SIZE: int = 5
+    DB_MAX_OVERFLOW: int = 10
+    DB_POOL_TIMEOUT: int = 30
+    DB_ECHO: bool = False
 
     # Security & JWT
-    JWT_SECRET_KEY: str
-    JWT_ALGORITHM: str
-    ACCESS_TOKEN_EXPIRE_MINUTES: int
+    JWT_SECRET_KEY: str = "dev-secret-key-satquery-2026"
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
 
     # Redis & Celery
-    REDIS_URL: str
-    CELERY_BROKER_URL: str
+    REDIS_URL: str = "redis://127.0.0.1:6379/0"
+    CELERY_BROKER_URL: str = "redis://127.0.0.1:6379/0"
 
     # Vector DB (Qdrant)
-    QDRANT_HOST: str
-    QDRANT_PORT: int
+    QDRANT_HOST: str = "127.0.0.1"
+    QDRANT_PORT: int = 6333
 
     # Environment & Logging
-    ENVIRONMENT: str
-    LOG_LEVEL: str
+    ENVIRONMENT: str = "development"
+    LOG_LEVEL: str = "INFO"
 
     # Geospatial Settings
-    DEFAULT_SRID: int
+    DEFAULT_SRID: int = 4326
 
     # Storage Settings (Programmatic Root & Relative Paths)
     BASE_DIR: Path = Path(__file__).resolve().parent.parent
-    DATA_DIR: str
-    JOB_STORAGE_PATH: str
-    WEIGHTS_DIR: str
+    DATA_DIR: str = "data"
+    JOB_STORAGE_PATH: str = "data/jobs"
+    WEIGHTS_DIR: str = "weights"
 
     # Vision-Language Model (VLM) via OpenRouter API (Server-side)
-    VLM_PROVIDER: str
-    VLM_MODEL: str
-    VLM_COST_SAFETY_ENFORCE_FREE: bool
+    VLM_PROVIDER: str = "openrouter"
+    VLM_MODEL: str = "qwen/qwen-2.5-72b-instruct:free"
+    VLM_COST_SAFETY_ENFORCE_FREE: bool = True
     OPENROUTER_API_KEY: str | None = None
     QWEN_API_KEY: str | None = None  # Alias support if configured as QWEN_API_KEY in .env
     QWEN_VL_MODEL: str | None = None  # Legacy alias
-    OPENROUTER_BASE_URL: str
-    OPENROUTER_TIMEOUT_SECONDS: float
+    OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
+    OPENROUTER_TIMEOUT_SECONDS: float = 60.0
 
     # Legacy/Fallback Qwen Router via Ollama (retained for backward compatibility)
-    OLLAMA_BASE_URL: str
-    OLLAMA_ROUTER_MODEL: str | None = None
-    OLLAMA_TIMEOUT_SECONDS: float
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    OLLAMA_ROUTER_MODEL: str | None = "qwen2.5:3b-instruct"
+    OLLAMA_TIMEOUT_SECONDS: float = 180.0
 
     # Model Slotting & Weights Architecture (3 Slots: Router, Talking VLM, Specialists)
-    ROUTER_BACKEND: str
+    ROUTER_BACKEND: str = "ollama"
     ROUTER_WEIGHTS_PATH: str | None = None
-    TALKING_VLM_MODEL: str | None = None
-    TALKING_VLM_BACKEND: str
+    TALKING_VLM_MODEL: str | None = "OpenGVLab/InternVL3-1B"
+    TALKING_VLM_BACKEND: str = "mock"
     TALKING_VLM_WEIGHTS_PATH: str | None = None
     # Local specialist checkpoints.  Their loaders are isolated under
     # backend.inference and are never fetched or run remotely by default.
@@ -108,7 +108,7 @@ class Settings(BaseSettings):
     BEN_S1_WEIGHTS_PATH: str | None = None
 
     # CORS
-    CORS_ORIGINS: str
+    CORS_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     @property
     def cors_origin_list(self) -> list[str]:

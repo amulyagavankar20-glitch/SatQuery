@@ -101,55 +101,91 @@ def _s2_nine_from_raster(path: Path) -> np.ndarray | None:
         return None
 
 
-def _open_rgb(path: str) -> np.ndarray:
+def _open_rgb(path: str) -> tuple[np.ndarray, np.ndarray | None]:
     p = Path(path)
     if not p.is_file():
         raise FileNotFoundError(path)
     suffix = p.suffix.lower()
+    nir: np.ndarray | None = None
     if suffix in {".tif", ".tiff"}:
         try:
             import rasterio
 
             with rasterio.open(p) as src:
-                count = min(src.count, 4)
-                arr = src.read(list(range(1, count + 1)))
-            arr = np.transpose(arr, (1, 2, 0)).astype(np.float32)
-            return _rgb_from_stack(arr)
+                count = src.count
+                if count >= 4:
+                    raw = src.read([1, 2, 3, 4]).astype(np.float32)
+                    max_val = 65535.0 if raw.max() > 255 else 255.0
+                    raw = np.clip(raw / max_val, 0.0, 1.0)
+                    rgb = np.transpose(raw[:3], (1, 2, 0))
+                    nir = raw[3]
+                    return rgb, nir
+                else:
+                    count_read = min(count, 3)
+                    arr = src.read(list(range(1, count_read + 1)))
+                    arr = np.transpose(arr, (1, 2, 0)).astype(np.float32)
+                    return _rgb_from_stack(arr), None
         except Exception:
             pass
     img = Image.open(p).convert("RGB")
     max_side = 512
     if max(img.size) > max_side:
         img.thumbnail((max_side, max_side), Image.Resampling.BILINEAR)
-    return np.asarray(img, dtype=np.float32) / 255.0
+    return np.asarray(img, dtype=np.float32) / 255.0, None
 
 
-def _spectral_labels(rgb: np.ndarray) -> np.ndarray:
-    """9-class map from RGB (and optional 4th band already folded into RGB)."""
+def _spectral_labels(rgb: np.ndarray, nir: np.ndarray | None = None) -> np.ndarray:
+    """9-class land cover map from RGB and optional NIR band."""
     r, g, b = rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2]
     bright = (r + g + b) / 3.0
-    greenness = 2.0 * g - r - b
-    ndwi = (g - r) / (g + r + 1e-6)
-    labels = np.full(r.shape, 8, dtype=np.uint8)  # snow default only if very bright+blue
-    labels[:, :] = 7  # bare
-    veg = greenness > 0.08
-    labels[veg & (greenness > 0.28)] = 1  # trees
-    labels[veg & (greenness <= 0.28) & (greenness > 0.16)] = 4  # crops
-    labels[veg & (greenness <= 0.16)] = 2  # grass
-    shrub = veg & (bright < 0.28) & (greenness < 0.14)
+    labels = np.full(r.shape, 7, dtype=np.uint8)  # Default: Bare soil / dry terrain
+
+    # 1. Vegetation Detection
+    if nir is not None:
+        ndvi = (nir - r) / (nir + r + 1e-6)
+        veg = ndvi > 0.15
+        trees = ndvi > 0.45
+        crops = (ndvi > 0.28) & ~trees
+        grass = veg & ~trees & ~crops
+    else:
+        # Greenness index
+        greenness = 2.0 * g - r - b
+        g_ratio = g / (r + 1e-6)
+        veg = (greenness > 0.015) & (g > r * 0.96) & (g > b * 0.94)
+        trees = (greenness > 0.14) | (g_ratio > 1.22)
+        crops = (greenness > 0.06) & ~trees
+        grass = veg & ~trees & ~crops
+
+    labels[trees] = 1   # Trees
+    labels[crops] = 4   # Crops
+    labels[grass] = 2   # Grass / sparse vegetation
+
+    shrub = veg & (bright < 0.25) & ~trees & ~crops & ~grass
     labels[shrub] = 5
-    # (G-R) NDWI is high on vegetation too — require low greenness for water.
-    water = ((ndwi > 0.12) & (greenness < 0.06)) | ((b > r + 0.08) & (b >= g) & (bright < 0.5) & (greenness < 0.06))
-    # Turbid / green-grey water (Cartosat reservoirs): R≈G > B, mid brightness.
-    turbid = (np.abs(r - g) < 0.04) & ((r - b) > 0.04) & (bright > 0.42) & (bright < 0.66) & (greenness < 0.14)
-    water = water | turbid
-    labels[water] = 0
-    flooded = water & veg
-    labels[flooded] = 3
-    built = (bright > 0.42) & (greenness < 0.04) & (np.abs(r - g) < 0.08) & ~water
-    labels[built] = 6
-    snow = (bright > 0.78) & (b > 0.7) & ~veg
-    labels[snow] = 8
+
+    # 2. Water & Flooded Vegetation
+    ndwi = (g - r) / (g + r + 1e-6)
+    water = ((ndwi > 0.12) & ~veg & (bright < 0.40)) | ((b > r + 0.08) & (b >= g) & (bright < 0.35) & ~veg)
+    turbid = (np.abs(r - g) < 0.03) & ((r - b) > 0.05) & (bright > 0.3) & (bright < 0.55) & ~veg
+    if nir is not None:
+        mndwi = (g - nir) / (g + nir + 1e-6)
+        water = water | ((mndwi > 0.05) & (nir < 0.15) & ~veg)
+
+    labels[water] = 0   # Water
+    labels[water & veg] = 3  # Flooded vegetation
+
+    # 3. Built-up (Urban/Commercial structures)
+    # Require distinct urban neutral signature without NIR vegetation reflection or uniform open soil/sand
+    built = (bright > 0.48) & (bright < 0.82) & (np.abs(r - g) < 0.03) & (np.abs(g - b) < 0.03) & ~veg & ~water
+    if nir is not None:
+        built = built & (nir < 0.30)
+    labels[built] = 6   # Built-up
+
+    # 4. Snow & Ice
+    # Require bright white AND distinct blue-heavy tint to avoid mistaking salt flats / white sand for snow
+    snow = (bright > 0.88) & (b > r + 0.10) & (b > g + 0.05) & ~veg & ~water
+    labels[snow] = 8   # Snow and ice
+
     return labels
 
 
@@ -301,9 +337,9 @@ class LulcMapTool(BaseTool):
         else:
             bbox = None
         path = next((r for r in refs if Path(r).is_file()), refs[0])
-        rgb = _open_rgb(path)
+        rgb, nir = _open_rgb(path)
         dw, backend = _try_dynamic_world(path, rgb)
-        labels = dw if dw is not None else _spectral_labels(rgb)
+        labels = dw if dw is not None else _spectral_labels(rgb, nir)
         if dw is None:
             backend = "spectral_fallback"
         fractions = _fractions(labels)

@@ -33,7 +33,7 @@ from backend.agents.tools.mock_tools import (
     MockAgreement,
     MockMobileSAM,
 )
-from backend.agents.tools.sarchat import SARChatTool
+from backend.agents.tools.sar_map import SarMapTool as SARChatTool
 from backend.agents.tools.geoground import GeoGroundTool
 from backend.agents.tools.bit import BITTool
 
