@@ -384,6 +384,7 @@ class RouteResponse(BaseModel):
     tools: list[RouterTool] = Field(default_factory=list, description="Ordered list of tools")
     need_overlay: bool = True
     params: dict[str, Any] = Field(default_factory=dict)
+    reasoning: str | None = Field(None, description="Explanation or classification provenance (Qwen-VL vs deterministic fallback)")
 
 
 class JobCreate(BaseModel):

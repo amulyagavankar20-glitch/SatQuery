@@ -4,9 +4,9 @@ import json
 import torch
 import rasterio
 import numpy as np
-from PIL import Image
+from pathlib import Path
 
-DATASET_DIR = "/Users/dhanyahariya/Downloads/satnav/sentinel_dataset 6.01.03 PM"
+DATASET_DIR = os.getenv("DATASET_DIR", str(Path(__file__).resolve().parent.parent / "data" / "sentinel_dataset"))
 
 
 def analyze_sample_characteristics(sample_dir):

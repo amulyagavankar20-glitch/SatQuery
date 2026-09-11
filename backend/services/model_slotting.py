@@ -34,6 +34,7 @@ class SlotID(str, enum.Enum):
 
 
 class SlotBackendType(str, enum.Enum):
+    OPENROUTER = "openrouter"
     OLLAMA = "ollama"
     LOCAL_WEIGHTS = "local_weights"
     MOCK = "mock"
@@ -122,12 +123,26 @@ class MockRouterAdapter(BaseRouterAdapter):
         )
 
 
+class OpenRouterRouterAdapter(BaseRouterAdapter):
+    """Router adapter calling Qwen-VL via OpenRouter API."""
+
+    def __init__(self, client: Any = None):
+        from backend.agents.router import QwenRouter
+        self.router = QwenRouter(client=client)
+
+    def route(self, request: RouteRequest) -> RouteResponse:
+        return self.router.route_sync(request)
+
+    async def route_async(self, request: RouteRequest) -> RouteResponse:
+        return await self.router.route(request)
+
+
 class OllamaRouterAdapter(BaseRouterAdapter):
     """Router adapter calling Qwen2.5-3B-Instruct via Ollama API."""
 
     def __init__(self, ollama_url: str, model: str, timeout: float = 120.0):
         from backend.agents.router import QwenRouter
-        self.router = QwenRouter(ollama_url=ollama_url, model=model, timeout=timeout)
+        self.router = QwenRouter(timeout=timeout)
 
     def route(self, request: RouteRequest) -> RouteResponse:
         return self.router.route_sync(request)
@@ -328,6 +343,8 @@ class ModelSlotRegistry:
         (self.weights_root / "specialists").mkdir(exist_ok=True)
 
     def _check_ollama(self) -> bool:
+        if not settings.OLLAMA_ROUTER_MODEL:
+            return False
         try:
             import httpx
             res = httpx.get(f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/tags", timeout=1.5)
@@ -344,13 +361,25 @@ class ModelSlotRegistry:
         # 1. Router Slot
         router_local = self.weights_root / "router"
         has_router_weights = router_local.exists() and any(router_local.iterdir())
+        has_openrouter = bool(settings.OPENROUTER_API_KEY)
         ollama_ready = self._check_ollama()
 
-        if ollama_ready:
+        if has_openrouter:
             router_status = ModelSlotInfo(
                 slot_id=SlotID.ROUTER.value,
                 name="Agent Intent Router",
-                target_model=settings.OLLAMA_ROUTER_MODEL,
+                target_model=settings.VLM_MODEL or "Unconfigured VLM",
+                status="ready",
+                backend_type=SlotBackendType.OPENROUTER,
+                weights_expected_at=f"{settings.OPENROUTER_BASE_URL} ({settings.VLM_MODEL or 'unconfigured'})",
+                description="Text-only JSON intent classifier powered by VLM via OpenRouter.",
+                notes="Server-side OpenRouter API configured.",
+            )
+        elif ollama_ready:
+            router_status = ModelSlotInfo(
+                slot_id=SlotID.ROUTER.value,
+                name="Agent Intent Router",
+                target_model=settings.OLLAMA_ROUTER_MODEL or "Ollama Router",
                 status="ready",
                 backend_type=SlotBackendType.OLLAMA,
                 weights_expected_at=f"{settings.OLLAMA_BASE_URL} (Ollama model)",
@@ -361,24 +390,24 @@ class ModelSlotRegistry:
             router_status = ModelSlotInfo(
                 slot_id=SlotID.ROUTER.value,
                 name="Agent Intent Router",
-                target_model=settings.OLLAMA_ROUTER_MODEL,
+                target_model=settings.OLLAMA_ROUTER_MODEL or "Local Router Weights",
                 status="ready",
                 backend_type=SlotBackendType.LOCAL_WEIGHTS,
                 weights_path=str(router_local),
                 weights_expected_at=str(router_local),
-                description="Local HuggingFace / GGUF weights detected for Qwen2.5-3B-Instruct.",
+                description="Local weights detected for router model.",
                 notes="Slotted via local weights directory.",
             )
         else:
             router_status = ModelSlotInfo(
                 slot_id=SlotID.ROUTER.value,
                 name="Agent Intent Router",
-                target_model=settings.OLLAMA_ROUTER_MODEL,
+                target_model=settings.VLM_MODEL or "Unconfigured VLM",
                 status="standby_mock",
                 backend_type=SlotBackendType.MOCK,
-                weights_expected_at=f"{str(router_local)} OR 'ollama pull {settings.OLLAMA_ROUTER_MODEL}'",
+                weights_expected_at=f"Set OPENROUTER_API_KEY in .env OR 'ollama pull {settings.OLLAMA_ROUTER_MODEL or '<model>'}'",
                 description="Deterministic intent classifier running in high-fidelity standby fallback.",
-                notes="Drop weights into weights/router or start Ollama to slot.",
+                notes="Configure OPENROUTER_API_KEY in .env to slot VLM.",
             )
         slots.append(router_status)
 
@@ -389,7 +418,7 @@ class ModelSlotRegistry:
             vlm_status = ModelSlotInfo(
                 slot_id=SlotID.TALKING_VLM.value,
                 name="Talking Vision-Language Model",
-                target_model=settings.TALKING_VLM_MODEL,
+                target_model=settings.TALKING_VLM_MODEL or "Slotted Local VLM",
                 status="ready",
                 backend_type=SlotBackendType.LOCAL_WEIGHTS,
                 weights_path=str(vlm_local),
@@ -401,12 +430,12 @@ class ModelSlotRegistry:
             vlm_status = ModelSlotInfo(
                 slot_id=SlotID.TALKING_VLM.value,
                 name="Talking Vision-Language Model",
-                target_model=settings.TALKING_VLM_MODEL,
+                target_model=settings.TALKING_VLM_MODEL or "Standby Mock VLM",
                 status="standby_mock",
                 backend_type=SlotBackendType.MOCK,
                 weights_expected_at=str(vlm_local),
                 description="Domain-grounded RS VLM simulation answering queries with spatial citations.",
-                notes="Drop InternVL3-1B / GeoChat weights into weights/talking_vlm/ to slot.",
+                notes="Drop optical VLM weights into weights/talking_vlm/ to slot.",
             )
         slots.append(vlm_status)
 
@@ -460,7 +489,7 @@ class ModelSlotRegistry:
         if settings.ROUTER_BACKEND == "ollama" or (settings.ROUTER_BACKEND == "auto" and self._check_ollama()):
             return OllamaRouterAdapter(
                 ollama_url=settings.OLLAMA_BASE_URL,
-                model=settings.OLLAMA_ROUTER_MODEL,
+                model=settings.OLLAMA_ROUTER_MODEL or "",
                 timeout=settings.OLLAMA_TIMEOUT_SECONDS,
             )
         # Check local weights

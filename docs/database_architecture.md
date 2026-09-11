@@ -3,7 +3,7 @@
 **Project:** SIH26167 — SatQuery AI  
 **Document Type:** Database Architecture & Entity-Relationship Reference  
 **Status:** Implementation Baseline — PostgreSQL 17.10 + PostGIS 3.6  
-**Implementation Source:** [`backend/models.py`](file:///Users/dhanyahariya/Downloads/satnav/backend/models.py) & [`migrations/versions/0b8f65db36fc_initial_satquery_schema.py`](file:///Users/dhanyahariya/Downloads/satnav/migrations/versions/0b8f65db36fc_initial_satquery_schema.py)
+**Implementation Source:** [`backend/models.py`](../backend/models.py) & [`migrations/versions/0b8f65db36fc_initial_satquery_schema.py`](../migrations/versions/0b8f65db36fc_initial_satquery_schema.py)
 
 ---
 

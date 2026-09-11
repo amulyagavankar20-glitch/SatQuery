@@ -58,11 +58,13 @@ app.include_router(assets.router)
 def health_check() -> dict[str, Any]:
     ollama_status = "unreachable"
     try:
-        response = httpx.get(f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/tags", timeout=3.0)
-        response.raise_for_status()
-        ollama_status = "ok"
-    except (httpx.HTTPError, Exception):
+        response = httpx.get(f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/tags", timeout=1.0)
+        if response.status_code == 200:
+            ollama_status = "ok"
+    except Exception:
         ollama_status = "unreachable"
+
+    openrouter_status = "configured" if settings.OPENROUTER_API_KEY else "missing_key"
 
     postgres: dict[str, Any] = {"status": "unreachable"}
     try:
@@ -76,7 +78,10 @@ def health_check() -> dict[str, Any]:
 
     return {
         "status": "ok",
-        "router_model": settings.OLLAMA_ROUTER_MODEL,
+        "router_model": settings.VLM_MODEL,
+        "vlm_model": settings.VLM_MODEL,
+        "vlm_provider": settings.VLM_PROVIDER,
+        "openrouter": openrouter_status,
         "talking_vlm": settings.TALKING_VLM_MODEL,
         "ollama": ollama_status,
         "postgres": postgres,
@@ -88,22 +93,26 @@ def health_check() -> dict[str, Any]:
 @app.get("/models")
 def list_models() -> dict[str, Any]:
     available: list[str] = []
-    ollama_status = "ok"
+    ollama_status = "unreachable"
     try:
-        response = httpx.get(f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/tags", timeout=3.0)
-        response.raise_for_status()
-        available = [m.get("name", "") for m in response.json().get("models", [])]
-    except (httpx.HTTPError, Exception) as exc:
+        response = httpx.get(f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/tags", timeout=1.0)
+        if response.status_code == 200:
+            available = [m.get("name", "") for m in response.json().get("models", [])]
+            ollama_status = "ok"
+    except Exception as exc:
         ollama_status = str(exc)
 
     slots = model_slot_registry.get_slot_statuses()
-    router_ready = settings.OLLAMA_ROUTER_MODEL in available or any(
+    router_ready = bool(settings.OPENROUTER_API_KEY) or any(
         s.slot_id == "router" and s.status == "ready" for s in slots
     )
 
     return {
-        "router_model": settings.OLLAMA_ROUTER_MODEL,
+        "router_model": settings.VLM_MODEL,
         "router_ready": router_ready,
+        "vlm_model": settings.VLM_MODEL,
+        "vlm_provider": settings.VLM_PROVIDER,
+        "openrouter_configured": bool(settings.OPENROUTER_API_KEY),
         "talking_vlm": settings.TALKING_VLM_MODEL,
         "talking_vlm_backend": settings.TALKING_VLM_BACKEND,
         "available": available,

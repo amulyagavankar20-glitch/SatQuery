@@ -8,10 +8,11 @@ import numpy as np
 from PIL import Image
 import torchvision.transforms as T
 from torchvision.transforms.functional import InterpolationMode
+from pathlib import Path
 from transformers import AutoTokenizer, AutoModel
 
-MODEL_PATH = "/Users/dhanyahariya/.cache/modelscope/models/JimmyMa99--SARChat-InternVL2.5-2B/snapshots/master"
-DATASET_DIR = "/Users/dhanyahariya/Downloads/satnav/sentinel_dataset 6.01.03 PM"
+MODEL_PATH = os.getenv("SARCHAT_MODEL_PATH", str(Path.home() / ".cache" / "modelscope" / "models" / "JimmyMa99--SARChat-InternVL2.5-2B" / "snapshots" / "master"))
+DATASET_DIR = os.getenv("DATASET_DIR", str(Path(__file__).resolve().parent.parent / "data" / "sentinel_dataset"))
 
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD = (0.229, 0.224, 0.225)

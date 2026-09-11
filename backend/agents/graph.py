@@ -4,7 +4,8 @@
 ARCHITECTURE RULES ENFORCED HERE:
 - ONE canonical GraphState imported from backend.agents.state (TypedDict).
   This file does NOT define a second GraphState.
-- query_router MUST invoke QwenRouter via Ollama. Failure produces refusal.
+- query_router invokes QwenRouter via OpenRouter (with deterministic fallback).
+- report_generator synthesizes final answers via FinalReasoner (Qwen-VL via OpenRouter).
 - tool_selector MUST validate against the PostgreSQL ToolRegistry.
   db_session must never be None.
 - run_tool must receive a real database session.
@@ -581,40 +582,41 @@ def report_generator(state: GraphState) -> dict[str, Any]:
 
     # Determine final answer — never fabricate from failed/refused executions
     final_answer: str | None = None
+    reasoning_provenance: str | None = None
     input_class_val = state.get("input_class")
     user_query = state.get("user_query", "")
 
     if not is_refused and not is_failed:
-        # Check if SAR-specific rich reporting applies
-        sarchat_res = next((r for r in results if r.tool_id == "sarchat_vqa" and r.status == "success"), None)
-        if sarchat_res and isinstance(sarchat_res.result, dict):
-            from backend.services.sar_analyzer import format_rich_sar_answer
-            res_dict = sarchat_res.result
-            raw_ans = str(res_dict.get("answer", ""))
-            scene_stats = res_dict.get("scene_statistics")
-            detections = res_dict.get("detections")
-            final_answer = format_rich_sar_answer(
-                query=user_query,
-                raw_answer=raw_ans,
-                scene_statistics=scene_stats,
-                detections=detections,
-            )
-        elif input_class_val == "SINGLE_SAR" and any(w in user_query.lower() for w in ["change", "changed", "increase", "increased", "decrease", "decreased", "growth", "over time"]):
-            final_answer = (
-                "### SAR Temporal Change Assessment\n\n"
-                "⚠️ **Temporal change cannot be calculated from a single SAR acquisition.**\n\n"
-                "To measure urbanization or land-cover change over time, a second SAR acquisition "
-                "from another date over the same geographic bounding box is required."
-            )
-        else:
-            # Use last successful specialist result with a textual output
-            for r in reversed(results):
-                if r.status == "success" and isinstance(r.result, str):
-                    final_answer = r.result
-                    break
-                if r.status == "success" and isinstance(r.result, dict):
-                    final_answer = str(r.result.get("answer") or r.result)
-                    break
+        from backend.agents.final_reasoner import get_final_reasoner
+        reasoner = get_final_reasoner()
+
+        # Extract scene statistics and detections from specialist results if present
+        scene_stats = None
+        detections = None
+        for r in results:
+            if isinstance(r.result, dict):
+                if "scene_statistics" in r.result and not scene_stats:
+                    scene_stats = r.result["scene_statistics"]
+                if "detections" in r.result and not detections:
+                    detections = r.result["detections"]
+
+        image_refs = _image_refs(state)
+        final_answer, reasoning_provenance = reasoner.reason_sync(
+            query=user_query,
+            specialist_results=results,
+            scene_statistics=scene_stats,
+            detections=detections,
+            image_refs=image_refs,
+            input_class=input_class_val,
+        )
+
+        _record_event(
+            state,
+            "FINAL_REASONING_COMPLETED",
+            "report_generator",
+            parameters={"provenance": reasoning_provenance},
+            message=f"Synthesized final answer via {reasoning_provenance}",
+        )
 
     report: dict[str, Any] = {
         "job_id": state.get("job_id"),
@@ -624,6 +626,7 @@ def report_generator(state: GraphState) -> dict[str, Any]:
         "selected_tools": state.get("selected_tools", []),
         "execution_summary": _visited_nodes(state),
         "final_answer": final_answer,
+        "reasoning_provenance": reasoning_provenance,
         "confidence": confidence_obj.level if confidence_obj else None,
         "confidence_signals": confidence_obj.signals if confidence_obj else [],
         "evidence_summary": state.get("evidence_items", []),

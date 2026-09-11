@@ -1,5 +1,5 @@
 """
-SatQuery AI — Configuration
+SatQuery AI — Configuration Schema & Programmatic Properties
 """
 
 from pathlib import Path
@@ -10,7 +10,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Application settings loaded from environment variables and .env file."""
+    """Application settings schema loaded from environment variables and .env file.
+
+    Contains NO concrete environment-specific defaults. All concrete configuration
+    values must be supplied via .env or the deployment environment.
+    """
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -18,65 +22,76 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # Database — prefer POSTGRES_* in .env; DATABASE_URL overrides if set.
-    POSTGRES_USER: str = "satquery"
-    POSTGRES_PASSWORD: str = "satquery"
-    POSTGRES_HOST: str = "127.0.0.1"
-    POSTGRES_PORT: int = 5432
-    POSTGRES_DB: str = "satquery"
+    # Database Configuration
+    POSTGRES_USER: str
+    POSTGRES_PASSWORD: str
+    POSTGRES_HOST: str
+    POSTGRES_PORT: int
+    POSTGRES_DB: str
     DATABASE_URL: str | None = None
     DATABASE_REPLICA_URL: str | None = None
-    DB_POOL_SIZE: int = 10
-    DB_MAX_OVERFLOW: int = 20
-    DB_POOL_TIMEOUT: int = 30
-    DB_ECHO: bool = False
+    DB_POOL_SIZE: int
+    DB_MAX_OVERFLOW: int
+    DB_POOL_TIMEOUT: int
+    DB_ECHO: bool
 
     # Security & JWT
-    JWT_SECRET_KEY: str = "your-super-secret-jwt-key"  # Change in production
-    JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440 # 24 hours
+    JWT_SECRET_KEY: str
+    JWT_ALGORITHM: str
+    ACCESS_TOKEN_EXPIRE_MINUTES: int
 
     # Redis & Celery
-    REDIS_URL: str = "redis://127.0.0.1:6379/0"
-    CELERY_BROKER_URL: str = "redis://127.0.0.1:6379/1"
+    REDIS_URL: str
+    CELERY_BROKER_URL: str
 
     # Vector DB (Qdrant)
-    QDRANT_HOST: str = "127.0.0.1"
-    QDRANT_PORT: int = 6333
+    QDRANT_HOST: str
+    QDRANT_PORT: int
 
     # Environment & Logging
-    ENVIRONMENT: str = "development"
-    LOG_LEVEL: str = "INFO"
+    ENVIRONMENT: str
+    LOG_LEVEL: str
 
     # Geospatial Settings
-    DEFAULT_SRID: int = 4326
+    DEFAULT_SRID: int
 
-    # Storage Settings
+    # Storage Settings (Programmatic Root & Relative Paths)
     BASE_DIR: Path = Path(__file__).resolve().parent.parent
-    DATA_DIR: str = "data"
-    JOB_STORAGE_PATH: str = "data/jobs"
+    DATA_DIR: str
+    JOB_STORAGE_PATH: str
+    WEIGHTS_DIR: str
 
-    # Qwen2.5-3B-Instruct router via Ollama (architecture §1 / §6 / §14)
-    OLLAMA_BASE_URL: str = "http://localhost:11434"
-    OLLAMA_ROUTER_MODEL: str = "qwen2.5:3b-instruct"
-    OLLAMA_TIMEOUT_SECONDS: float = 180.0
+    # Vision-Language Model (VLM) via OpenRouter API (Server-side)
+    VLM_PROVIDER: str
+    VLM_MODEL: str
+    VLM_COST_SAFETY_ENFORCE_FREE: bool
+    OPENROUTER_API_KEY: str | None = None
+    QWEN_API_KEY: str | None = None  # Alias support if configured as QWEN_API_KEY in .env
+    QWEN_VL_MODEL: str | None = None  # Legacy alias
+    OPENROUTER_BASE_URL: str
+    OPENROUTER_TIMEOUT_SECONDS: float
+
+    # Legacy/Fallback Qwen Router via Ollama (retained for backward compatibility)
+    OLLAMA_BASE_URL: str
+    OLLAMA_ROUTER_MODEL: str | None = None
+    OLLAMA_TIMEOUT_SECONDS: float
 
     # Model Slotting & Weights Architecture (3 Slots: Router, Talking VLM, Specialists)
-    WEIGHTS_DIR: str = "weights"
-    ROUTER_BACKEND: str = "auto"  # auto | ollama | local | mock
+    ROUTER_BACKEND: str
     ROUTER_WEIGHTS_PATH: str | None = None
-    TALKING_VLM_MODEL: str = "OpenGVLab/InternVL3-1B"
-    TALKING_VLM_BACKEND: str = "auto"  # auto | local | mock
+    TALKING_VLM_MODEL: str | None = None
+    TALKING_VLM_BACKEND: str
     TALKING_VLM_WEIGHTS_PATH: str | None = None
     BIT_WEIGHTS_PATH: str | None = None
     SAM_WEIGHTS_PATH: str | None = None
     FUSION_WEIGHTS_PATH: str | None = None
 
-    # SARChat-InternVL2.5-2B (Specialized SAR Model)
-    SARCHAT_MODEL_PATH: str = ""
+    # SARChat Specialist Model
+    SARCHAT_MODEL_PATH: str | None = None
     SARCHAT_DEVICE: str | None = None
 
-    CORS_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
+    # CORS
+    CORS_ORIGINS: str
 
     @property
     def cors_origin_list(self) -> list[str]:
@@ -87,13 +102,22 @@ class Settings(BaseSettings):
         user = quote_plus(self.POSTGRES_USER)
         password = quote_plus(self.POSTGRES_PASSWORD)
         base_url = f"postgresql+psycopg://{user}:{password}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
-        
+
         if not self.DATABASE_URL:
             self.DATABASE_URL = base_url
         if not self.DATABASE_REPLICA_URL:
             # Fallback to primary for replica if not explicitly set
             self.DATABASE_REPLICA_URL = self.DATABASE_URL
-            
+
+        if not self.JWT_SECRET_KEY or not self.JWT_SECRET_KEY.strip():
+            raise ValueError("JWT_SECRET_KEY must be configured in environment or .env file.")
+
+        if not self.OPENROUTER_API_KEY and self.QWEN_API_KEY:
+            self.OPENROUTER_API_KEY = self.QWEN_API_KEY
+
+        if not self.VLM_MODEL and self.QWEN_VL_MODEL:
+            self.VLM_MODEL = self.QWEN_VL_MODEL
+
         return self
 
     @property

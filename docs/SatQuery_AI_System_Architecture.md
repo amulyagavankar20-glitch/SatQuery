@@ -1,160 +1,195 @@
-# SatQuery AI — Multimodal Specialist-Agent System Architecture & Technical Design
+# SatQuery AI — Complete System Architecture & Technical Design
 
 **Project:** SIH26167 — SatQuery AI  
-**Document type:** Master System Architecture & Technical Design  
-**Status:** Architecture Baseline — Multimodal Specialist-Agent System  
+**Document Type:** Master System Architecture & Technical Specification  
+**System Classification:** Natural-Language Remote-Sensing Intelligence System  
+**Status:** Authoritative Architecture Reference (Current Baseline vs. Target State)  
 
-> **Core Principle:**  
-> Qwen-VL acts as the intelligent orchestration and reasoning layer. Specialized remote-sensing models perform domain-specific analysis. Specialist outputs are normalized/fused and passed back to Qwen-VL for final evidence-based reasoning and answer generation.
+> **Core Architectural Principle:**  
+> SatQuery AI is a natural-language remote-sensing intelligence platform combining **PostGIS** spatial data persistence, a **Vision-Language Model (VLM)** (active implementation: **Google Gemma 4 31B Free** via OpenRouter) for multimodal orchestration and final evidence synthesis, and domain-specific specialist vision models (**GeoGround**, **SARChat**, and **BIT**) across optical, radar (SAR), and temporal satellite modalities.
 
 ---
 
-## 1. High-Level System Architecture
+## 1. System Vision & Architectural Classification
 
-SatQuery AI employs a **multimodal specialist-agent architecture** designed specifically for Earth Observation (EO) satellite imagery analysis. It decouples query understanding, sensor-specific visual processing, multi-temporal change detection, and cross-modal synthesis into specialized, high-efficiency stages.
+SatQuery AI is **not** merely a chatbot, a raster viewer, or an isolated image classifier. It is a unified **Natural-Language Remote-Sensing Intelligence System** that fuses:
+* **Natural-Language Intent Understanding:** Parsing complex analyst queries, extracting spatial AOIs, temporal bounds, and analytical goals.
+* **First-Class Spatial Data Persistence (PostGIS):** Managing spatial footprints, geographic bounding boxes, multi-temporal metadata, and vector evidence layers.
+* **Modality-Specific Satellite Preprocessing:** Radiometric calibration, dB scaling, speckle reduction, percentile contrast stretching, and synchronized bitemporal grid alignment.
+* **Specialist Remote-Sensing AI Models:** Domain-tailored vision models for optical grounding (**GeoGround**), synthetic aperture radar interpretation (**SARChat**), and bitemporal change detection (**BIT**).
+* **Multimodal Orchestration & Cross-Model Reasoning (VLM via OpenRouter — active: Google Gemma 4 31B Free):** Intelligent task decomposition and final multi-evidence reasoning.
+* **Interactive Geospatial Visualization:** High-performance MapLibre GL map views, raster composites, detection overlays, and audit lineage traces.
+
+---
+
+## 2. Master System Architecture Diagram (Target State)
+
+The diagram below illustrates the target end-to-end architecture.
 
 ```
                          SATQUERY AI
                               │
                               ▼
                     ┌───────────────────┐
-                    │      USER         │
-                    │ Natural Language  │
-                    │ Query + Optional   │
-                    │ AOI / Image / Time│
+                    │USER / SATQUERY UI │
+                    │ React 19 / Vite   │
+                    │ MapLibre Evidence │
                     └─────────┬─────────┘
-                              │
+                              │ HTTPS / JSON / Multipart
                               ▼
                     ┌───────────────────┐
-                    │  QUERY PROCESSING │
-                    │                   │
-                    │ Intent            │
-                    │ AOI / Location    │
-                    │ Temporal context  │
-                    │ Sensor / Modality │
-                    │ Analysis required │
+                    │  FASTAPI BACKEND  │
+                    │  API & App Logic  │
                     └─────────┬─────────┘
                               │
+             ┌────────────────┴────────────────┐
+             │                                 │
+             ▼                                 ▼
+   ┌───────────────────┐             ┌───────────────────┐
+   │ QUERY PROCESSING  │             │      POSTGIS      │
+   │ Intent & Context  │◄───────────►│Spatial Data Layer │
+   │ Spatial / Temporal│             │Footprints, Bounds,│
+   │ Parameter Parser  │             │Assets, Traces, SF │
+   └─────────┬─────────┘             └─────────┬─────────┘
+             │                                 │
+             └────────────────┬────────────────┘
+                              │ Context + Imagery Metadata
                               ▼
                     ┌───────────────────┐
-                    │      QWEN-VL      │
-                    │    ORCHESTRATOR   │
-                    │                   │
-                    │ Query understanding│
-                    │ Task decomposition│
-                    │ Specialist routing│
-                    │ Workflow planning │
+                    │  VLM API LAYER    │  [IMPLEMENTED: OpenRouter]
+                    │   (ORCHESTRATOR)  │  Configured via VLM_MODEL
+                    │                   │  (Default: .env free model)
+                    │ Task Decomposition│
+                    │ Sensor Routing    │
+                    │ Workflow Planning │
                     └─────────┬─────────┘
-                              │
+                              │ Dispatch Subtasks
               ┌───────────────┼────────────────┐
               │               │                │
               ▼               ▼                ▼
        ┌─────────────┐ ┌─────────────┐ ┌─────────────┐
        │  GeoGround  │ │   SARChat   │ │     BIT     │
-       │     S2      │ │     S1      │ │  Temporal   │
+       │ Sentinel-2  │ │ Sentinel-1  │ │  Temporal   │
+       │   Optical   │ │     SAR     │ │   Change    │
        │             │ │             │ │             │
-       │ Grounding   │ │ SAR scene   │ │ Change      │
-       │ Localization│ │ understanding│ │ detection  │
-       │ Segmentation│ │ SAR reasoning│ │ Temporal   │
-       │             │ │             │ │ analysis    │
+       │ Grounding   │ │ Scene VQA   │ │ Difference  │
+       │ Localization│ │ Backscatter │ │ Detection   │
+       │ Segmentation│ │ Interpretation│  Change Mask │
+       │ [MOCK]      │ │ [FUNCTIONAL]│ │ [MOCK]      │
        └──────┬──────┘ └──────┬──────┘ └──────┬──────┘
               │               │                │
               └───────────────┼────────────────┘
+                              │ Raw Specialist Evidence
                               ▼
-                    ┌────────────────────┐
+                    ┌────────────────────┐  [PLANNED]
                     │ RESULT NORMALIZER  │
                     │     / FUSION       │
                     │                    │
-                    │ Spatial alignment  │
-                    │ Temporal alignment │
-                    │ Evidence alignment │
-                    │ Confidence/results  │
-                    │ Common output      │
-                    │ representation     │
+                    │ Spatial Alignment  │
+                    │ Temporal Alignment │
+                    │ Confidence & Provenance
+                    │ Normalized Schema  │
                     └─────────┬──────────┘
-                              │
+                              │ Unified Evidence Structure
                               ▼
-                    ┌───────────────────┐
-                    │      QWEN-VL      │
-                    │   FINAL REASONER  │
+                    ┌───────────────────┐  [IMPLEMENTED: OpenRouter]
+                    │  VLM API LAYER    │  Configured via VLM_MODEL
+                    │  (FINAL REASONER) │  (Default: .env free model)
                     │                   │
-                    │ Evidence synthesis│
-                    │ Cross-model       │
-                    │ reasoning         │
-                    │ Conflict handling │
-                    │ Answer generation │
+                    │ Cross-Modal Logic │
+                    │ Conflict Handling │
+                    │ Grounded Synthesis│
                     └─────────┬─────────┘
-                              │
-                              ▼
-                    ┌───────────────────┐
-                    │    SATQUERY UI    │
-                    │                   │
-                    │ Natural language  │
-                    │ answer            │
-                    │ Satellite imagery │
-                    │ Bounding regions  │
-                    │ Segmentation masks│
-                    │ Change overlays   │
-                    │ SAR visualization │
-                    └───────────────────┘
+                              │ Final Grounded Answer + Evidence
+             ┌────────────────┴────────────────┐
+             │                                 │
+             ▼                                 ▼
+   ┌───────────────────┐             ┌───────────────────┐
+   │ POSTGIS / STORAGE │             │    SATQUERY UI    │
+   │ Completed Jobs,   │             │ Natural Language  │
+   │ Traces, Outputs,  │             │ MapLibre Overlays │
+   │ Vector Polygons   │             │ Multi-Channel SAR │
+   └───────────────────┘             └───────────────────┘
 ```
+
+> [!IMPORTANT]
+> **Data Access Rule:** AI models **never** connect directly to PostGIS. All database queries, spatial transactions, and asset metadata operations are strictly mediated by the FastAPI backend data-access layer.
 
 ---
 
-## 2. Component Responsibilities & Specialist Model Layer
+## 3. PostGIS as a Core Architectural Component
 
-Domain-specific remote-sensing tasks are distributed to dedicated specialist models. Specialists do **not** directly generate final unstructured user answers; they produce structured visual evidence, masks, metrics, and domain-specific observations for subsequent fusion.
+PostGIS is a **first-class, foundational component** of SatQuery AI, not an implementation detail or an interchangeable database. Satellite intelligence requires rigorous coordinate reference system (CRS) projections, topological intersections, and persistent vector tracking.
 
 ```mermaid
 flowchart TD
-    subgraph Specialists ["Domain-Specific Remote Sensing Specialists"]
-        GG["GeoGround<br/><b>Modality:</b> Sentinel-2 / Optical<br/>Grounding · Localization · Segmentation"]
-        SC["SARChat<br/><b>Modality:</b> Sentinel-1 / SAR<br/>Radar Backscatter · Polarimetry · SAR VQA"]
-        BIT_M["BIT<br/><b>Modality:</b> Multi-Temporal (T1 + T2)<br/>Bitemporal Change Detection · Difference Masks"]
+    subgraph DataLayer ["PostgreSQL 17 + PostGIS 3.5 Spatial Persistence"]
+        JOBS["jobs<br/>(id, session_id, query, input_mode, task, status)"]
+        ASSETS["assets<br/>(id, job_id, file_path, modality, sensor, crs, bbox::POLYGON)"]
+        SF["spatial_features<br/>(id, job_id, asset_id, feature_type, geometry::GEOMETRY, area_m2)"]
+        TRACES["traces<br/>(id, job_id, event_type, node_name, tool_id, parameters, metadata)"]
+        OUTPUTS["outputs<br/>(id, job_id, output_type, text_result, file_path, confidence_score)"]
+        TOOL_REG["tool_registry<br/>(id, tool_id, name, tool_type, supported_tasks, supported_modalities)"]
     end
+
+    BACKEND["FastAPI Application Layer"] <--> DataLayer
 ```
 
-### 2.1 GeoGround — Sentinel-2 / Optical Grounding & Segmentation
-* **Domain Role:** Dedicated specialist for optical remote-sensing spatial grounding, localization, and segmentation.
-* **Modality / Sensors:** Sentinel-2, Cartosat, high-resolution optical imagery.
-* **Core Responsibilities:**
-  - Object grounding from natural-language phrases (e.g., "storage tanks", "bridges", "runways").
-  - Precise object localization with bounding boxes and spatial coordinates.
-  - High-fidelity pixel segmentation masks for identified targets.
-  - Spatial grounding of spatial references and geographic features.
-* **Typical Data Flow:**
-  $$\text{Sentinel-2 Optical Image} + \text{User's relevant target/query} \longrightarrow \mathbf{GeoGround} \longrightarrow \text{Grounded regions / masks / bounding coordinates}$$
-
-### 2.2 SARChat — Sentinel-1 / Synthetic Aperture Radar (SAR)
-* **Domain Role:** Dedicated specialist for SAR-specific visual reasoning and interpretation.
-* **Modality / Sensors:** Sentinel-1 (C-band SAR, VV/VH polarizations), RISAT.
-* **Core Responsibilities:**
-  - Sentinel-1 SAR scene understanding and speckle-tolerant feature extraction.
-  - SAR-specific visual reasoning (dielectric properties, double-bounce scattering, rough surface backscatter).
-  - SAR target interpretation (vessels, maritime structures, flood extents, infrastructure under cloud cover).
-  - Radar-specific question answering and backscatter anomaly detection.
-* **Typical Data Flow:**
-  $$\text{Sentinel-1 SAR Image} + \text{Relevant query} \longrightarrow \mathbf{SARChat} \longrightarrow \text{SAR observations / backscatter reasoning / target detections}$$
-
-### 2.3 BIT — Temporal / Bitemporal Change Detection
-* **Domain Role:** Dedicated specialist for transformer-based bitemporal change detection.
-* **Modality / Sensors:** Multi-temporal paired optical or radar observations across distinct timestamps ($T_1, T_2$).
-* **Core Responsibilities:**
-  - High-resolution comparison of registered temporal observation pairs.
-  - Pixel-level change detection and changed-region binary/semantic segmentation.
-  - Temporal difference localization and change area quantification.
-* **Typical Data Flow:**
-  $$\text{Image } T_1 + \text{Image } T_2 \longrightarrow \mathbf{BIT} \longrightarrow \text{Changed regions / difference masks / change metrics}$$
+### 3.1 PostGIS Responsibilities in SatQuery AI:
+1. **Raster Footprint Storage:** Ingested raster boundaries are stored as WGS84 bounding polygons (`assets.bbox` as `Geometry(POLYGON, 4326)`).
+2. **Spatial Overlap & IoU Calculation:** Evaluates spatial intersections between bitemporal or optical-SAR raster pairs before invoking compute-heavy models.
+3. **Vector Feature Persistence:** Stores model-generated outputs such as grounding bounding boxes, building footprints, flood extents, and change polygons (`spatial_features.geometry`).
+4. **Audit Trail & Observability:** Records structured JSON traces and tool run receipts for every execution node (`traces` and `tool_runs`).
+5. **No Rasters in DB:** PostGIS stores vector geometries and metadata. Raw rasters, composites, tiles, and masks reside strictly on disk (`data/jobs/{job_id}/`).
 
 ---
 
-## 3. Qwen-VL Dual-Role Architecture
+## 4. End-to-End System Data Flow
 
-Qwen-VL serves as the central cognitive engine across two logically distinct stages:
+The complete data lifecycle follows a strict pipeline from user ingestion to persistent visualization:
+
+```
+USER
+  │ Natural Language Query + Satellite GeoTIFF(s) / AOI
+  ▼
+QUERY PROCESSING
+  │ Input Validation, Modality Inspection & Intent Classification
+  ▼
+GEOSPATIAL & TEMPORAL DATA RETRIEVAL
+  │ Header Metadata Parsing, CRS Verification, Spatial Overlap (IoU) Check
+  ▼
+POSTGIS + SATELLITE PREPROCESSING
+  │ Footprints Persisted to PostGIS; Rasters Sliced into Normalized Model Tiles
+  ▼
+QWEN-VL ORCHESTRATION [PLANNED: OpenRouter API]
+  │ Query Understanding, Subtask Decomposition, Specialist Routing DAG
+  ▼
+SPECIALIST MODEL EXECUTION
+  │ GeoGround (Optical) | SARChat (SAR) | BIT (Temporal Change)
+  ▼
+RESULT NORMALIZATION / FUSION [PLANNED]
+  │ Heterogeneous Outputs Standardized into Unified Spatial-Temporal Schema
+  ▼
+QWEN-VL FINAL REASONING [PLANNED: OpenRouter API]
+  │ Cross-Modal Synthesis, Anomaly Resolution, Grounded Natural Language Answer
+  ▼
+POSTGIS / RESULT PERSISTENCE
+  │ Final Text, Vector Polygons, and Lineage Saved to PostgreSQL/PostGIS
+  ▼
+SATQUERY UI
+  │ MapLibre GL Visualization, Raster Toggles, GeoJSON/KML/PDF Exports
+```
+
+---
+
+## 5. Vision-Language Model (VLM) Architecture & Hosting Model
+
+### 5.1 Dual-Role Logical Engine
+The Vision-Language Model (VLM) operates across two logically distinct stages:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│                         QWEN-VL COGNITIVE ENGINE                       │
+│                     VLM COGNITIVE ARCHITECTURE                         │
 ├──────────────────────────────────┬─────────────────────────────────────┤
 │      STAGE 1: ORCHESTRATOR       │       STAGE 2: FINAL REASONER       │
 ├──────────────────────────────────┼─────────────────────────────────────┤
@@ -166,38 +201,90 @@ Qwen-VL serves as the central cognitive engine across two logically distinct sta
 └──────────────────────────────────┴─────────────────────────────────────┘
 ```
 
-### 3.1 Role 1 — Orchestrator & Workflow Planner
-In the entry phase, the Orchestrator evaluates the query against metadata and physical raster constraints:
-1. **Query & Intent Understanding:** Parses user intent (e.g., counting, status inspection, change identification, spatial search).
-2. **Modality & Sensor Determination:** Inspects whether the uploaded assets and query require optical (Sentinel-2), SAR (Sentinel-1), or multi-temporal analysis.
-3. **Task Decomposition:** Breaks compound questions into discrete, executable sub-tasks (e.g., "Find new buildings" $\rightarrow$ `BIT` change detection $+$ `GeoGround` building segmentation).
-4. **Specialist Routing:** Dispatches subtasks to `GeoGround`, `SARChat`, and/or `BIT` in parallel or sequentially.
+* **Role 1 — Orchestrator (Entry Phase):**
+  - Evaluates user query and image metadata.
+  - Determines required sensor modalities (Sentinel-1 SAR, Sentinel-2 Optical, or Multi-Temporal).
+  - Decomposes multi-intent queries (e.g., *"Find new buildings after the flood"* $\rightarrow$ SAR flood extent $+$ BIT change $+$ GeoGround building segmentation).
+* **Role 2 — Final Reasoner (Exit Phase):**
+  - Receives normalized specialist outputs.
+  - Resolves cross-modal discrepancies (e.g., optical cloud obscuration resolved by all-weather SAR backscatter).
+  - Generates final user-facing text explanations strictly citing spatial evidence.
 
-### 3.2 Role 2 — Final Reasoner & Evidence Synthesizer
-In the exit phase, the Final Reasoner operates over the normalized specialist outputs:
-1. **Evidence Synthesis:** Merges raw observations, bounding boxes, masks, and SAR backscatter interpretation into a unified scene model.
-2. **Cross-Model Reasoning:** Correlates spatial masks from `GeoGround` with change extents from `BIT` or radar evidence from `SARChat`.
-3. **Conflict & Uncertainty Handling:** Resolves conflicting observations (e.g., optical cloud occlusion vs. SAR all-weather verification).
-4. **Answer Generation:** Formulates a comprehensive, natural-language explanation grounded strictly in the specialist evidence.
+### 5.2 Hosting Model: OpenRouter API Layer (Active: Google Gemma 4 31B Free)
+To prevent massive VRAM exhaustion on edge or local servers, the VLM is **hosted externally and accessed via OpenRouter**, not hosted locally within the Python process.
+
+```
+┌─────────────────┐       HTTPS       ┌─────────────────┐       HTTPS       ┌─────────────────┐
+│ React Frontend  │ ────────────────► │ SatQuery Backend│ ────────────────► │ OpenRouter API  │
+│ (User Interface)│                   │(Server-Side API)│ (Secured Bearer)  │(Gemma 4 31B Free)
+└─────────────────┘                   └─────────────────┘                   └─────────────────┘
+```
+
+> [!CAUTION]
+> **Security Boundary:** The OpenRouter API key is a **strict server-side secret**. The React frontend never connects directly to OpenRouter; all LLM requests are proxied and authenticated by the FastAPI backend.
+
+* **Active Implementation Status:** **IMPLEMENTED & FUNCTIONAL.** (Configured via `VLM_MODEL` in `.env`, e.g. `google/gemma-4-31b-it:free` over OpenRouter).
 
 ---
 
-## 4. Result Normalization & Fusion Layer
+## 6. Specialist Model Layer & Sensor Separation
 
-To enable rigorous cross-model reasoning without tight coupling between models, a logical **Result Normalization and Fusion Layer** sits between the specialists and the final Qwen-VL reasoning stage.
+Satellite intelligence requires models trained on the specific physics of each sensor. Specialist models perform domain-specific vision tasks and output structured artifacts rather than raw conversational answers.
+
+```mermaid
+flowchart TD
+    subgraph Specialists ["Domain-Specific Remote Sensing Specialists"]
+        GG["<b>GeoGround</b><br/>Modality: Sentinel-2 / Optical<br/>Grounding · Localization · Segmentation<br/><i>Status: MOCK</i>"]
+        SC["<b>SARChat-InternVL2.5-2B</b><br/>Modality: Sentinel-1 / SAR<br/>Radar Backscatter · Polarimetry · SAR VQA<br/><i>Status: FUNCTIONAL (Local Weights)</i>"]
+        BIT_M["<b>BIT</b><br/>Modality: Multi-Temporal Pairs (T1 + T2)<br/>Bitemporal Change Detection<br/><i>Status: MOCK</i>"]
+    end
+```
+
+### 6.1 GeoGround — Sentinel-2 / Optical Grounding & Segmentation
+* **Modality / Sensors:** Sentinel-2, Cartosat, high-resolution optical imagery.
+* **Responsibilities:** Object grounding from natural-language phrases, spatial coordinate localization, pixel segmentation masks.
+* **Data Flow:**
+  $$\text{Sentinel-2 Optical Image} + \text{Query Target} \longrightarrow \mathbf{GeoGround} \longrightarrow \text{Bounding Polygons / Segmentation Masks}$$
+* **Current Implementation Status:** **MOCK / NOT FUNCTIONALLY INTEGRATED.** (Represented by `MockGrounding` returning static bounding box coordinates).
+
+### 6.2 SARChat-InternVL2.5-2B — Sentinel-1 / Synthetic Aperture Radar (SAR)
+* **Modality / Sensors:** Sentinel-1 (C-Band SAR, VV/VH polarizations), RISAT.
+* **Responsibilities:** Radar backscatter analysis (dielectric properties, double-bounce scattering, rough surface volume scattering), flood detection, all-weather scene interpretation, SAR VQA.
+* **Data Flow:**
+  $$\text{Sentinel-1 SAR Image (VV/VH)} + \text{Query} \longrightarrow \mathbf{SARChat} \longrightarrow \text{SAR Observations / Detection Tokens / dB Stats}$$
+* **Current Implementation Status:** **FUNCTIONAL & INTEGRATED (LOCAL WEIGHTS).** (`SARChatService` loads `JimmyMa99/SARChat-InternVL2.5-2B` locally; integrated with GIS raster backscatter calibration in `sar_analyzer.py`).
+
+### 6.3 BIT — Temporal / Bitemporal Change Detection
+* **Modality / Sensors:** Multi-temporal paired optical or radar observations ($T_1, T_2$).
+* **Responsibilities:** Bitemporal image comparison, pixel-level change detection probability maps, changed-area delta calculations.
+* **Data Flow:**
+  $$\text{Image } T_1 + \text{Image } T_2 \longrightarrow \mathbf{BIT} \longrightarrow \text{Change Probability Masks / Delta Metrics}$$
+* **Current Implementation Status:** **MOCK / NOT FUNCTIONALLY INTEGRATED.** (Represented by `MockBitCD` returning `"MOCK_BIT_CD_MASK"`; research code exists in `models/BIT.ipynb`).
+
+---
+
+## 7. Deprecation & Removal of MobileSAM
+
+* **Architectural Decision:** **MobileSAM is REMOVED from the active and target SatQuery AI architecture.**
+* **Rationale:** `GeoGround` natively handles end-to-end natural-language grounding and spatial segmentation for Earth observation rasters, eliminating the need for an external SAM prompt-engineering pipeline.
+* **Current Codebase State:** Deprecated references in `mock_tools.py`, `tool_catalog.py`, `model_slotting.py`, and `schemas.py` are slated for removal during code cleanup.
+
+---
+
+## 8. Result Normalization & Fusion Layer (Conceptual Design)
+
+To enable seamless multi-model reasoning without tightly coupling specialist architectures, a logical **Result Normalization and Fusion Layer** converts heterogeneous outputs into a standardized dictionary:
 
 ```mermaid
 flowchart LR
-    GG_OUT["GeoGround Output<br/>(Masks, Boxes, Labels)"] --> NF["Result Normalizer / Fusion Layer"]
-    SC_OUT["SARChat Output<br/>(SAR text, Backscatter, Detections)"] --> NF
-    BIT_OUT["BIT Output<br/>(Change Mask, Delta % GeoTIFF)"] --> NF
-    NF --> UNIFIED["Normalized Common Representation<br/>• Modality & Analysis Type<br/>• Spatial Coordinates & GeoJSON<br/>• Temporal Delta Metrics<br/>• Confidence & Evidence<br/>• Model Source Lineage"]
-    UNIFIED --> QWEN_FINAL["Qwen-VL Final Reasoner"]
+    GG_OUT["GeoGround Output<br/>(Masks, Boxes, Labels)"] --> NF["Result Normalization & Fusion Layer"]
+    SC_OUT["SARChat Output<br/>(SAR Text, Backscatter, Detections)"] --> NF
+    BIT_OUT["BIT Output<br/>(Change Mask, Delta Area)"] --> NF
+    NF --> UNIFIED["Normalized Common Representation<br/>• Modality & Analysis Type<br/>• Spatial Coordinates (EPSG:4326)<br/>• Temporal Delta Metrics<br/>• Confidence & Evidence<br/>• Specialist Lineage"]
+    UNIFIED --> QWEN_FINAL["Qwen-VL Final Reasoner<br/>(OpenRouter API)"]
 ```
 
-### 4.1 Common Output Representation Schema (Conceptual)
-Each specialist's raw output is transformed into a standardized, structured dictionary:
-
+### 8.1 Common Output Representation Schema (Target Definition):
 ```json
 {
   "request_id": "REQ-20260911-001",
@@ -206,13 +293,13 @@ Each specialist's raw output is transformed into a standardized, structured dict
   "analysis_type": "GROUNDING | SAR_REASONING | CHANGE_DETECTION",
   "spatial_information": {
     "crs": "EPSG:4326",
-    "bounding_boxes": [[77.5946, 12.9716, 77.6046, 12.9816]],
-    "mask_artifact_path": "data/jobs/{job_id}/masks/geoground_mask_0.png",
+    "bounding_boxes": [[72.042, 22.781, 72.158, 22.879]],
+    "mask_artifact_path": "data/jobs/{job_id}/masks/mask_0.png",
     "geojson_features": []
   },
   "temporal_information": {
-    "t1_timestamp": "2022-01-15T10:30:00Z",
-    "t2_timestamp": "2026-02-20T10:30:00Z",
+    "t1_timestamp": "2022-03-08T10:30:00Z",
+    "t2_timestamp": "2024-02-21T10:30:00Z",
     "change_area_sqkm": 0.42
   },
   "observations": "Identified 14 industrial storage tanks in northern quadrant.",
@@ -220,226 +307,188 @@ Each specialist's raw output is transformed into a standardized, structured dict
   "evidence_artifacts": ["tiles/tile_0_0_rgb.png", "masks/change_overlay.png"]
 }
 ```
+* **Current Implementation Status:** **PLANNED / NOT YET IMPLEMENTED.**
 
 ---
 
-## 5. Data & Sensor Relationships
-
-SatQuery AI maintains strict physical and conceptual separation between satellite modalities. Modality isolation guarantees that specialist models operate exclusively within their trained physics and sensor domain:
+## 9. Example End-to-End Query Workflows (Target Architecture)
 
 ```
-Sentinel-2 (Optical)     ───────►  Optical Workflow   ───────►  GeoGround
-Sentinel-1 (SAR / Radar)  ───────►  SAR Workflow       ───────►  SARChat
-Multi-Temporal Pairs     ───────►  Temporal Workflow  ───────►  BIT
+┌────────────────────────────────────────────────────────────────────────┐
+│                   TARGET MULTI-SPECIALIST WORKFLOWS                    │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
-* **Sentinel-2 $\rightarrow$ Optical Workflow $\rightarrow$ GeoGround:** Handles visual spectrum bands (RGB, NIR, SWIR), surface reflectance, optical grounding, and segmentation.
-* **Sentinel-1 $\rightarrow$ SAR Workflow $\rightarrow$ SARChat:** Handles radar backscatter intensity (dB), dual-pol ratios (VV/VH), penetration through cloud cover/smoke, and structural dielectric features.
-* **Multi-temporal Imagery $\rightarrow$ Temporal Workflow $\rightarrow$ BIT:** Handles spatial-temporal difference grids and change verification across temporal baselines.
-
-> [!IMPORTANT]
-> **Modality Boundaries:**
-> - `SARChat` does not replace optical visual grounding.
-> - `GeoGround` does not process radar backscatter or SAR phase/intensity.
-> - `BIT` is not a general-purpose single-image VLM; it computes temporal change differentials.
-
----
-
-## 6. Query Flow & Multi-Model Workflows
-
-SatQuery AI supports both single-specialist and multi-specialist parallel/sequential execution patterns.
-
-### 6.1 Single-Specialist Workflows
-
-#### Workflow 1: Optical Object Grounding
-* **Query:** *"Find all buildings in this region."*
+### Example 1: Optical Object Grounding (Single Specialist)
+* **User Query:** *"Find all buildings in this region."*
 ```
-Qwen-VL Orchestrator ──► GeoGround ──► Qwen-VL Final Reasoner ──► Grounded Answer + Bounding Polygons / Masks
+User Query ──► Qwen-VL (OpenRouter) ──► GeoGround ──► Normalized Result ──► Qwen-VL (OpenRouter) ──► Answer + Bounding Polygons
 ```
 
-#### Workflow 2: SAR Flood & Scene Analysis
-* **Query:** *"Is this region flooded?"*
+### Example 2: SAR Flood Analysis (Single Specialist)
+* **User Query:** *"Is this region flooded?"*
 ```
-Qwen-VL Orchestrator ──► SARChat ──► Qwen-VL Final Reasoner ──► Grounded Answer + Radar Backscatter Evidence
-```
-
-#### Workflow 3: Temporal Change Analysis
-* **Query:** *"What changed between 2022 and 2026?"*
-```
-Qwen-VL Orchestrator ──► BIT ──► Qwen-VL Final Reasoner ──► Grounded Explanation + Change Overlay Mask
+User Query ──► Qwen-VL (OpenRouter) ──► SARChat ──► Normalized SAR Evidence ──► Qwen-VL (OpenRouter) ──► Answer + Radar Backscatter Proof
 ```
 
----
-
-### 6.2 Multi-Specialist Workflows
-
-#### Workflow 4: Multi-Specialist Parallel Execution (Optical Grounding + Temporal Change)
-* **Query:** *"What new buildings appeared between 2022 and 2026?"*
-* **Execution Pattern:** Parallel specialist dispatch followed by spatial-temporal fusion.
-
+### Example 3: Temporal Land-Cover Change (Single Specialist)
+* **User Query:** *"What changed between 2022 and 2026?"*
 ```
-                    ┌─────────────────────────┐
-                    │  Qwen-VL Orchestrator   │
-                    └────────────┬────────────┘
-                                 │
-                 ┌───────────────┴───────────────┐
-                 │                               │
-                 ▼                               ▼
-          ┌─────────────┐                 ┌─────────────┐
-          │  GeoGround  │                 │     BIT     │
-          │  Building   │                 │   Change    │
-          │ Grounding   │                 │  Detection  │
-          └──────┬──────┘                 └──────┬──────┘
-                 │                               │
-                 └───────────────┬───────────────┘
-                                 │
-                                 ▼
-                    ┌─────────────────────────┐
-                    │      Result Fusion      │
-                    │ (Spatial Intersection)  │
-                    └────────────┬────────────┘
-                                 │
-                                 ▼
-                    ┌─────────────────────────┐
-                    │  Qwen-VL Final Reasoner │
-                    └────────────┬────────────┘
-                                 │
-                                 ▼
-                    ┌─────────────────────────┐
-                    │    Final Explanation    │
-                    │ + Highlighted New Bldgs │
-                    └─────────────────────────┘
+User Query ──► Qwen-VL (OpenRouter) ──► BIT ──► Normalized Change Delta ──► Qwen-VL (OpenRouter) ──► Answer + Change Difference Overlay
 ```
 
-#### Workflow 5: Tri-Modal Complex Workflow (Optical + SAR + Temporal)
-* **Query:** *"Assess all-weather structural damage and land cover change following the flood event."*
-* **Execution Pattern:** Parallel routing to `GeoGround` (optical features), `SARChat` (flood water extent & infrastructure radar backscatter), and `BIT` (pre/post change detection), followed by cross-model synthesis.
-
+### Example 4: Multi-Specialist Parallel Execution (Optical Grounding + Temporal Change)
+* **User Query:** *"What new buildings appeared between 2022 and 2026?"*
 ```
-                       ┌─────────────────────────┐
-                       │  Qwen-VL Orchestrator   │
-                       └────────────┬────────────┘
-                                    │
-           ┌────────────────────────┼────────────────────────┐
-           │                        │                        │
-           ▼                        ▼                        ▼
-    ┌─────────────┐          ┌─────────────┐          ┌─────────────┐
-    │  GeoGround  │          │   SARChat   │          │     BIT     │
-    │ (Structures)│          │ (SAR Flood) │          │  (Changes)  │
-    └──────┬──────┘          └──────┬──────┘          └──────┬──────┘
-           │                        │                        │
-           └────────────────────────┼────────────────────────┘
-                                    │
-                                    ▼
-                       ┌─────────────────────────┐
-                       │ Result Normalizer/Fusion│
-                       └────────────┬────────────┘
-                                    │
-                                    ▼
-                       ┌─────────────────────────┐
-                       │  Qwen-VL Final Reasoner │
-                       └────────────┬────────────┘
-                                    │
-                                    ▼
-                       ┌─────────────────────────┐
-                       │    Comprehensive        │
-                       │ Grounded Multi-Evidence │
-                       │         Report          │
-                       └─────────────────────────┘
+                         User Query
+                             │
+                             ▼
+                 Qwen-VL Orchestrator (OpenRouter)
+                             │
+             ┌───────────────┴───────────────┐
+             ▼                               ▼
+         GeoGround                          BIT
+    (Building Detection)             (Change Detection)
+             │                               │
+             └───────────────┬───────────────┘
+                             ▼
+                Result Normalization & Fusion
+                  (Spatial Intersection)
+                             │
+                             ▼
+                 Qwen-VL Final Reasoner (OpenRouter)
+                             │
+                             ▼
+             Answer + Highlighted New Buildings Map
 ```
 
 ---
 
-## 7. Operational Workflow & Execution Pipeline
+## 10. Satellite Data Ingestion & Preprocessing Pipelines
 
-```mermaid
-flowchart TD
-    USER_IN["User Query + GeoTIFF(s)"] --> GATE["Input Gate & Pair-Fitness Check"]
-    GATE -->|Unfit / Incompatible| REFUSE["Refusal Output + Diagnostic Reason"]
-    GATE -->|Valid| PREPROC["Input-Type Preprocessing<br/>(Tiling, Rescaling, Band Extraction)"]
-    PREPROC --> ORCH["Qwen-VL Orchestration<br/>(Intent, Modality & Routing DAG)"]
-    ORCH --> ROUTE{Routing Branch}
-    
-    ROUTE -->|Optical Tasks| GG_NODE["GeoGround Specialist"]
-    ROUTE -->|SAR Tasks| SC_NODE["SARChat Specialist"]
-    ROUTE -->|Temporal Tasks| BIT_NODE["BIT Specialist"]
-    ROUTE -->|Multi-Modal Tasks| PARALLEL_NODE["Parallel Specialist Dispatch"]
-    
-    GG_NODE --> NORM["Result Normalizer & Fusion Layer"]
-    SC_NODE --> NORM
-    BIT_NODE --> NORM
-    PARALLEL_NODE --> NORM
-    
-    NORM --> REASON["Qwen-VL Final Reasoner<br/>(Evidence Synthesis & Answer Generation)"]
-    REASON --> PERSIST["Session Store & Postgres/PostGIS Persistence"]
-    PERSIST --> UI["SatQuery UI (JobView, MapLibre Overlays, Audit Trace)"]
 ```
+Sentinel-2 (Optical)  ──► Ingestion ──► OpticalPreprocessor  ──► GeoGround [MOCK]
+Sentinel-1 (SAR)      ──► Ingestion ──► SARPreprocessor      ──► SARChat [FUNCTIONAL]
+Multi-Temporal Pairs  ──► Ingestion ──► BitemporalPreprocessor ──► BIT [MOCK]
+```
+
+### 10.1 Optical Preprocessing Pipeline (`OpticalPreprocessor`):
+- Reads red, green, blue bands (or duplicates panchromatic bands to 3 channels).
+- Applies `PercentileMinMax` $[2\%, 98\%]$ radiometric contrast stretch.
+- Produces full-scene preview composite and georeferenced $256 \times 256$ tiles.
+
+### 10.2 SAR Preprocessing Pipeline (`SARPreprocessor`):
+- Radiometric calibration of raw intensity to decibel scale: $\text{dB} = 10 \cdot \log_{10}(\text{clip}(\text{DN}, 10^{-5}, \infty))$.
+- Computes dual-pol ratio composite: Red = VV, Green = VH, Blue = VV / (VH + 0.1).
+- Generates VV, VH, and overlay visual products.
+
+### 10.3 Bitemporal Preprocessing Pipeline (`BitemporalPreprocessor`):
+- Validates minimum spatial overlap ($\text{IoU} \ge 10\%$).
+- Crops rasters to their shared geographic intersection bounding box.
+- Slices synchronized, geographically paired tiles for $T_1$ and $T_2$.
 
 ---
 
-## 8. State & Session Memory Architecture
+## 11. Backend, Memory & Persistence Architecture
 
-SatQuery AI manages runtime state through a two-tiered memory hierarchy:
+The backend application uses a decoupled two-tiered memory architecture:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
 │                   IN-MEMORY LIVE SESSION (FastAPI)                     │
 │                  sessions[session_id] = SessionContext                 │
 │                                                                        │
-│ • Active job state & parameters                                        │
-│ • Preprocessed tile coordinates & intermediate masks                   │
-│ • Specialist normalized tool results                                   │
-│ • Evidence artifacts currently in-flight                               │
+│ • In-flight job state & active parameters                              │
+│ • Preprocessed tile filepaths & intermediate raster references         │
+│ • Raw specialist tool results in execution                             │
 └──────────────────────────────────┬─────────────────────────────────────┘
                                    │ On graph completion / refusal
                                    ▼
 ┌────────────────────────────────────────────────────────────────────────┐
-│                   PERSISTENT STORAGE (Postgres + Disk)                 │
+│              PERSISTENT DATA LAYER (PostgreSQL + PostGIS)              │
 │                                                                        │
-│ • PostgreSQL: Structured jobs, audit traces, logs, execution receipts  │
-│ • PostGIS: Vector boundaries, footprints, change MULTIPOLYGONs         │
+│ • PostgreSQL: Structured jobs, traces, outputs, tool runs              │
+│ • PostGIS: Vector boundaries, footprints, spatial features             │
 │ • Filesystem (data/jobs/{id}/): Rasters, tiles, masks, reports, PDF    │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
-* **No external distributed queue in base runtime:** In-memory execution using native asyncio/FastAPI background tasks eliminates Redis/Kafka operational complexity for edge and isolated deployments.
-* **Deterministic Persistence:** State is written to relational and spatial storage at pipeline termination (`END`, `REFUSE`, or `FAIL`).
+* **API Endpoints:**
+  - `POST /ingest` — Uploads GeoTIFFs, performs metadata extraction & PostGIS asset persistence.
+  - `POST /run` — Launches LangGraph workflow in background tasks.
+  - `GET /jobs/{job_id}` — Returns the unified immutable `JobView` document.
+  - `GET /jobs/{job_id}/artifacts/*` — Fetches composite, VV, VH, and overlay rasters.
+  - `GET /jobs/{job_id}/export.*` — Exports GeoJSON footprints, KML, and ReportLab PDF reports.
 
 ---
 
-## 9. Gate, Modality & Pair-Fitness Subsystem
+## 12. Frontend & MapLibre Visualization
 
-Before model invocation, a deterministic validator verifies the geometric and physical integrity of the inputs:
-
-| Check | Condition | Action on Failure |
-|---|---|---|
-| **CRS & Projections** | Identical or reprojection supported | Re-project or Refuse |
-| **Spatial Overlap** | Pair intersection $\ge 10\%$ IoU | `REFUSE: Insufficient spatial overlap` |
-| **Temporal Consistency** | Timestamp metadata present and distinct | `REFUSE: Missing or identical timestamps` |
-| **Cloud Cover Fraction** | Optical quality above threshold | Warn and route / supplement with SAR |
-| **Radiometric Bounds** | Band count and bit depth verified | Normalized via `PercentileMinMax` |
+* **Framework:** React 19 + TypeScript 5.9 + Vite 8 + Tailwind CSS 4.
+* **Geospatial Map Engine:** **MapLibre GL 5** (`MapEvidence.tsx`).
+* **Visual Capabilities:**
+  - Live background layer switching between OpenStreetMap basemap, Optical composite, and SAR multi-channel rasters.
+  - Dynamic GeoJSON vector rendering for bounding boxes, spatial grounding regions, and change masks.
+  - Wipe swipe-slider for interactive visual comparison of $T_1$ vs. $T_2$ bitemporal scenes.
+  - Execution audit timeline rendering every step in the agentic trace.
 
 ---
 
-## 10. SatQuery UI & Output Synthesis
+## 13. Current Implemented Architecture vs. Target Architecture
 
-The client receives a unified, immutable **`JobView`** response containing:
-1. **Natural Language Answer:** Final evidence-grounded response synthesized by Qwen-VL.
-2. **Interactive Map Overlays:** MapLibre-rendered vector layers (GeoJSON bounding polygons, segmentation boundaries).
-3. **Raster Artifacts:** High-resolution change detection masks (BIT), SAR backscatter composites, and optical RGB overlays.
-4. **Audit Trace & Lineage:** Transparent breakdown of which specialist models fired, execution latencies, confidence metrics, and parameter settings.
-
----
-
-## 11. Architectural Constraints & Decision Register
-
-| ID | Architectural Constraint | Status | Justification |
+| Component / Subsystem | Current Codebase Implementation | Target / Intended Architecture | Implementation Status |
 |---|---|---|---|
-| **C1** | **MobileSAM Removal** | **Removed** | Replaced by `GeoGround`, which natively handles remote-sensing grounding and segmentation without an external SAM stage. |
-| **C2** | **Qwen-VL Dual Role** | **Active** | Logical separation between Orchestration (routing/decomposition) and Final Reasoning (synthesis/answer generation). |
-| **C3** | **Specialist Modality Separation** | **Locked** | Optical $\rightarrow$ GeoGround, SAR $\rightarrow$ SARChat, Temporal $\rightarrow$ BIT. No cross-modality contamination. |
-| **C4** | **Normalized Fusion Intermediate** | **Required** | Decouples specialist model internals from Qwen-VL prompt conditioning. |
-| **C5** | **No Direct Specialist Output** | **Locked** | Specialist models never output final user-facing text independently; all results pass through Qwen-VL reasoning. |
-| **C6** | **No Heavy Distributed Queues** | **Preserved** | FastAPI in-memory session store + Postgres persistence. No Redis/Celery/Kafka dependencies. |
-| **C7** | **Deterministic Graph Routing** | **Preserved** | LangGraph DAG with validated conditional routing rather than unbounded tool creation. |
-| **C8** | **Integration Reality** | **Locked** | Documentation reflects the architectural specification without falsely claiming unbuilt backend code implementations. |
+| **User Interface** | React 19 + MapLibre GL console | React 19 + MapLibre GL console | **Implemented & Functional** |
+| **Backend API** | FastAPI asynchronous endpoints | FastAPI asynchronous endpoints | **Implemented & Functional** |
+| **Spatial Database** | PostgreSQL 17 + PostGIS 3.5 | PostgreSQL 17 + PostGIS 3.5 | **Implemented & Functional** |
+| **Live State Store** | In-memory `SessionContext` dictionary | In-memory `SessionContext` dictionary | **Implemented & Functional** |
+| **Raster Ingestion & Gate** | Deterministic 4-class `InputClassifier` | Deterministic 4-class `InputClassifier` | **Implemented & Functional** |
+| **S1 / S2 Preprocessing** | Modality-specific tile slicing & scaling | Modality-specific tile slicing & scaling | **Implemented & Functional** |
+| **SAR Specialist** | `SARChat-InternVL2.5-2B` (Local PyTorch) | `SARChat-InternVL2.5-2B` (Local PyTorch) | **Implemented & Functional** |
+| **Optical Specialist** | `MockGrounding` (Static mock boxes) | `GeoGround` model integration | **Mock / Planned** |
+| **Temporal Specialist** | `MockBitCD` (Static mock mask) | `BIT` model integration | **Mock / Planned** |
+| **MobileSAM** | Deprecated mock classes in codebase | **Completely removed** (Replaced by GeoGround) | **Deprecated / In Codebase** |
+| **Orchestrator** | Text-only Ollama Qwen-3B / Regex fallback | Multimodal Qwen-VL via OpenRouter API | **Planned** |
+| **Workflow Routing** | Single-path mutually exclusive LangGraph | Multi-specialist parallel fan-out LangGraph | **Planned** |
+| **Result Normalization** | Raw tool results placed in state | Standardized common representation schema | **Planned** |
+| **Final Reasoner** | Static string formatter in report generator | Multimodal Qwen-VL via OpenRouter API | **Planned** |
+
+---
+
+## 14. Security Architecture
+
+1. **Server-Side API Key Management:** OpenRouter API keys, database credentials, and internal secrets must remain strictly on the backend and loaded via `.env`.
+2. **No Frontend Credential Leakage:** The React client never receives or stores external AI service keys.
+3. **Untrusted Input Handling:** User queries, uploaded GeoTIFF headers, and filenames are treated as untrusted input and sanitized via `_safe_filename` and raster validation.
+4. **Backend-Mediated Database Access:** Direct SQL execution from AI models or client requests is forbidden; all PostGIS interactions pass through parameterized SQLAlchemy ORM queries.
+5. **Audit Logging Hygiene:** Database connection passwords and third-party API bearer tokens are scrubbed and never recorded in the `traces` or `logs` tables.
+
+---
+
+## 15. Deployment Architecture
+
+* **Development Environment:**
+  - Local Python 3.12/3.13 virtual environment (`uv` / `venv`).
+  - PostgreSQL + PostGIS running locally or in standalone Docker container.
+  - Local PyTorch runtime for `SARChat-InternVL2.5-2B` (utilizing Apple Silicon MPS or CUDA).
+  - OpenRouter API accessed via outbound HTTPS for Qwen-VL.
+* **Production Deployment (Target):**
+  - Multi-stage containerized build (`Dockerfile` + `docker-compose.yml`).
+  - Gunicorn / Uvicorn multi-worker FastAPI backend.
+  - Dedicated PostgreSQL/PostGIS database container with persistent volume storage.
+  - Nginx reverse proxy serving compiled static Vite assets and routing `/api/` traffic.
+
+---
+
+## 16. Authoritative Architectural Principles
+
+1. **PostGIS-First Spatial Architecture:** PostGIS is the authoritative source for all geospatial relationships, bounds, footprints, and persistent spatial features.
+2. **Natural-Language-First Interface:** Translates non-expert analyst questions into rigorous remote-sensing workflows.
+3. **Specialist Modality Separation:** Optical (Sentinel-2), radar (Sentinel-1), and temporal change tasks are handled by dedicated models tailored to their sensor physics.
+4. **Qwen-VL via OpenRouter:** General multimodal visual orchestration and final evidence synthesis are powered by Qwen-VL hosted via the OpenRouter API.
+5. **Backend-Mediated AI Access:** AI models operate through standard backend service adapters; external APIs are secured server-side.
+6. **Compound Multi-Specialist Workflows:** Complex questions trigger parallel specialist execution (e.g., GeoGround + BIT).
+7. **Evidence-Grounded Explanations:** Final answers must directly cite and align with spatial polygons, masks, and backscatter statistics.
+8. **Clear Implementation vs. Target Boundaries:** Documentation transparently delineates active functional code from planned capabilities.
+9. **Preservation of Functional Baseline:** Protects and leverages working S1/S2 preprocessing, PostGIS persistence, and the functional SARChat specialist.
+10. **Zero Model Redundancy:** Replaces multi-model overlap with dedicated specialists (e.g., MobileSAM removed in favor of GeoGround).
