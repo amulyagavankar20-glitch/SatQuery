@@ -2,6 +2,7 @@ import { LulcPanel } from "@/components/LulcPanel";
 import { MarkdownView } from "@/components/MarkdownView";
 import { RoutingLine } from "@/components/RoutingLine";
 import { TraceAccordion } from "@/components/TraceAccordion";
+import { apiUrl } from "@/lib/api";
 import { followUpQuestions, specialistId } from "@/lib/thinking";
 import type { AssistantTurn as AssistantTurnModel } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -120,6 +121,15 @@ export function AssistantTurn({
       ) : null}
 
       <div className="mt-5 flex flex-wrap gap-2">
+        <a 
+          href={apiUrl(`/jobs/${turn.jobId}/report.pdf`)}
+          target="_blank"
+          rel="noreferrer"
+          className="sq-chip font-semibold !border-primary/50 !bg-primary/10 !text-primary hover:!bg-primary/20"
+        >
+          📄 Generate Report (PDF)
+        </a>
+        
         {followUpQuestions(query, slots, activeSlot).map((chip) => (
           <button key={chip} type="button" onClick={() => insertChip(chip)} className="sq-chip">
             {chip}

@@ -23,9 +23,16 @@ from reportlab.platypus import (
     Spacer,
     Table,
     TableStyle,
+    Image as RLImage
 )
 
 from backend.schemas import JobView
+from backend.services.job_view import (
+    resolve_composite_path,
+    resolve_overlay_path,
+    resolve_asset_preview_path,
+    safe_job_file
+)
 
 # Color Palette matching SatQuery Brand
 PRIMARY_TEAL = HexColor("#5E8F8A")
@@ -160,6 +167,53 @@ def generate_job_pdf(job_view: JobView) -> bytes:
     )
     elements.append(query_box)
     elements.append(Spacer(1, 14))
+
+    # 3.5. Imagery & Evidence
+    elements.append(Paragraph("Imagery & Visual Evidence", heading_style))
+    
+    # Try to load composite/original image
+    try:
+        composite_rel = resolve_composite_path(job_view.job_id)
+        # fallback to raw asset 0
+        if not safe_job_file(job_view.job_id, composite_rel):
+            composite_rel = resolve_asset_preview_path(job_view.job_id, 0)
+            
+        composite_path = safe_job_file(job_view.job_id, composite_rel) if composite_rel else None
+        
+        # Try to load overlay/updated image
+        overlay_rel = resolve_overlay_path(job_view.job_id)
+        overlay_path = safe_job_file(job_view.job_id, overlay_rel) if overlay_rel else None
+        
+        img_table_data = []
+        img_headers = []
+        img_row = []
+        
+        if composite_path and composite_path.exists():
+            img_headers.append(Paragraph("<b>Original Input</b>", body_style))
+            img_row.append(RLImage(str(composite_path), width=240, height=240, kind='proportional'))
+            
+        if overlay_path and overlay_path.exists():
+            img_headers.append(Paragraph("<b>Processed / Detected Overlay</b>", body_style))
+            img_row.append(RLImage(str(overlay_path), width=240, height=240, kind='proportional'))
+            
+        if img_row:
+            img_table = Table([img_headers, img_row], colWidths=[260] * len(img_row))
+            img_table.setStyle(
+                TableStyle([
+                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("BOTTOMPADDING", (0, 0), (-1, 0), 10),
+                ])
+            )
+            elements.append(img_table)
+            elements.append(Spacer(1, 14))
+        else:
+            elements.append(Paragraph("<i>No visual evidence available for this job.</i>", body_style))
+            elements.append(Spacer(1, 14))
+            
+    except Exception as e:
+        elements.append(Paragraph(f"<i>Could not load images: {e}</i>", body_style))
+        elements.append(Spacer(1, 14))
 
     # 4. Grounded Analysis Answer
     elements.append(Paragraph("Specialist & VLM Grounded Findings", heading_style))
